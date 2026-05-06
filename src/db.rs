@@ -226,6 +226,23 @@ impl Database {
         Ok(())
     }
 
+    /// Search the knowledge_fts table for matching entries.
+    pub fn search_knowledge(&self, query: &str, limit: usize) -> Result<Vec<(String, String)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT title, content FROM knowledge_fts WHERE knowledge_fts MATCH ?1 LIMIT ?2"
+        )?;
+
+        let rows = stmt.query_map(params![query, limit as i64], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+
+        let mut results = Vec::new();
+        for row in rows {
+            results.push(row?);
+        }
+        Ok(results)
+    }
+
     pub fn get_squad_agents(&self, squad_id: &str) -> Result<Vec<Agent>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, squad_id, name, role, specializations, status, hired_at FROM squad_agents WHERE squad_id = ?1 AND status = 'active'"

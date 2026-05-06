@@ -13,6 +13,7 @@ mod memory;
 mod fallback;
 mod models;
 mod orchestrator;
+mod bridge;
 mod routing;
 #[allow(dead_code)]
 mod session_pool;
@@ -23,6 +24,8 @@ mod tools;
 mod interfaces;
 #[allow(dead_code)]
 mod updater;
+
+use std::sync::Arc;
 
 use clap::Parser;
 
@@ -61,12 +64,72 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(?config.data_dir, "Configuration loaded");
 
     // Initialize database
-    let _db = db::Database::init(&config.data_dir)?;
+    let db = db::Database::init(&config.data_dir)?;
     tracing::info!("Database initialized");
 
     // Initialize event bus
     let event_bus = event_bus::EventBus::new();
     tracing::info!("Event bus ready");
+
+    // Wrap shared resources in Arc
+    let config = Arc::new(config);
+    let event_bus = Arc::new(event_bus);
+    let db = Arc::new(std::sync::Mutex::new(db));
+
+    // Create squad manager
+    let squad_manager = Arc::new(squad::SquadManager::new(
+        config.data_dir.clone(),
+        Arc::new(db::Database::init(&config.data_dir)?),
+    ));
+
+    // Create orchestrator
+    let copilot = copilot::CopilotManager::new(
+        copilot::CopilotConfig::default(),
+        event_bus.sender(),
+    );
+    let orchestrator = orchestrator::Orchestrator::new(
+        config.clone(),
+        copilot,
+        squad_manager.clone(),
+        event_bus.clone(),
+    );
+
+    // Spawn orchestrator bridge
+    let _bridge_handle = bridge::spawn_orchestrator_bridge(orchestrator, event_bus.clone());
+    tracing::info!("Orchestrator bridge started");
+
+    // Conditionally start Telegram bot
+    #[cfg(feature = "telegram")]
+    {
+        if let Some(ref telegram_config) = config.telegram {
+            let mut bot = interfaces::telegram::TelegramBot::new(
+                telegram_config.clone(),
+                event_bus.sender(),
+            );
+            bot.set_command_context(interfaces::telegram::CommandContext {
+                db: db.clone(),
+            });
+
+            let bot = Arc::new(bot);
+
+            // Start response listener in background
+            let bot_listener = bot.clone();
+            let event_rx = event_bus.subscribe();
+            tokio::spawn(async move {
+                bot_listener.start_response_listener(event_rx).await;
+            });
+
+            // Start the Telegram dispatcher in background
+            let bot_runner = bot.clone();
+            tokio::spawn(async move {
+                if let Err(e) = bot_runner.run().await {
+                    tracing::error!("Telegram bot exited with error: {e:#}");
+                }
+            });
+
+            tracing::info!("Telegram bot started");
+        }
+    }
 
     // Spawn self-update checker
     if config.update.enabled {
@@ -79,9 +142,9 @@ async fn main() -> anyhow::Result<()> {
         tracing::info!("Update checker started");
     }
 
-    tracing::info!("io-daemon initialized successfully");
-
-    // TODO: Start orchestrator, interfaces, etc.
+    tracing::info!("io-daemon running. Press Ctrl+C to stop.");
+    tokio::signal::ctrl_c().await?;
+    tracing::info!("Shutting down...");
 
     Ok(())
 }
