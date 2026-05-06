@@ -109,6 +109,12 @@ fn run_handler(
     let local = tokio::task::LocalSet::new();
 
     local.block_on(&rt, async move {
+        // Initialize the orchestrator's Copilot session before handling messages
+        if let Err(e) = orchestrator.start().await {
+            error!("Failed to start orchestrator session: {e:#}");
+            return;
+        }
+
         while let Some(req) = rx.recv().await {
             let session_id = session_id_for(&req.source);
             match orchestrator.handle_message(&req.content, req.source).await {
