@@ -12,6 +12,39 @@ pub struct Config {
 
     #[serde(default)]
     pub telegram: Option<TelegramConfig>,
+
+    #[serde(default)]
+    pub update: UpdateConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateConfig {
+    #[serde(default = "default_update_enabled")]
+    pub enabled: bool,
+
+    #[serde(default = "default_check_interval_hours")]
+    pub check_interval_hours: u64,
+
+    #[serde(default)]
+    pub auto_apply: bool,
+}
+
+fn default_update_enabled() -> bool {
+    true
+}
+
+fn default_check_interval_hours() -> u64 {
+    12
+}
+
+impl Default for UpdateConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_update_enabled(),
+            check_interval_hours: default_check_interval_hours(),
+            auto_apply: false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -71,6 +104,7 @@ impl Default for Config {
             data_dir: default_data_dir(),
             models: ModelConfig::default(),
             telegram: None,
+            update: UpdateConfig::default(),
         }
     }
 }

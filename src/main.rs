@@ -21,6 +21,8 @@ mod shutdown;
 mod squad;
 mod tools;
 mod interfaces;
+#[allow(dead_code)]
+mod updater;
 
 use clap::Parser;
 
@@ -63,8 +65,19 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Database initialized");
 
     // Initialize event bus
-    let _event_bus = event_bus::EventBus::new();
+    let event_bus = event_bus::EventBus::new();
     tracing::info!("Event bus ready");
+
+    // Spawn self-update checker
+    if config.update.enabled {
+        let update_config = updater::UpdateConfig {
+            enabled: config.update.enabled,
+            check_interval_hours: config.update.check_interval_hours,
+            auto_apply: config.update.auto_apply,
+        };
+        let _update_handle = updater::spawn_update_checker(update_config, event_bus.sender());
+        tracing::info!("Update checker started");
+    }
 
     tracing::info!("io-daemon initialized successfully");
 
