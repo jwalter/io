@@ -1,0 +1,6 @@
+/target
+/.rustup
+/.cargo
+*.swp
+*.swo
+.env

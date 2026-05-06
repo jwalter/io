@@ -1,10 +1,23 @@
 mod config;
 #[allow(dead_code)]
 mod copilot;
+#[allow(dead_code)]
+mod cost;
 mod db;
 mod event_bus;
+#[allow(dead_code)]
+mod knowledge_sharing;
+#[allow(dead_code)]
+mod memory;
+#[allow(dead_code)]
+mod fallback;
 mod models;
 mod orchestrator;
+mod routing;
+#[allow(dead_code)]
+mod session_pool;
+#[allow(dead_code)]
+mod shutdown;
 mod squad;
 mod tools;
 mod interfaces;

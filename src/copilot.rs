@@ -100,6 +100,7 @@ impl SessionConfig {
 
 /// A Copilot session that can send/receive messages.
 // TODO: Replace with real SDK when available
+#[derive(Debug)]
 pub struct Session {
     pub id: String,
     _config: SessionConfig,
