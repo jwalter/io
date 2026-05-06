@@ -49,8 +49,9 @@ impl SquadManager {
         let agents_dir = self.agents_dir(project_slug);
 
         // Create directory structure
-        fs::create_dir_all(&agents_dir)
-            .with_context(|| format!("Failed to create squad directory: {}", squad_dir.display()))?;
+        fs::create_dir_all(&agents_dir).with_context(|| {
+            format!("Failed to create squad directory: {}", squad_dir.display())
+        })?;
 
         let now = Utc::now();
         let now_str = now.to_rfc3339();
@@ -72,7 +73,8 @@ last_active_at = "{now_str}"
         fs::write(squad_dir.join("decisions.md"), "# Decision Log\n\n")?;
 
         // Insert into DB
-        self.db.insert_squad(&id, project_slug, project_path, &now_str)?;
+        self.db
+            .insert_squad(&id, project_slug, project_path, &now_str)?;
 
         Ok(Squad {
             id,
@@ -114,8 +116,9 @@ last_active_at = "{now_str}"
         let squad = self.find_squad_by_id(squad_id)?;
         let agent_dir = self.agents_dir(&squad.project_slug).join(name);
 
-        fs::create_dir_all(&agent_dir)
-            .with_context(|| format!("Failed to create agent directory: {}", agent_dir.display()))?;
+        fs::create_dir_all(&agent_dir).with_context(|| {
+            format!("Failed to create agent directory: {}", agent_dir.display())
+        })?;
 
         let now = Utc::now();
         let now_str = now.to_rfc3339();
@@ -159,7 +162,8 @@ hired_at: {now_str}
 
         // Insert into DB
         let specs_csv = specializations.join(", ");
-        self.db.insert_agent(&id, squad_id, name, role, &specs_csv, &now_str)?;
+        self.db
+            .insert_agent(&id, squad_id, name, role, &specs_csv, &now_str)?;
 
         Ok(Agent {
             id,
@@ -175,14 +179,18 @@ hired_at: {now_str}
 
     /// Retires an agent (sets status to Retired, appends note to history).
     pub fn retire_agent(&self, squad_id: &str, agent_name: &str) -> Result<()> {
-        self.db.update_agent_status(squad_id, agent_name, "retired")?;
+        self.db
+            .update_agent_status(squad_id, agent_name, "retired")?;
 
         // Append retirement note to history
         let now_str = Utc::now().to_rfc3339();
         let entry = format!("## {now_str}\n\nAgent retired.\n\n");
 
         let squad = self.find_squad_by_id(squad_id)?;
-        let history_path = self.agents_dir(&squad.project_slug).join(agent_name).join("history.md");
+        let history_path = self
+            .agents_dir(&squad.project_slug)
+            .join(agent_name)
+            .join("history.md");
 
         if history_path.exists() {
             let mut contents = fs::read_to_string(&history_path)?;
@@ -196,7 +204,10 @@ hired_at: {now_str}
     /// Appends a timestamped entry to an agent's history.md.
     pub fn append_history(&self, squad_id: &str, agent_name: &str, entry: &str) -> Result<()> {
         let squad = self.find_squad_by_id(squad_id)?;
-        let history_path = self.agents_dir(&squad.project_slug).join(agent_name).join("history.md");
+        let history_path = self
+            .agents_dir(&squad.project_slug)
+            .join(agent_name)
+            .join("history.md");
 
         let now_str = Utc::now().to_rfc3339();
         let formatted = format!("## {now_str}\n\n{entry}\n\n");

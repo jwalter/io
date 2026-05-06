@@ -1,6 +1,6 @@
-use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -77,10 +77,7 @@ fn default_model() -> String {
 }
 
 fn default_fallback_chain() -> Vec<String> {
-    vec![
-        "claude-sonnet-4-5".to_string(),
-        "gpt-4.1".to_string(),
-    ]
+    vec!["claude-sonnet-4-5".to_string(), "gpt-4.1".to_string()]
 }
 
 impl Config {

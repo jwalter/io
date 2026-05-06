@@ -1,9 +1,9 @@
 //! Wiki/Notes tool for persistent knowledge storage.
 
-use async_trait::async_trait;
-use serde_json::{json, Value};
 use anyhow::Result;
+use async_trait::async_trait;
 use chrono::Utc;
+use serde_json::{json, Value};
 use std::path::PathBuf;
 
 use super::{Tool, ToolResult};
@@ -226,7 +226,11 @@ impl WikiTool {
 fn extract_frontmatter_field(content: &str, field: &str) -> Option<String> {
     for line in content.lines() {
         if line.starts_with(&format!("{field}:")) {
-            return Some(line.trim_start_matches(&format!("{field}:")).trim().to_string());
+            return Some(
+                line.trim_start_matches(&format!("{field}:"))
+                    .trim()
+                    .to_string(),
+            );
         }
     }
     None

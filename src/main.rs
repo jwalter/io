@@ -1,28 +1,23 @@
+// Allow dead code during early development — modules are scaffolded but not fully wired yet
+#![allow(dead_code, unused_imports)]
+
+mod bridge;
 mod config;
-#[allow(dead_code)]
 mod copilot;
-#[allow(dead_code)]
 mod cost;
 mod db;
 mod event_bus;
-#[allow(dead_code)]
-mod knowledge_sharing;
-#[allow(dead_code)]
-mod memory;
-#[allow(dead_code)]
 mod fallback;
+mod interfaces;
+mod knowledge_sharing;
+mod memory;
 mod models;
 mod orchestrator;
-mod bridge;
 mod routing;
-#[allow(dead_code)]
 mod session_pool;
-#[allow(dead_code)]
 mod shutdown;
 mod squad;
 mod tools;
-mod interfaces;
-#[allow(dead_code)]
 mod updater;
 
 use std::sync::Arc;
@@ -52,8 +47,11 @@ async fn main() -> anyhow::Result<()> {
     // Initialize logging
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| cli.log_level.parse().unwrap_or_else(|_| "info".parse().unwrap()))
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                cli.log_level
+                    .parse()
+                    .unwrap_or_else(|_| "info".parse().unwrap())
+            }),
         )
         .init();
 
@@ -77,16 +75,15 @@ async fn main() -> anyhow::Result<()> {
     let db = Arc::new(std::sync::Mutex::new(db));
 
     // Create squad manager
+    #[allow(clippy::arc_with_non_send_sync)]
     let squad_manager = Arc::new(squad::SquadManager::new(
         config.data_dir.clone(),
         Arc::new(db::Database::init(&config.data_dir)?),
     ));
 
     // Create orchestrator
-    let copilot = copilot::CopilotManager::new(
-        copilot::CopilotConfig::default(),
-        event_bus.sender(),
-    );
+    let copilot =
+        copilot::CopilotManager::new(copilot::CopilotConfig::default(), event_bus.sender());
     let orchestrator = orchestrator::Orchestrator::new(
         config.clone(),
         copilot,
@@ -102,13 +99,9 @@ async fn main() -> anyhow::Result<()> {
     #[cfg(feature = "telegram")]
     {
         if let Some(ref telegram_config) = config.telegram {
-            let mut bot = interfaces::telegram::TelegramBot::new(
-                telegram_config.clone(),
-                event_bus.sender(),
-            );
-            bot.set_command_context(interfaces::telegram::CommandContext {
-                db: db.clone(),
-            });
+            let mut bot =
+                interfaces::telegram::TelegramBot::new(telegram_config.clone(), event_bus.sender());
+            bot.set_command_context(interfaces::telegram::CommandContext { db: db.clone() });
 
             let bot = Arc::new(bot);
 

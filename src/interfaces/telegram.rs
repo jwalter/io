@@ -48,48 +48,46 @@ impl TelegramBot {
         let chat_registry = self.chat_registry.clone();
         let cmd_ctx = self.command_context.clone();
 
-        let handler = Update::filter_message().endpoint(
-            move |bot: Bot, msg: Message| {
-                let sender = event_sender.clone();
-                let allowed = allowed_users.clone();
-                let registry = chat_registry.clone();
-                let cmd_ctx = cmd_ctx.clone();
-                async move {
-                    let username = msg
-                        .from
-                        .as_ref()
-                        .and_then(|u| u.username.clone())
-                        .unwrap_or_default();
+        let handler = Update::filter_message().endpoint(move |bot: Bot, msg: Message| {
+            let sender = event_sender.clone();
+            let allowed = allowed_users.clone();
+            let registry = chat_registry.clone();
+            let cmd_ctx = cmd_ctx.clone();
+            async move {
+                let username = msg
+                    .from
+                    .as_ref()
+                    .and_then(|u| u.username.clone())
+                    .unwrap_or_default();
 
-                    if !allowed.is_empty() && !allowed.contains(&username) {
-                        bot.send_message(msg.chat.id, "Unauthorized.").await?;
+                if !allowed.is_empty() && !allowed.contains(&username) {
+                    bot.send_message(msg.chat.id, "Unauthorized.").await?;
+                    return respond(());
+                }
+
+                if let Some(text) = msg.text() {
+                    if text.starts_with('/') {
+                        handle_command(&bot, &msg, text, &sender, cmd_ctx.as_ref()).await?;
                         return respond(());
                     }
 
-                    if let Some(text) = msg.text() {
-                        if text.starts_with('/') {
-                            handle_command(&bot, &msg, text, &sender, cmd_ctx.as_ref()).await?;
-                            return respond(());
-                        }
-
-                        let session_id = format!("telegram-{}", msg.chat.id.0);
-                        if let Ok(mut reg) = registry.lock() {
-                            reg.insert(session_id, msg.chat.id);
-                        }
-
-                        let _ = sender.send(Event::UserMessage {
-                            content: text.to_string(),
-                            source: MessageSource::Telegram {
-                                chat_id: msg.chat.id.0,
-                            },
-                            timestamp: chrono::Utc::now(),
-                        });
+                    let session_id = format!("telegram-{}", msg.chat.id.0);
+                    if let Ok(mut reg) = registry.lock() {
+                        reg.insert(session_id, msg.chat.id);
                     }
 
-                    respond(())
+                    let _ = sender.send(Event::UserMessage {
+                        content: text.to_string(),
+                        source: MessageSource::Telegram {
+                            chat_id: msg.chat.id.0,
+                        },
+                        timestamp: chrono::Utc::now(),
+                    });
                 }
-            },
-        );
+
+                respond(())
+            }
+        });
 
         Dispatcher::builder(bot, handler)
             .enable_ctrlc_handler()
@@ -134,9 +132,7 @@ impl TelegramBot {
                                 full_response
                                     .as_bytes()
                                     .chunks(MAX_LEN)
-                                    .map(|chunk| {
-                                        std::str::from_utf8(chunk).unwrap_or("")
-                                    })
+                                    .map(|chunk| std::str::from_utf8(chunk).unwrap_or(""))
                                     .filter(|s| !s.is_empty())
                                     .collect()
                             };
@@ -196,21 +192,16 @@ async fn handle_command(
                     match db.list_squads() {
                         Ok(squads) if squads.is_empty() => "No active squads.".to_string(),
                         Ok(squads) => {
-                            let mut lines =
-                                vec!["📋 Active Squads:".to_string(), String::new()];
+                            let mut lines = vec!["📋 Active Squads:".to_string(), String::new()];
                             for squad in &squads {
-                                let agents =
-                                    db.get_squad_agents(&squad.id).unwrap_or_default();
+                                let agents = db.get_squad_agents(&squad.id).unwrap_or_default();
                                 lines.push(format!(
                                     "🔹 {} ({} agents)",
                                     squad.project_slug,
                                     agents.len()
                                 ));
                                 for agent in &agents {
-                                    lines.push(format!(
-                                        "  • {} ({:?})",
-                                        agent.name, agent.status
-                                    ));
+                                    lines.push(format!("  • {} ({:?})", agent.name, agent.status));
                                 }
                             }
                             lines.join("\n")
@@ -251,8 +242,7 @@ async fn handle_command(
                                 ];
                                 for (i, (title, content)) in results.iter().enumerate() {
                                     let snippet: String = content.chars().take(200).collect();
-                                    let ellipsis =
-                                        if content.len() > 200 { "..." } else { "" };
+                                    let ellipsis = if content.len() > 200 { "..." } else { "" };
                                     lines.push(format!(
                                         "{}. **{}** — {}{}",
                                         i + 1,

@@ -1,8 +1,8 @@
 //! File operations tool: read, write, list, search.
 
+use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::{json, Value};
-use anyhow::Result;
 use std::path::Path;
 
 use super::{Tool, ToolResult};
@@ -136,7 +136,11 @@ impl FileOpsTool {
         let mut entries = Vec::new();
         for entry in std::fs::read_dir(path)? {
             let entry = entry?;
-            let file_type = if entry.file_type()?.is_dir() { "dir" } else { "file" };
+            let file_type = if entry.file_type()?.is_dir() {
+                "dir"
+            } else {
+                "file"
+            };
             entries.push(format!("[{file_type}] {}", entry.path().display()));
         }
         entries.sort();
@@ -163,7 +167,12 @@ impl FileOpsTool {
         Ok(())
     }
 
-    async fn search_files(&self, path: &str, pattern: &str, glob: Option<&str>) -> Result<ToolResult> {
+    async fn search_files(
+        &self,
+        path: &str,
+        pattern: &str,
+        glob: Option<&str>,
+    ) -> Result<ToolResult> {
         let mut matches = Vec::new();
         self.search_recursive(Path::new(path), pattern, glob, &mut matches)?;
 
@@ -225,7 +234,12 @@ impl FileOpsTool {
 
 /// Simple glob matching supporting * and ? wildcards.
 fn simple_glob_match(pattern: &str, text: &str) -> bool {
-    glob_match_recursive(&pattern.chars().collect::<Vec<_>>(), &text.chars().collect::<Vec<_>>(), 0, 0)
+    glob_match_recursive(
+        &pattern.chars().collect::<Vec<_>>(),
+        &text.chars().collect::<Vec<_>>(),
+        0,
+        0,
+    )
 }
 
 fn glob_match_recursive(pattern: &[char], text: &[char], pi: usize, ti: usize) -> bool {

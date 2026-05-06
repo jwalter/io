@@ -1,10 +1,10 @@
 //! Shell command execution tool.
 
+use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::{json, Value};
-use anyhow::Result;
-use tokio::process::Command;
 use std::time::Duration;
+use tokio::process::Command;
 
 use super::{Tool, ToolResult};
 
@@ -69,11 +69,7 @@ impl Tool for ShellTool {
             cmd.current_dir(dir);
         }
 
-        let result = tokio::time::timeout(
-            Duration::from_secs(timeout_secs),
-            cmd.output(),
-        )
-        .await;
+        let result = tokio::time::timeout(Duration::from_secs(timeout_secs), cmd.output()).await;
 
         match result {
             Ok(Ok(output)) => {

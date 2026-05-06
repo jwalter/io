@@ -1,7 +1,7 @@
+use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{Mutex, Semaphore};
-use anyhow::Result;
 
 use crate::copilot::{CopilotManager, Session, SessionOptions};
 
@@ -67,7 +67,10 @@ impl SessionPool {
         // Check if agent already has a pooled session
         {
             let mut sessions = self.sessions.lock().await;
-            if let Some(pooled) = sessions.values_mut().find(|s| s.agent_name == agent_name && !s.in_use) {
+            if let Some(pooled) = sessions
+                .values_mut()
+                .find(|s| s.agent_name == agent_name && !s.in_use)
+            {
                 pooled.in_use = true;
                 pooled.last_used = chrono::Utc::now();
                 return Ok(SessionHandle {
@@ -195,8 +198,8 @@ pub struct PoolStatus {
 mod tests {
     use super::*;
     use crate::copilot::{CopilotConfig, CopilotManager};
-    use tokio::sync::broadcast;
     use crate::event_bus::Event;
+    use tokio::sync::broadcast;
 
     async fn setup_pool() -> SessionPool {
         let (sender, _) = broadcast::channel::<Event>(16);
@@ -239,7 +242,10 @@ mod tests {
             tools: vec![],
         };
 
-        let handle1 = pool.acquire("agent-a", None, options.clone()).await.unwrap();
+        let handle1 = pool
+            .acquire("agent-a", None, options.clone())
+            .await
+            .unwrap();
         let id1 = handle1.session_id().to_string();
         pool.release(&id1).await;
 

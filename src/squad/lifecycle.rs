@@ -3,8 +3,8 @@
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Utc};
 
-use std::fs;
 use std::fmt;
+use std::fs;
 
 use crate::models::AgentStatus;
 
@@ -378,7 +378,11 @@ impl SquadManager {
             (
                 &["security", "auth", "vulnerability", "audit"],
                 "Security Specialist",
-                &["security-audit", "authentication", "vulnerability-assessment"],
+                &[
+                    "security-audit",
+                    "authentication",
+                    "vulnerability-assessment",
+                ],
             ),
             (
                 &["deploy", "ci", "cd", "pipeline", "infrastructure", "devops"],
@@ -427,9 +431,11 @@ impl SquadManager {
             }
 
             // Check if these specializations are already covered
-            let already_covered = specializations
-                .iter()
-                .any(|s| covered_lower.iter().any(|c| c.contains(s) || s.contains(c.as_str())));
+            let already_covered = specializations.iter().any(|s| {
+                covered_lower
+                    .iter()
+                    .any(|c| c.contains(s) || s.contains(c.as_str()))
+            });
 
             if !already_covered {
                 let matched_keywords: Vec<&str> = keywords
@@ -499,9 +505,7 @@ fn parse_history_entries(content: &str) -> Vec<HistoryEntry> {
         // Try to parse "[EntryType]" from header
         let (timestamp_str, entry_type) = if let Some(bracket_start) = header.find('[') {
             let ts = header[..bracket_start].trim();
-            let type_str = header[bracket_start + 1..]
-                .trim_end_matches(']')
-                .trim();
+            let type_str = header[bracket_start + 1..].trim_end_matches(']').trim();
             let etype = HistoryEntryType::from_str(type_str).unwrap_or(HistoryEntryType::Note);
             (ts, etype)
         } else {

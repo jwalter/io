@@ -6,9 +6,9 @@ pub mod shell;
 pub mod web;
 pub mod wiki;
 
+use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::{json, Value};
-use anyhow::Result;
 
 use calendar::CalendarTool;
 use file_ops::FileOpsTool;
@@ -66,7 +66,10 @@ impl ToolRegistry {
     }
 
     pub fn get(&self, name: &str) -> Option<&dyn Tool> {
-        self.tools.iter().find(|t| t.name() == name).map(|t| t.as_ref())
+        self.tools
+            .iter()
+            .find(|t| t.name() == name)
+            .map(|t| t.as_ref())
     }
 
     pub fn list(&self) -> Vec<&dyn Tool> {

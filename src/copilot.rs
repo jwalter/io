@@ -11,7 +11,6 @@
 
 use std::sync::Arc;
 use tokio::sync::broadcast;
-use tracing;
 
 use crate::event_bus::Event;
 
@@ -72,6 +71,7 @@ pub struct SessionConfig {
 }
 
 impl Default for SessionConfig {
+    #[allow(clippy::derivable_impls)]
     fn default() -> Self {
         Self {
             system_prompt: None,
@@ -172,21 +172,12 @@ pub enum PermissionResult {
 // ─── Our wrapper types ──────────────────────────────────────────────────────
 
 /// Configuration for the CopilotManager.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CopilotConfig {
     /// Transport type (e.g., "stdio", "tcp://host:port")
     pub transport: Option<String>,
     /// Default model to use for sessions
     pub default_model: Option<String>,
-}
-
-impl Default for CopilotConfig {
-    fn default() -> Self {
-        Self {
-            transport: None,
-            default_model: None,
-        }
-    }
 }
 
 /// Options for creating a new session through CopilotManager.

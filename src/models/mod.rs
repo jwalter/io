@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 /// Represents a squad of agents for a specific project
 #[derive(Debug, Clone, Serialize, Deserialize)]

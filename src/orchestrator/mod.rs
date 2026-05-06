@@ -119,7 +119,10 @@ impl Orchestrator {
                 });
             }
             None => {
-                tracing::info!(project = project_slug, "No existing squad, will create on demand");
+                tracing::info!(
+                    project = project_slug,
+                    "No existing squad, will create on demand"
+                );
             }
         }
         Ok(())

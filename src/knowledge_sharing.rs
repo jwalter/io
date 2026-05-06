@@ -74,7 +74,8 @@ impl KnowledgeSharingManager {
             squad_id: squad_id.to_string(),
         };
 
-        self.knowledge_store.add(&title, entry_content, tags, source)
+        self.knowledge_store
+            .add(&title, entry_content, tags, source)
     }
 
     /// Scan an agent's history for entries that look promotable.
@@ -126,8 +127,12 @@ impl KnowledgeSharingManager {
 
         // Write to ~/.io-daemon/skills/{skill_name}.md
         let skills_dir = skills_directory()?;
-        fs::create_dir_all(&skills_dir)
-            .with_context(|| format!("Failed to create skills directory: {}", skills_dir.display()))?;
+        fs::create_dir_all(&skills_dir).with_context(|| {
+            format!(
+                "Failed to create skills directory: {}",
+                skills_dir.display()
+            )
+        })?;
 
         let file_path = skills_dir.join(format!("{}.md", skill_name));
         let tags_yaml = tags
@@ -236,7 +241,7 @@ impl KnowledgeSharingManager {
             }
         }
 
-        skills.sort_by(|a, b| b.extracted_at.cmp(&a.extracted_at));
+        skills.sort_by_key(|s| std::cmp::Reverse(s.extracted_at));
         Ok(skills)
     }
 
@@ -288,7 +293,10 @@ fn suggest_tags(content: &str) -> Vec<String> {
     let lower = content.to_lowercase();
     let keyword_tags: &[(&[&str], &str)] = &[
         (&["test", "testing", "coverage"], "testing"),
-        (&["performance", "optimization", "latency", "benchmark"], "performance"),
+        (
+            &["performance", "optimization", "latency", "benchmark"],
+            "performance",
+        ),
         (&["security", "auth", "vulnerability"], "security"),
         (&["architecture", "design", "pattern"], "architecture"),
         (&["api", "endpoint", "rest", "graphql"], "api"),
@@ -347,8 +355,8 @@ fn diversify_by_squad(entries: &mut Vec<KnowledgeEntry>, target_count: usize) {
 fn parse_skill_file(path: &PathBuf) -> Result<Skill> {
     let raw = fs::read_to_string(path)?;
 
-    let (frontmatter, body) = split_frontmatter(&raw)
-        .context("Skill file missing YAML frontmatter")?;
+    let (frontmatter, body) =
+        split_frontmatter(&raw).context("Skill file missing YAML frontmatter")?;
 
     let name = extract_field(&frontmatter, "name").unwrap_or_default();
     let description = extract_field(&frontmatter, "description").unwrap_or_default();

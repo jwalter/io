@@ -1,10 +1,10 @@
 //! Calendar tool for event management.
 
-use async_trait::async_trait;
-use serde_json::{json, Value};
-use serde::{Deserialize, Serialize};
 use anyhow::Result;
+use async_trait::async_trait;
 use chrono::{NaiveDate, Utc};
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use std::path::PathBuf;
 use uuid::Uuid;
 
@@ -205,8 +205,18 @@ impl CalendarTool {
             .map(|e| {
                 let time_str = e.time.as_deref().unwrap_or("all-day");
                 let desc = e.description.as_deref().unwrap_or("");
-                format!("[{}] {} {} - {}{}", e.id, e.date, time_str, e.title,
-                    if desc.is_empty() { String::new() } else { format!(" ({desc})") })
+                format!(
+                    "[{}] {} {} - {}{}",
+                    e.id,
+                    e.date,
+                    time_str,
+                    e.title,
+                    if desc.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" ({desc})")
+                    }
+                )
             })
             .collect::<Vec<_>>()
             .join("\n");

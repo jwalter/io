@@ -1,7 +1,7 @@
-use std::path::Path;
-use rusqlite::{params, Connection};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
+use rusqlite::{params, Connection};
+use std::path::Path;
 
 use crate::models::{Agent, AgentStatus, Squad};
 
@@ -21,7 +21,8 @@ impl Database {
     }
 
     fn run_migrations(&self) -> Result<()> {
-        self.conn.execute_batch("
+        self.conn.execute_batch(
+            "
             CREATE TABLE IF NOT EXISTS migrations (
                 id INTEGER PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -62,19 +63,23 @@ impl Database {
                 status TEXT NOT NULL DEFAULT 'active',
                 hired_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
-        ")?;
+        ",
+        )?;
 
         // Create FTS5 virtual table for full-text search on messages
-        self.conn.execute_batch("
+        self.conn.execute_batch(
+            "
             CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
                 content,
                 content_rowid='rowid',
                 tokenize='porter'
             );
-        ")?;
+        ",
+        )?;
 
         // Knowledge index for the memory/wiki system
-        self.conn.execute_batch("
+        self.conn.execute_batch(
+            "
             CREATE TABLE IF NOT EXISTS knowledge_index (
                 id TEXT PRIMARY KEY,
                 title TEXT NOT NULL,
@@ -93,7 +98,8 @@ impl Database {
                 tags,
                 tokenize='porter'
             );
-        ")?;
+        ",
+        )?;
 
         Ok(())
     }
@@ -104,7 +110,13 @@ impl Database {
 
     // --- Squad operations ---
 
-    pub fn insert_squad(&self, id: &str, project_slug: &str, project_path: &str, created_at: &str) -> Result<()> {
+    pub fn insert_squad(
+        &self,
+        id: &str,
+        project_slug: &str,
+        project_path: &str,
+        created_at: &str,
+    ) -> Result<()> {
         self.conn.execute(
             "INSERT INTO squads (id, project_slug, project_path, created_at, last_active_at) VALUES (?1, ?2, ?3, ?4, ?4)",
             params![id, project_slug, project_path, created_at],
@@ -132,14 +144,18 @@ impl Database {
         match result {
             Ok((id, slug, path, created_str, active_str)) => {
                 let created_at = DateTime::parse_from_rfc3339(&created_str)
-                    .or_else(|_| chrono::NaiveDateTime::parse_from_str(&created_str, "%Y-%m-%d %H:%M:%S")
-                        .map(|ndt| ndt.and_utc().fixed_offset()))
+                    .or_else(|_| {
+                        chrono::NaiveDateTime::parse_from_str(&created_str, "%Y-%m-%d %H:%M:%S")
+                            .map(|ndt| ndt.and_utc().fixed_offset())
+                    })
                     .map(|dt| dt.with_timezone(&Utc))
                     .unwrap_or_else(|_| Utc::now());
 
                 let last_active_at = DateTime::parse_from_rfc3339(&active_str)
-                    .or_else(|_| chrono::NaiveDateTime::parse_from_str(&active_str, "%Y-%m-%d %H:%M:%S")
-                        .map(|ndt| ndt.and_utc().fixed_offset()))
+                    .or_else(|_| {
+                        chrono::NaiveDateTime::parse_from_str(&active_str, "%Y-%m-%d %H:%M:%S")
+                            .map(|ndt| ndt.and_utc().fixed_offset())
+                    })
                     .map(|dt| dt.with_timezone(&Utc))
                     .unwrap_or_else(|_| Utc::now());
 
@@ -167,7 +183,7 @@ impl Database {
 
     pub fn list_squads(&self) -> Result<Vec<Squad>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, project_slug, project_path, created_at, last_active_at FROM squads"
+            "SELECT id, project_slug, project_path, created_at, last_active_at FROM squads",
         )?;
 
         let rows = stmt.query_map([], |row| {
@@ -218,7 +234,12 @@ impl Database {
         Ok(())
     }
 
-    pub fn update_agent_status(&self, squad_id: &str, agent_name: &str, status: &str) -> Result<()> {
+    pub fn update_agent_status(
+        &self,
+        squad_id: &str,
+        agent_name: &str,
+        status: &str,
+    ) -> Result<()> {
         self.conn.execute(
             "UPDATE squad_agents SET status = ?1 WHERE squad_id = ?2 AND name = ?3",
             params![status, squad_id, agent_name],
@@ -229,7 +250,7 @@ impl Database {
     /// Search the knowledge_fts table for matching entries.
     pub fn search_knowledge(&self, query: &str, limit: usize) -> Result<Vec<(String, String)>> {
         let mut stmt = self.conn.prepare(
-            "SELECT title, content FROM knowledge_fts WHERE knowledge_fts MATCH ?1 LIMIT ?2"
+            "SELECT title, content FROM knowledge_fts WHERE knowledge_fts MATCH ?1 LIMIT ?2",
         )?;
 
         let rows = stmt.query_map(params![query, limit as i64], |row| {
@@ -295,8 +316,7 @@ fn parse_db_timestamp(s: &str) -> DateTime<Utc> {
     DateTime::parse_from_rfc3339(s)
         .map(|dt| dt.with_timezone(&Utc))
         .or_else(|_| {
-            chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S")
-                .map(|ndt| ndt.and_utc())
+            chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S").map(|ndt| ndt.and_utc())
         })
         .unwrap_or_else(|_| Utc::now())
 }

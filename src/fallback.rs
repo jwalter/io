@@ -18,10 +18,7 @@ impl ModelSelector {
         let chains = vec![
             ModelChain {
                 tier_name: "premium".to_string(),
-                models: vec![
-                    "claude-opus-4-5".to_string(),
-                    "gpt-5.2".to_string(),
-                ],
+                models: vec!["claude-opus-4-5".to_string(), "gpt-5.2".to_string()],
             },
             ModelChain {
                 tier_name: "standard".to_string(),
@@ -29,13 +26,13 @@ impl ModelSelector {
             },
             ModelChain {
                 tier_name: "fast".to_string(),
-                models: vec![
-                    "claude-haiku-4-5".to_string(),
-                    "gpt-4.1".to_string(),
-                ],
+                models: vec!["claude-haiku-4-5".to_string(), "gpt-4.1".to_string()],
             },
         ];
-        Self { chains, default_model }
+        Self {
+            chains,
+            default_model,
+        }
     }
 
     /// Get the default model.

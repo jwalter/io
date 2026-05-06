@@ -124,7 +124,7 @@ impl Router {
     pub fn add_rule(&mut self, rule: RoutingRule) {
         self.rules.push(rule);
         // Keep rules sorted by priority descending
-        self.rules.sort_by(|a, b| b.priority.cmp(&a.priority));
+        self.rules.sort_by_key(|r| std::cmp::Reverse(r.priority));
     }
 
     /// Set the default agent for when no rules match.
@@ -140,7 +140,11 @@ impl Router {
         let mentions: Vec<String> = message
             .split_whitespace()
             .filter(|w| w.starts_with('@') && w.len() > 1)
-            .map(|w| w[1..].trim_end_matches(|c: char| !c.is_alphanumeric() && c != '-' && c != '_').to_string())
+            .map(|w| {
+                w[1..]
+                    .trim_end_matches(|c: char| !c.is_alphanumeric() && c != '-' && c != '_')
+                    .to_string()
+            })
             .filter(|s| !s.is_empty())
             .collect();
 
@@ -155,7 +159,9 @@ impl Router {
         // 2. Check for fan-out keywords
         let fan_out_keywords = ["@team", "@all", "@everyone"];
         if fan_out_keywords.iter().any(|kw| lower.contains(kw))
-            || lower.split_whitespace().any(|w| w == "team" || w == "all" || w == "everyone")
+            || lower
+                .split_whitespace()
+                .any(|w| w == "team" || w == "all" || w == "everyone")
         {
             let all_agents: Vec<String> = self
                 .rules
@@ -194,9 +200,7 @@ impl Router {
             .default_agent
             .clone()
             .map(|a| vec![a])
-            .or_else(|| {
-                self.rules.first().map(|r| r.agents.clone())
-            })
+            .or_else(|| self.rules.first().map(|r| r.agents.clone()))
             .unwrap_or_default();
 
         RoutingDecision {

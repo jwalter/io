@@ -127,43 +127,35 @@ impl TuiApp {
             (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
                 self.should_quit = true;
             }
-            (KeyCode::Enter, _) => {
-                if !self.input.is_empty() {
-                    let content = self.input.drain(..).collect::<String>();
-                    self.input_cursor = 0;
+            (KeyCode::Enter, _) if !self.input.is_empty() => {
+                let content = self.input.drain(..).collect::<String>();
+                self.input_cursor = 0;
 
-                    self.messages.push(ChatMessage {
-                        sender: "user".to_string(),
-                        content: content.clone(),
-                        timestamp: chrono::Utc::now(),
-                        is_streaming: false,
-                    });
+                self.messages.push(ChatMessage {
+                    sender: "user".to_string(),
+                    content: content.clone(),
+                    timestamp: chrono::Utc::now(),
+                    is_streaming: false,
+                });
 
-                    let _ = self.event_sender.send(Event::UserMessage {
-                        content,
-                        source: MessageSource::Tui,
-                        timestamp: chrono::Utc::now(),
-                    });
+                let _ = self.event_sender.send(Event::UserMessage {
+                    content,
+                    source: MessageSource::Tui,
+                    timestamp: chrono::Utc::now(),
+                });
 
-                    // Auto-scroll to bottom
-                    self.scroll_offset = 0;
-                }
+                // Auto-scroll to bottom
+                self.scroll_offset = 0;
             }
-            (KeyCode::Backspace, _) => {
-                if self.input_cursor > 0 {
-                    self.input_cursor -= 1;
-                    self.input.remove(self.input_cursor);
-                }
+            (KeyCode::Backspace, _) if self.input_cursor > 0 => {
+                self.input_cursor -= 1;
+                self.input.remove(self.input_cursor);
             }
-            (KeyCode::Left, _) => {
-                if self.input_cursor > 0 {
-                    self.input_cursor -= 1;
-                }
+            (KeyCode::Left, _) if self.input_cursor > 0 => {
+                self.input_cursor -= 1;
             }
-            (KeyCode::Right, _) => {
-                if self.input_cursor < self.input.len() {
-                    self.input_cursor += 1;
-                }
+            (KeyCode::Right, _) if self.input_cursor < self.input.len() => {
+                self.input_cursor += 1;
             }
             (KeyCode::Up, _) => {
                 self.scroll_offset = self.scroll_offset.saturating_add(1);
@@ -240,16 +232,13 @@ impl TuiApp {
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(3), // Status bar
-                Constraint::Min(1),   // Chat area
+                Constraint::Min(1),    // Chat area
                 Constraint::Length(3), // Input area
             ])
             .split(frame.area());
 
         // Status bar
-        let squad_display = self
-            .squad_name
-            .as_deref()
-            .unwrap_or("none");
+        let squad_display = self.squad_name.as_deref().unwrap_or("none");
         let status_text = format!(
             " io-daemon v0.1.0 | Squad: {} | Agents: {}",
             squad_display, self.agent_count
@@ -308,11 +297,26 @@ impl TuiApp {
 
         for msg in &self.messages {
             let (sender_style, prefix) = if msg.sender == "user" {
-                (Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD), "[user]")
+                (
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                    "[user]",
+                )
             } else if msg.sender.starts_with("system:") {
-                (Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD), "[system]")
+                (
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                    "[system]",
+                )
             } else {
-                (Style::default().fg(Color::Green).add_modifier(Modifier::BOLD), "")
+                (
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                    "",
+                )
             };
 
             let sender_display = if prefix.is_empty() {

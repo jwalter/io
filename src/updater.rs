@@ -102,8 +102,8 @@ fn binary_name() -> &'static str {
 /// Check GitHub for a newer release. Returns `Some(UpdateInfo)` when an update
 /// is available, or `None` if already on the latest version.
 pub async fn check_for_update(current_version: &str) -> Result<Option<UpdateInfo>> {
-    let current = Version::parse(current_version)
-        .context("Failed to parse current version as semver")?;
+    let current =
+        Version::parse(current_version).context("Failed to parse current version as semver")?;
 
     let client = reqwest::Client::new();
     let release: GitHubRelease = client
@@ -119,7 +119,10 @@ pub async fn check_for_update(current_version: &str) -> Result<Option<UpdateInfo
         .await
         .context("Failed to parse GitHub release response")?;
 
-    let tag = release.tag_name.strip_prefix('v').unwrap_or(&release.tag_name);
+    let tag = release
+        .tag_name
+        .strip_prefix('v')
+        .unwrap_or(&release.tag_name);
     let latest = Version::parse(tag).context("Failed to parse release tag as semver")?;
 
     if latest <= current {
@@ -155,8 +158,9 @@ pub async fn check_for_update(current_version: &str) -> Result<Option<UpdateInfo
         .await
         .context("Failed to read sha256sums.txt body")?;
 
-    let checksum = parse_checksum(&sums_text, &archive)
-        .context(format!("Checksum for {archive} not found in sha256sums.txt"))?;
+    let checksum = parse_checksum(&sums_text, &archive).context(format!(
+        "Checksum for {archive} not found in sha256sums.txt"
+    ))?;
 
     Ok(Some(UpdateInfo {
         version: latest.to_string(),
@@ -298,8 +302,9 @@ pub fn spawn_update_checker(
 
                     if config.auto_apply {
                         info!("Auto-apply enabled, applying update...");
-                        let temp_dir =
-                            std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_path_buf()));
+                        let temp_dir = std::env::current_exe()
+                            .ok()
+                            .and_then(|p| p.parent().map(|d| d.to_path_buf()));
 
                         if let Some(dir) = temp_dir {
                             match download_and_verify(&update_info, &dir).await {
@@ -380,17 +385,14 @@ fn extract_zip(archive_bytes: &[u8], output_path: &Path) -> Result<()> {
     let target_name = binary_name();
 
     for i in 0..archive.len() {
-        let mut file = archive
-            .by_index(i)
-            .context("Failed to read zip entry")?;
+        let mut file = archive.by_index(i).context("Failed to read zip entry")?;
 
         let name = file.name().to_string();
         if name == target_name || name.ends_with(&format!("/{target_name}")) {
             let mut contents = Vec::new();
             file.read_to_end(&mut contents)
                 .context("Failed to read binary from zip")?;
-            std::fs::write(output_path, &contents)
-                .context("Failed to write extracted binary")?;
+            std::fs::write(output_path, &contents).context("Failed to write extracted binary")?;
             return Ok(());
         }
     }

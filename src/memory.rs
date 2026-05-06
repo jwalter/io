@@ -264,10 +264,7 @@ impl KnowledgeStore {
             params![id],
             |row| row.get(0),
         )?;
-        conn.execute(
-            "DELETE FROM knowledge_fts WHERE rowid = ?1",
-            params![rowid],
-        )?;
+        conn.execute("DELETE FROM knowledge_fts WHERE rowid = ?1", params![rowid])?;
         conn.execute(
             "INSERT INTO knowledge_fts (rowid, title, content, tags) VALUES (?1, ?2, ?3, ?4)",
             params![rowid, title, content, tags_vec.join(" ")],
@@ -292,10 +289,7 @@ impl KnowledgeStore {
             params![id],
             |row| row.get(0),
         )?;
-        conn.execute(
-            "DELETE FROM knowledge_fts WHERE rowid = ?1",
-            params![rowid],
-        )?;
+        conn.execute("DELETE FROM knowledge_fts WHERE rowid = ?1", params![rowid])?;
 
         // Remove index entry
         conn.execute("DELETE FROM knowledge_index WHERE id = ?1", params![id])?;
@@ -611,7 +605,10 @@ impl EpisodeSummarizer {
         summary: &str,
         topics: Vec<String>,
     ) -> Result<KnowledgeEntry> {
-        let title = format!("Episode Summary — {}", &session_id[..8.min(session_id.len())]);
+        let title = format!(
+            "Episode Summary — {}",
+            &session_id[..8.min(session_id.len())]
+        );
         let source = KnowledgeSource::EpisodeSummary {
             session_id: session_id.to_string(),
         };
@@ -656,10 +653,7 @@ fn compute_relevance(fts_rank: f64, updated_at: &str, access_count: u32) -> f32 
     // Recency: decay over 30 days
     let recency_score = {
         let updated = parse_timestamp(updated_at);
-        let age_days = Utc::now()
-            .signed_duration_since(updated)
-            .num_days()
-            .max(0) as f64;
+        let age_days = Utc::now().signed_duration_since(updated).num_days().max(0) as f64;
         (1.0 / (1.0 + age_days / 30.0)).min(1.0)
     };
 

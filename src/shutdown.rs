@@ -24,9 +24,7 @@ impl ShutdownController {
 
     /// Wait for Ctrl+C and trigger shutdown.
     pub async fn wait_for_signal(&self) {
-        signal::ctrl_c()
-            .await
-            .expect("Failed to listen for Ctrl+C");
+        signal::ctrl_c().await.expect("Failed to listen for Ctrl+C");
         tracing::info!("Shutdown signal received");
         self.trigger();
     }

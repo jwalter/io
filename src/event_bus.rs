@@ -22,15 +22,9 @@ pub enum Event {
         session_id: String,
     },
     /// Squad composition changed
-    SquadUpdated {
-        squad_id: String,
-        action: String,
-    },
+    SquadUpdated { squad_id: String, action: String },
     /// System event (errors, status changes)
-    System {
-        level: String,
-        message: String,
-    },
+    System { level: String, message: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
