@@ -25,8 +25,12 @@ pub struct UpdateConfig {
     #[serde(default = "default_check_interval_hours")]
     pub check_interval_hours: u64,
 
-    #[serde(default)]
+    #[serde(default = "default_auto_apply")]
     pub auto_apply: bool,
+}
+
+fn default_auto_apply() -> bool {
+    true
 }
 
 fn default_update_enabled() -> bool {
@@ -42,7 +46,7 @@ impl Default for UpdateConfig {
         Self {
             enabled: default_update_enabled(),
             check_interval_hours: default_check_interval_hours(),
-            auto_apply: false,
+            auto_apply: default_auto_apply(),
         }
     }
 }

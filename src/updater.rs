@@ -27,7 +27,7 @@ impl Default for UpdateConfig {
         Self {
             enabled: true,
             check_interval_hours: 12,
-            auto_apply: false,
+            auto_apply: true,
         }
     }
 }
