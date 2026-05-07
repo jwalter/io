@@ -108,12 +108,14 @@ impl Orchestrator {
         let model = &self.config.models.default;
         let tools = self.orchestrator_tools();
 
+        tracing::debug!(model = %model, "Processing user message");
+
         // Tool call loop — model may respond with text or request tool calls
         let mut rounds = 0;
         loop {
             rounds += 1;
             if rounds > MAX_TOOL_ROUNDS {
-                tracing::warn!("Tool call loop exceeded max rounds, returning partial response");
+                tracing::warn!(model = %model, "Tool call loop exceeded max rounds, returning partial response");
                 break;
             }
 
