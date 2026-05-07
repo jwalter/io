@@ -220,7 +220,7 @@ impl GithubModelsClient {
         let mut body = serde_json::json!({
             "model": model,
             "messages": messages,
-            "max_tokens": 4096,
+            "max_completion_tokens": 4096,
         });
 
         if !tools.is_empty() {
@@ -283,7 +283,7 @@ impl GithubModelsClient {
         let mut body = serde_json::json!({
             "model": model,
             "messages": messages,
-            "max_tokens": 4096,
+            "max_completion_tokens": 4096,
             "stream": true,
         });
 
