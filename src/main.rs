@@ -81,9 +81,14 @@ async fn main() -> anyhow::Result<()> {
         Arc::new(db::Database::init(&config.data_dir)?),
     ));
 
-    // Create orchestrator
-    let orchestrator =
-        orchestrator::Orchestrator::new(config.clone(), squad_manager.clone(), event_bus.clone());
+    // Create orchestrator with tool registry
+    let tool_registry = tools::ToolRegistry::register_defaults();
+    let orchestrator = orchestrator::Orchestrator::new(
+        config.clone(),
+        squad_manager.clone(),
+        tool_registry,
+        event_bus.clone(),
+    );
 
     // Spawn orchestrator bridge
     let _bridge_handle = bridge::spawn_orchestrator_bridge(orchestrator, event_bus.clone());

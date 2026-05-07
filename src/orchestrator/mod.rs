@@ -12,6 +12,7 @@ use crate::config::Config;
 use crate::copilot::{ChatMessage, ChatResponse, GithubModelsClient, ToolCall, ToolDefinition};
 use crate::event_bus::{EventBus, MessageSource};
 use crate::squad::SquadManager;
+use crate::tools::ToolRegistry;
 
 /// The Orchestrator system prompt — defines hybrid direct-response + routing behavior
 const ORCHESTRATOR_SYSTEM_PROMPT: &str = r#"You are IO, a personal AI assistant daemon. You are helpful, concise, and friendly.
@@ -24,15 +25,21 @@ Answer these yourself — no tools needed:
 - Status questions about yourself ("what can you do?", "what squads exist?")
 - Opinions, recommendations, or advice that don't require project context
 
-## When to delegate to squads
-Use your squad tools when the request involves:
-- Project-specific work (code generation, refactoring, debugging)
-- File operations (reading, writing, searching project files)
-- Tasks requiring specialist expertise (security review, architecture design)
-- Multi-step workflows that benefit from agent collaboration
-- Anything that needs persistent project context or history
+## When to use utility tools
+Use these tools for practical tasks the user asks for:
+- file_ops: Read, write, list, or search files on the local filesystem
+- shell: Execute shell commands on the host system
+- web: Fetch web pages or make HTTP requests
+- wiki: Search and read Wikipedia articles
+- calendar: Query and manage calendar events
 
-## Available tools
+## When to delegate to squads
+Use squad tools when the request involves:
+- Project-specific work that needs persistent project context
+- Multi-step workflows that benefit from agent collaboration
+- Tasks requiring specialist expertise across a project
+
+## Squad management tools
 - squad_recall: Recall an existing squad for a project
 - squad_create: Create a new squad for a project
 - squad_hire: Hire a new specialist agent into a squad
@@ -42,9 +49,9 @@ Use your squad tools when the request involves:
 
 ## Guidelines
 - Be conversational and natural for simple interactions
-- When delegating, provide clear context and task descriptions to agents
-- If a task requires expertise not covered by current agents, hire a new specialist first
-- Synthesize agent results into clear summaries for the user
+- Use utility tools directly for straightforward tasks (reading a file, running a command)
+- Delegate to squads for complex multi-step project work
+- Synthesize results into clear summaries for the user
 "#;
 
 /// Maximum tool call rounds to prevent infinite loops.
@@ -55,6 +62,7 @@ pub struct Orchestrator {
     config: Arc<Config>,
     client: Option<GithubModelsClient>,
     squad_manager: Arc<SquadManager>,
+    tool_registry: ToolRegistry,
     event_bus: Arc<EventBus>,
     /// Conversation history (per-session, simplified for now)
     messages: Vec<ChatMessage>,
@@ -64,12 +72,14 @@ impl Orchestrator {
     pub fn new(
         config: Arc<Config>,
         squad_manager: Arc<SquadManager>,
+        tool_registry: ToolRegistry,
         event_bus: Arc<EventBus>,
     ) -> Self {
         Self {
             config,
             client: None,
             squad_manager,
+            tool_registry,
             event_bus,
             messages: Vec::new(),
         }
@@ -159,6 +169,15 @@ impl Orchestrator {
             "Executing tool call"
         );
 
+        // Check the tool registry first (file_ops, shell, web, wiki, calendar, etc.)
+        if let Some(tool) = self.tool_registry.get(&tool_call.function.name) {
+            return match tool.execute(args).await {
+                Ok(result) => result.output,
+                Err(e) => format!("Tool error: {e}"),
+            };
+        }
+
+        // Fall back to built-in squad management tools
         match tool_call.function.name.as_str() {
             "squad_recall" => {
                 let slug = args["project_slug"].as_str().unwrap_or("");
@@ -220,7 +239,16 @@ impl Orchestrator {
 
     /// Get the tool definitions in OpenAI format.
     fn orchestrator_tools(&self) -> Vec<ToolDefinition> {
-        vec![
+        // Start with tools from the registry
+        let mut tools: Vec<ToolDefinition> = self
+            .tool_registry
+            .list()
+            .iter()
+            .map(|t| ToolDefinition::new(t.name(), t.description(), t.parameters_schema()))
+            .collect();
+
+        // Add squad management tools
+        tools.extend(vec![
             ToolDefinition::new(
                 "squad_recall",
                 "Recall an existing squad for a project by its slug",
@@ -294,7 +322,9 @@ impl Orchestrator {
                     "required": ["title", "content"]
                 }),
             ),
-        ]
+        ]);
+
+        tools
     }
 
     /// Gracefully shut down the orchestrator.
