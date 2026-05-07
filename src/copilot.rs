@@ -217,9 +217,10 @@ impl GithubModelsClient {
         tools: &[ToolDefinition],
         model: &str,
     ) -> Result<ChatResponse> {
+        let adapted_messages = adapt_messages_for_model(messages, model);
         let mut body = serde_json::json!({
             "model": model,
-            "messages": messages,
+            "messages": adapted_messages,
             "max_completion_tokens": 4096,
         });
 
@@ -280,9 +281,10 @@ impl GithubModelsClient {
     where
         F: FnMut(&str),
     {
+        let adapted_messages = adapt_messages_for_model(messages, model);
         let mut body = serde_json::json!({
             "model": model,
-            "messages": messages,
+            "messages": adapted_messages,
             "max_completion_tokens": 4096,
             "stream": true,
         });
@@ -404,6 +406,36 @@ impl GithubModelsClient {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+/// Returns true if the model is a reasoning model that requires "developer"
+/// role instead of "system" role (e.g., o1, o3, o4-mini).
+fn is_reasoning_model(model: &str) -> bool {
+    // Strip any provider prefix (e.g. "openai/o3-mini" -> "o3-mini")
+    let name = model.rsplit('/').next().unwrap_or(model);
+    name.starts_with("o1") || name.starts_with("o3") || name.starts_with("o4-mini")
+}
+
+/// Adapt messages for the target model. Reasoning models (o1, o3, o4-mini)
+/// require "developer" role instead of "system" role.
+fn adapt_messages_for_model(messages: &[ChatMessage], model: &str) -> Vec<ChatMessage> {
+    if !is_reasoning_model(model) {
+        return messages.to_vec();
+    }
+
+    messages
+        .iter()
+        .map(|msg| {
+            if msg.role == "system" {
+                ChatMessage {
+                    role: "developer".to_string(),
+                    ..msg.clone()
+                }
+            } else {
+                msg.clone()
+            }
+        })
+        .collect()
+}
+
 /// Get the GitHub token, checking `GITHUB_TOKEN` env var first,
 /// then falling back to `gh auth token`.
 fn get_gh_token() -> Result<String> {
@@ -470,5 +502,45 @@ mod tests {
         let td = ToolDefinition::new("test_tool", "A test", serde_json::json!({"type": "object"}));
         assert_eq!(td.tool_type, "function");
         assert_eq!(td.function.name, "test_tool");
+    }
+
+    #[test]
+    fn test_is_reasoning_model() {
+        assert!(is_reasoning_model("openai/o1"));
+        assert!(is_reasoning_model("openai/o1-mini"));
+        assert!(is_reasoning_model("openai/o1-preview"));
+        assert!(is_reasoning_model("openai/o3"));
+        assert!(is_reasoning_model("openai/o3-mini"));
+        assert!(is_reasoning_model("openai/o4-mini"));
+        assert!(is_reasoning_model("o3-mini"));
+
+        assert!(!is_reasoning_model("openai/gpt-4.1"));
+        assert!(!is_reasoning_model("openai/gpt-4o-mini"));
+        assert!(!is_reasoning_model("claude-sonnet-4-5"));
+    }
+
+    #[test]
+    fn test_adapt_messages_for_reasoning_model() {
+        let messages = vec![
+            ChatMessage::system("You are helpful"),
+            ChatMessage::user("Hi"),
+        ];
+
+        let adapted = adapt_messages_for_model(&messages, "openai/o3-mini");
+        assert_eq!(adapted[0].role, "developer");
+        assert_eq!(adapted[0].content.as_deref(), Some("You are helpful"));
+        assert_eq!(adapted[1].role, "user");
+    }
+
+    #[test]
+    fn test_adapt_messages_for_standard_model() {
+        let messages = vec![
+            ChatMessage::system("You are helpful"),
+            ChatMessage::user("Hi"),
+        ];
+
+        let adapted = adapt_messages_for_model(&messages, "openai/gpt-4.1");
+        assert_eq!(adapted[0].role, "system");
+        assert_eq!(adapted[1].role, "user");
     }
 }
