@@ -1362,6 +1362,7 @@ dependencies = [
  "dirs",
  "flate2",
  "futures",
+ "http 1.4.0",
  "ratatui",
  "reqwest 0.12.28",
  "rusqlite",

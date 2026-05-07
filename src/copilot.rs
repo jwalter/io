@@ -4,6 +4,8 @@
 //! using the token from `gh auth token`. OpenAI-compatible request/response
 //! format with streaming (SSE) and tool calling support.
 
+use std::time::Duration;
+
 use anyhow::{Context, Result};
 use futures::StreamExt;
 use reqwest::Client;
@@ -11,6 +13,12 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
 const API_BASE: &str = "https://models.github.ai/inference";
+
+/// Maximum number of retry attempts for retryable HTTP errors.
+const MAX_RETRIES: u32 = 5;
+
+/// Base delay for exponential backoff (doubles each retry).
+const BASE_RETRY_DELAY: Duration = Duration::from_secs(1);
 
 // ─── Public types ───────────────────────────────────────────────────────────
 
@@ -210,6 +218,60 @@ impl GithubModelsClient {
         })
     }
 
+    /// Send an HTTP request to the GitHub Models API with retry on 429/5xx.
+    async fn send_with_retry(
+        &self,
+        body: &serde_json::Value,
+        model: &str,
+        streaming: bool,
+    ) -> Result<reqwest::Response> {
+        let label = if streaming { "streaming " } else { "" };
+
+        for attempt in 0..MAX_RETRIES {
+            let response = self
+                .http
+                .post(format!("{API_BASE}/chat/completions"))
+                .header("Authorization", format!("Bearer {}", self.token))
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/vnd.github+json")
+                .header("X-GitHub-Api-Version", "2022-11-28")
+                .json(body)
+                .send()
+                .await
+                .context(format!(
+                    "Failed to send {label}request to GitHub Models API"
+                ))?;
+
+            let status = response.status();
+
+            if status.is_success() {
+                return Ok(response);
+            }
+
+            let is_retryable =
+                status == reqwest::StatusCode::TOO_MANY_REQUESTS || status.is_server_error();
+
+            if !is_retryable || attempt + 1 >= MAX_RETRIES {
+                let error_body = response.text().await.unwrap_or_default();
+                warn!(model = %model, status = %status, "GitHub Models API {label}request failed");
+                anyhow::bail!("GitHub Models API returned {status}: {error_body}");
+            }
+
+            // Determine delay: Retry-After header or exponential backoff
+            let delay = retry_delay(&response, attempt);
+            warn!(
+                model = %model,
+                status = %status,
+                attempt = attempt + 1,
+                delay_secs = delay.as_secs(),
+                "Rate limited, retrying after backoff"
+            );
+            tokio::time::sleep(delay).await;
+        }
+
+        unreachable!("retry loop always returns or bails")
+    }
+
     /// Non-streaming chat completion.
     pub async fn chat_completion(
         &self,
@@ -231,24 +293,7 @@ impl GithubModelsClient {
             body["tool_choice"] = serde_json::json!("auto");
         }
 
-        let response = self
-            .http
-            .post(format!("{API_BASE}/chat/completions"))
-            .header("Authorization", format!("Bearer {}", self.token))
-            .header("Content-Type", "application/json")
-            .header("Accept", "application/vnd.github+json")
-            .header("X-GitHub-Api-Version", "2022-11-28")
-            .json(&body)
-            .send()
-            .await
-            .context("Failed to send request to GitHub Models API")?;
-
-        let status = response.status();
-        if !status.is_success() {
-            let error_body = response.text().await.unwrap_or_default();
-            warn!(model = %model, status = %status, "GitHub Models API request failed");
-            anyhow::bail!("GitHub Models API returned {status}: {error_body}");
-        }
+        let response = self.send_with_retry(&body, model, false).await?;
 
         let api_response: ApiResponse = response
             .json()
@@ -301,24 +346,7 @@ impl GithubModelsClient {
             body["tool_choice"] = serde_json::json!("auto");
         }
 
-        let response = self
-            .http
-            .post(format!("{API_BASE}/chat/completions"))
-            .header("Authorization", format!("Bearer {}", self.token))
-            .header("Content-Type", "application/json")
-            .header("Accept", "application/vnd.github+json")
-            .header("X-GitHub-Api-Version", "2022-11-28")
-            .json(&body)
-            .send()
-            .await
-            .context("Failed to send streaming request to GitHub Models API")?;
-
-        let status = response.status();
-        if !status.is_success() {
-            let error_body = response.text().await.unwrap_or_default();
-            warn!(model = %model, status = %status, "GitHub Models API streaming request failed");
-            anyhow::bail!("GitHub Models API returned {status}: {error_body}");
-        }
+        let response = self.send_with_retry(&body, model, true).await?;
 
         let mut stream = response.bytes_stream();
         let mut buffer = String::new();
@@ -413,6 +441,20 @@ impl GithubModelsClient {
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+
+/// Compute the retry delay from a `Retry-After` header (seconds) or
+/// exponential backoff: base × 2^attempt.
+fn retry_delay(response: &reqwest::Response, attempt: u32) -> Duration {
+    if let Some(retry_after) = response
+        .headers()
+        .get("retry-after")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse::<u64>().ok())
+    {
+        return Duration::from_secs(retry_after);
+    }
+    BASE_RETRY_DELAY * 2u32.saturating_pow(attempt)
+}
 
 /// Returns true if the model is a reasoning model that requires "developer"
 /// role instead of "system" role (e.g., o1, o3, o4-mini).
@@ -551,5 +593,32 @@ mod tests {
         let adapted = adapt_messages_for_model(&messages, "openai/gpt-4.1");
         assert_eq!(adapted[0].role, "system");
         assert_eq!(adapted[1].role, "user");
+    }
+
+    #[test]
+    fn test_retry_delay_exponential_backoff() {
+        // Build a dummy response with no Retry-After header
+        let resp = http::Response::builder().status(429).body("").unwrap();
+        let reqwest_resp = reqwest::Response::from(resp);
+
+        assert_eq!(retry_delay(&reqwest_resp, 0), Duration::from_secs(1));
+        assert_eq!(retry_delay(&reqwest_resp, 1), Duration::from_secs(2));
+        assert_eq!(retry_delay(&reqwest_resp, 2), Duration::from_secs(4));
+        assert_eq!(retry_delay(&reqwest_resp, 3), Duration::from_secs(8));
+        assert_eq!(retry_delay(&reqwest_resp, 4), Duration::from_secs(16));
+    }
+
+    #[test]
+    fn test_retry_delay_with_retry_after_header() {
+        let resp = http::Response::builder()
+            .status(429)
+            .header("retry-after", "30")
+            .body("")
+            .unwrap();
+        let reqwest_resp = reqwest::Response::from(resp);
+
+        // Should use the Retry-After value, not exponential backoff
+        assert_eq!(retry_delay(&reqwest_resp, 0), Duration::from_secs(30));
+        assert_eq!(retry_delay(&reqwest_resp, 3), Duration::from_secs(30));
     }
 }

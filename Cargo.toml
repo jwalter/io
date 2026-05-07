@@ -42,3 +42,6 @@ default = ["tui", "telegram"]
 tui = ["dep:ratatui", "dep:crossterm"]
 telegram = ["dep:teloxide"]
 web = []  # Future: axum web frontend
+
+[dev-dependencies]
+http = "1.4.0"

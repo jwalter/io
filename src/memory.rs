@@ -698,6 +698,7 @@ mod tests {
     fn test_should_summarize() {
         let tmp = std::env::temp_dir().join("io_daemon_test_summarize");
         let _ = std::fs::create_dir_all(&tmp);
+        #[allow(clippy::arc_with_non_send_sync)]
         let store = Arc::new(KnowledgeStore {
             wiki_dir: tmp.clone(),
             db: Arc::new(Database::init(&tmp).unwrap()),
@@ -714,6 +715,6 @@ mod tests {
     #[test]
     fn test_compute_relevance_in_range() {
         let score = compute_relevance(-5.0, &Utc::now().to_rfc3339(), 10);
-        assert!(score >= 0.0 && score <= 1.0);
+        assert!((0.0..=1.0).contains(&score));
     }
 }
