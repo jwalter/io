@@ -73,9 +73,7 @@ impl TelegramBot {
                     }
 
                     // Send typing indicator so the user knows we received their message
-                    let _ = bot
-                        .send_chat_action(msg.chat.id, ChatAction::Typing)
-                        .await;
+                    let _ = bot.send_chat_action(msg.chat.id, ChatAction::Typing).await;
 
                     let session_id = format!("telegram-{}", msg.chat.id.0);
                     if let Ok(mut reg) = registry.lock() {
@@ -118,7 +116,10 @@ impl TelegramBot {
                     content,
                     session_id,
                 } => {
-                    buffer.entry(session_id.clone()).or_default().push_str(&content);
+                    buffer
+                        .entry(session_id.clone())
+                        .or_default()
+                        .push_str(&content);
 
                     // Re-send typing indicator every 4 seconds to keep it active
                     let should_send = typing_sent
@@ -133,9 +134,7 @@ impl TelegramBot {
                             .and_then(|reg| reg.get(&session_id).copied());
 
                         if let Some(chat_id) = chat_id {
-                            let _ = bot
-                                .send_chat_action(chat_id, ChatAction::Typing)
-                                .await;
+                            let _ = bot.send_chat_action(chat_id, ChatAction::Typing).await;
                         }
                         typing_sent.insert(session_id, tokio::time::Instant::now());
                     }
