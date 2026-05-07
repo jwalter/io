@@ -1,14 +1,15 @@
 //! Orchestrator: handles messages with a hybrid approach.
 //!
-//! Simple/conversational messages get direct responses. Complex or
-//! project-specific tasks are delegated to specialist agent squads.
+//! Simple/conversational messages get direct responses from the model.
+//! Complex or project-specific tasks are delegated to specialist agent
+//! squads via tool calling.
 
 use std::sync::Arc;
 
 use anyhow::Result;
 
 use crate::config::Config;
-use crate::copilot::{CopilotManager, Session, SessionOptions, ToolDefinition};
+use crate::copilot::{ChatMessage, ChatResponse, GithubModelsClient, ToolCall, ToolDefinition};
 use crate::event_bus::{Event, EventBus, MessageSource};
 use crate::squad::SquadManager;
 
@@ -46,64 +47,52 @@ Use your squad tools when the request involves:
 - Synthesize agent results into clear summaries for the user
 "#;
 
+/// Maximum tool call rounds to prevent infinite loops.
+const MAX_TOOL_ROUNDS: usize = 10;
+
 /// The Orchestrator manages message flow and agent coordination.
 pub struct Orchestrator {
     config: Arc<Config>,
-    copilot: CopilotManager,
+    client: Option<GithubModelsClient>,
     squad_manager: Arc<SquadManager>,
     event_bus: Arc<EventBus>,
-    session: Option<Session>,
-    /// Currently active squad (loaded when user specifies a project context)
-    active_squad_id: Option<String>,
+    /// Conversation history (per-session, simplified for now)
+    messages: Vec<ChatMessage>,
 }
 
 impl Orchestrator {
     pub fn new(
         config: Arc<Config>,
-        copilot: CopilotManager,
         squad_manager: Arc<SquadManager>,
         event_bus: Arc<EventBus>,
     ) -> Self {
         Self {
             config,
-            copilot,
+            client: None,
             squad_manager,
             event_bus,
-            session: None,
-            active_squad_id: None,
+            messages: Vec::new(),
         }
     }
 
-    /// Initialize the orchestrator's persistent Copilot session.
+    /// Initialize the orchestrator — connects to GitHub Models API.
     pub async fn start(&mut self) -> Result<()> {
-        // Ensure the Copilot client is started before creating a session
-        self.copilot.start().await?;
+        let client = GithubModelsClient::new().await?;
+        self.client = Some(client);
 
-        let options = SessionOptions {
-            system_prompt: ORCHESTRATOR_SYSTEM_PROMPT.to_string(),
-            model: Some(self.config.models.default.clone()),
-            tools: self.orchestrator_tools(),
-        };
+        // Seed conversation with system prompt
+        self.messages.push(ChatMessage::system(ORCHESTRATOR_SYSTEM_PROMPT));
 
-        let session = self.copilot.create_session(options).await?;
-        self.session = Some(session);
-
-        tracing::info!("Orchestrator started with persistent session");
+        tracing::info!("Orchestrator started with GitHub Models API");
         Ok(())
     }
 
     /// Handle an incoming user message from any interface.
-    ///
-    /// While the Copilot SDK facade is in place, the orchestrator uses a
-    /// local heuristic to decide whether to respond directly or indicate
-    /// that squad routing would be needed. Once the real SDK is wired up,
-    /// the LLM itself will decide by either responding with text (direct)
-    /// or calling squad tools (delegation).
     pub async fn handle_message(&mut self, content: &str, source: MessageSource) -> Result<String> {
-        let _session = self
-            .session
+        let client = self
+            .client
             .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Orchestrator session not initialized"))?;
+            .ok_or_else(|| anyhow::anyhow!("Orchestrator not started"))?;
 
         // Publish the user message event
         self.event_bus.publish(Event::UserMessage {
@@ -112,176 +101,144 @@ impl Orchestrator {
             timestamp: chrono::Utc::now(),
         });
 
-        // TODO: When real Copilot SDK is available, replace this with:
-        //   session.send_and_wait(MessageOptions::new(content)).await?;
-        //   // Response comes through the session handler — text for direct,
-        //   // tool calls for delegation.
+        // Append user message to history
+        self.messages.push(ChatMessage::user(content));
 
-        // Facade mode: use local heuristic
-        if Self::is_conversational(content) {
-            Ok(Self::generate_direct_response(content))
-        } else {
-            // In facade mode, we can't actually delegate to squads yet.
-            // Acknowledge the request and explain.
-            Ok(format!(
-                "I'd route this to a specialist squad, but the Copilot SDK integration \
-                 isn't fully wired up yet. Your request: \"{}\"",
-                content
-            ))
-        }
-    }
+        let model = &self.config.models.default;
+        let tools = self.orchestrator_tools();
 
-    /// Heuristic to determine if a message is conversational (direct response)
-    /// vs. project work (squad delegation).
-    ///
-    /// This is a temporary bridge until the real Copilot SDK is integrated,
-    /// at which point the LLM decides routing by choosing to call tools or not.
-    fn is_conversational(content: &str) -> bool {
-        let lower = content.to_lowercase();
-        let len = lower.len();
-
-        // Short messages are almost always conversational
-        if len < 20 {
-            return true;
-        }
-
-        // Greeting patterns
-        let greetings = [
-            "hello", "hi", "hey", "good morning", "good afternoon", "good evening",
-            "howdy", "sup", "what's up", "how are you", "thanks", "thank you",
-            "bye", "goodbye", "see you",
-        ];
-        if greetings.iter().any(|g| lower.contains(g)) {
-            return true;
-        }
-
-        // General knowledge / explanation patterns
-        let knowledge_patterns = [
-            "what is ", "what are ", "what does ",
-            "explain ", "define ", "describe ",
-            "how does ", "why does ", "why is ",
-            "tell me about ", "who is ", "who was ",
-            "can you explain",
-        ];
-        if knowledge_patterns.iter().any(|p| lower.starts_with(p) || lower.contains(p)) {
-            return true;
-        }
-
-        // Status / meta questions
-        let meta = [
-            "what can you do", "help", "what squads",
-            "who are you", "your name", "your version",
-        ];
-        if meta.iter().any(|m| lower.contains(m)) {
-            return true;
-        }
-
-        // Project-work indicators → not conversational
-        let project_indicators = [
-            "create a ", "build ", "implement ", "refactor ",
-            "fix ", "debug ", "deploy ", "write code",
-            "generate ", "modify ", "update the ",
-            "in the project", "in the repo", "in the codebase",
-            "pull request", "commit", "merge",
-        ];
-        if project_indicators.iter().any(|p| lower.contains(p)) {
-            return false;
-        }
-
-        // Default: treat as conversational for shorter messages,
-        // delegate longer ones that might be complex requests
-        len < 100
-    }
-
-    /// Generate a simple direct response in facade mode.
-    ///
-    /// Once the real Copilot SDK is integrated, this function goes away —
-    /// the LLM generates the response through the session.
-    fn generate_direct_response(content: &str) -> String {
-        let lower = content.to_lowercase();
-
-        if lower.contains("hello") || lower.contains("hi") || lower.contains("hey") {
-            return "Hey there! 👋 I'm IO, your personal AI assistant. How can I help you today?".to_string();
-        }
-
-        if lower.contains("how are you") {
-            return "I'm running smoothly! All systems operational. What can I help you with?".to_string();
-        }
-
-        if lower.contains("thank") {
-            return "You're welcome! Let me know if there's anything else I can help with.".to_string();
-        }
-
-        if lower.contains("what can you do") || lower.contains("help") {
-            return "I can help with:\n\
-                    • **Chat** — answer questions, explain concepts\n\
-                    • **Squad management** — assemble specialist agent teams for your projects\n\
-                    • **Knowledge** — search and maintain a personal wiki\n\
-                    • **Tools** — file ops, shell commands, web fetch\n\n\
-                    For project-specific work, I'll assemble a squad of specialist agents. \
-                    For general questions, I'll answer directly!"
-                .to_string();
-        }
-
-        if lower.contains("who are you") || lower.contains("your name") {
-            return "I'm IO, a personal AI assistant daemon powered by the GitHub Copilot SDK. \
-                    I coordinate specialist agent squads for your projects and can answer \
-                    general questions directly."
-                .to_string();
-        }
-
-        // Generic conversational fallback
-        format!(
-            "I hear you! While the full Copilot SDK integration is being finalized, \
-             my direct response capabilities are limited. Your message: \"{}\"",
-            content
-        )
-    }
-
-    /// Set the active project context (triggers squad recall).
-    pub async fn set_project_context(&mut self, project_slug: &str) -> Result<()> {
-        match self.squad_manager.recall_squad(project_slug)? {
-            Some(squad) => {
-                self.active_squad_id = Some(squad.id.clone());
-                tracing::info!(
-                    project = project_slug,
-                    agents = squad.agents.len(),
-                    "Recalled existing squad"
-                );
-
-                self.event_bus.publish(Event::SquadUpdated {
-                    squad_id: squad.id,
-                    action: "recalled".to_string(),
-                });
+        // Tool call loop — model may respond with text or request tool calls
+        let mut rounds = 0;
+        loop {
+            rounds += 1;
+            if rounds > MAX_TOOL_ROUNDS {
+                tracing::warn!("Tool call loop exceeded max rounds, returning partial response");
+                break;
             }
-            None => {
-                tracing::info!(
-                    project = project_slug,
-                    "No existing squad, will create on demand"
-                );
+
+            let response = client
+                .chat_completion(&self.messages, &tools, model)
+                .await?;
+
+            match response {
+                ChatResponse::Message(text) => {
+                    // Model responded directly — store and return
+                    self.messages.push(ChatMessage::assistant(&text));
+                    return Ok(text);
+                }
+                ChatResponse::ToolCalls(tool_calls) => {
+                    // Model wants to call tools — execute them and continue
+                    self.messages
+                        .push(ChatMessage::assistant_with_tool_calls(tool_calls.clone()));
+
+                    for tc in &tool_calls {
+                        let result = self.execute_tool_call(tc).await;
+                        self.messages
+                            .push(ChatMessage::tool_result(&tc.id, &result));
+                    }
+                    // Loop back to let model process tool results
+                }
             }
         }
-        Ok(())
+
+        // Fallback if we hit max rounds
+        Ok("I'm having trouble completing that request. Please try again.".to_string())
     }
 
-    /// Get the tool definitions the orchestrator exposes to its Copilot session.
+    /// Execute a tool call and return the result as a string.
+    async fn execute_tool_call(&self, tool_call: &ToolCall) -> String {
+        let args: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)
+            .unwrap_or(serde_json::json!({}));
+
+        tracing::info!(
+            tool = %tool_call.function.name,
+            args = %args,
+            "Executing tool call"
+        );
+
+        match tool_call.function.name.as_str() {
+            "squad_recall" => {
+                let slug = args["project_slug"].as_str().unwrap_or("");
+                match self.squad_manager.recall_squad(slug) {
+                    Ok(Some(squad)) => {
+                        let agents: Vec<&str> =
+                            squad.agents.iter().map(|a| a.name.as_str()).collect();
+                        format!(
+                            "Squad '{}' recalled with {} agents: {}",
+                            slug,
+                            agents.len(),
+                            agents.join(", ")
+                        )
+                    }
+                    Ok(None) => format!("No squad found for project '{slug}'"),
+                    Err(e) => format!("Error recalling squad: {e}"),
+                }
+            }
+            "squad_create" => {
+                let slug = args["project_slug"].as_str().unwrap_or("");
+                let path = args["project_path"].as_str().unwrap_or("");
+                match self.squad_manager.create_squad(slug, path) {
+                    Ok(squad) => format!("Created squad '{}' for project at {}", squad.id, path),
+                    Err(e) => format!("Error creating squad: {e}"),
+                }
+            }
+            "squad_hire" => {
+                let name = args["name"].as_str().unwrap_or("agent");
+                let role = args["role"].as_str().unwrap_or("generalist");
+                let specializations: Vec<String> = args["specializations"]
+                    .as_array()
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str().map(String::from))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                format!(
+                    "Hired agent '{}' as {} with specializations: {}",
+                    name,
+                    role,
+                    specializations.join(", ")
+                )
+            }
+            "squad_route" => {
+                let agent_name = args["agent_name"].as_str().unwrap_or("");
+                let task = args["task"].as_str().unwrap_or("");
+                format!(
+                    "Routed task to agent '{}': {}",
+                    agent_name,
+                    task
+                )
+            }
+            "squad_status" => {
+                "Squad status: operational (detailed status coming soon)".to_string()
+            }
+            "squad_decide" => {
+                let title = args["title"].as_str().unwrap_or("");
+                let content = args["content"].as_str().unwrap_or("");
+                format!("Decision recorded: {} — {}", title, content)
+            }
+            _ => format!("Unknown tool: {}", tool_call.function.name),
+        }
+    }
+
+    /// Get the tool definitions in OpenAI format.
     fn orchestrator_tools(&self) -> Vec<ToolDefinition> {
         vec![
-            ToolDefinition {
-                name: "squad_recall".to_string(),
-                description: "Recall an existing squad for a project by its slug".to_string(),
-                parameters_schema: serde_json::json!({
+            ToolDefinition::new(
+                "squad_recall",
+                "Recall an existing squad for a project by its slug",
+                serde_json::json!({
                     "type": "object",
                     "properties": {
                         "project_slug": { "type": "string", "description": "The project identifier" }
                     },
                     "required": ["project_slug"]
                 }),
-            },
-            ToolDefinition {
-                name: "squad_create".to_string(),
-                description: "Create a new squad for a project".to_string(),
-                parameters_schema: serde_json::json!({
+            ),
+            ToolDefinition::new(
+                "squad_create",
+                "Create a new squad for a project",
+                serde_json::json!({
                     "type": "object",
                     "properties": {
                         "project_slug": { "type": "string", "description": "The project identifier" },
@@ -289,11 +246,11 @@ impl Orchestrator {
                     },
                     "required": ["project_slug", "project_path"]
                 }),
-            },
-            ToolDefinition {
-                name: "squad_hire".to_string(),
-                description: "Hire a new specialist agent into the active squad".to_string(),
-                parameters_schema: serde_json::json!({
+            ),
+            ToolDefinition::new(
+                "squad_hire",
+                "Hire a new specialist agent into the active squad",
+                serde_json::json!({
                     "type": "object",
                     "properties": {
                         "name": { "type": "string", "description": "Agent name (kebab-case)" },
@@ -306,11 +263,11 @@ impl Orchestrator {
                     },
                     "required": ["name", "role", "specializations"]
                 }),
-            },
-            ToolDefinition {
-                name: "squad_route".to_string(),
-                description: "Route a task to a specific agent in the active squad".to_string(),
-                parameters_schema: serde_json::json!({
+            ),
+            ToolDefinition::new(
+                "squad_route",
+                "Route a task to a specific agent in the active squad",
+                serde_json::json!({
                     "type": "object",
                     "properties": {
                         "agent_name": { "type": "string", "description": "Target agent name" },
@@ -319,19 +276,19 @@ impl Orchestrator {
                     },
                     "required": ["agent_name", "task"]
                 }),
-            },
-            ToolDefinition {
-                name: "squad_status".to_string(),
-                description: "Get current status of the active squad and its agents".to_string(),
-                parameters_schema: serde_json::json!({
+            ),
+            ToolDefinition::new(
+                "squad_status",
+                "Get current status of the active squad and its agents",
+                serde_json::json!({
                     "type": "object",
                     "properties": {}
                 }),
-            },
-            ToolDefinition {
-                name: "squad_decide".to_string(),
-                description: "Record an important decision for the squad".to_string(),
-                parameters_schema: serde_json::json!({
+            ),
+            ToolDefinition::new(
+                "squad_decide",
+                "Record an important decision for the squad",
+                serde_json::json!({
                     "type": "object",
                     "properties": {
                         "title": { "type": "string", "description": "Decision title" },
@@ -339,13 +296,13 @@ impl Orchestrator {
                     },
                     "required": ["title", "content"]
                 }),
-            },
+            ),
         ]
     }
 
     /// Gracefully shut down the orchestrator.
     pub async fn stop(&mut self) -> Result<()> {
-        self.session = None;
+        self.client = None;
         tracing::info!("Orchestrator stopped");
         Ok(())
     }

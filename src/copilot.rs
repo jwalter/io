@@ -1,386 +1,457 @@
-//! Copilot SDK integration module.
+//! GitHub Models API client.
 //!
-//! Provides a wrapper around the GitHub Copilot SDK for LLM interaction.
-//! Currently uses a local facade since the SDK crate (github-copilot-sdk v0.1.0)
-//! may not be resolvable yet. The facade mirrors the SDK's API so the rest of
-//! the system can be built against a stable interface.
+//! Calls `https://models.github.ai/inference/chat/completions` directly
+//! using the token from `gh auth token`. OpenAI-compatible request/response
+//! format with streaming (SSE) and tool calling support.
 
-// TODO: Replace facade with real SDK when available:
-// use github_copilot_sdk::{Client, ClientOptions};
-// use github_copilot_sdk::handler::{HandlerEvent, HandlerResponse, SessionHandler};
+use anyhow::{Context, Result};
+use futures::StreamExt;
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use tracing::{debug, warn};
 
-use std::sync::Arc;
-use tokio::sync::broadcast;
+const API_BASE: &str = "https://models.github.ai/inference";
 
-use crate::event_bus::Event;
+// ─── Public types ───────────────────────────────────────────────────────────
 
-// ─── Facade types (mirroring github-copilot-sdk API) ────────────────────────
-
-/// Tool definition schema for registering tools with a session.
-#[derive(Debug, Clone)]
-pub struct ToolDefinition {
-    pub name: String,
-    pub description: String,
-    pub parameters_schema: serde_json::Value,
+/// A message in the conversation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatMessage {
+    pub role: String,
+    pub content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<Vec<ToolCall>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
 }
 
-/// Options for creating the underlying SDK client.
-// TODO: Replace with real SDK when available
-#[derive(Debug, Clone, Default)]
-pub struct ClientOptions {
-    /// Optional transport override (default: stdio)
-    pub transport: Option<String>,
-}
-
-/// Represents a connected Copilot CLI client.
-// TODO: Replace with real SDK when available
-pub struct CopilotClient {
-    _options: ClientOptions,
-}
-
-impl CopilotClient {
-    /// Start the Copilot CLI client process.
-    pub async fn start(options: ClientOptions) -> anyhow::Result<Self> {
-        tracing::info!("Starting Copilot CLI client (facade mode)");
-        Ok(Self { _options: options })
+impl ChatMessage {
+    pub fn system(content: impl Into<String>) -> Self {
+        Self {
+            role: "system".to_string(),
+            content: Some(content.into()),
+            tool_calls: None,
+            tool_call_id: None,
+        }
     }
 
-    /// Create a new session with the given configuration.
-    pub async fn create_session(&self, config: SessionConfig) -> anyhow::Result<Session> {
-        tracing::info!(model = ?config.model, "Creating Copilot session (facade mode)");
-        Ok(Session {
-            id: uuid::Uuid::new_v4().to_string(),
-            _config: config,
+    pub fn user(content: impl Into<String>) -> Self {
+        Self {
+            role: "user".to_string(),
+            content: Some(content.into()),
+            tool_calls: None,
+            tool_call_id: None,
+        }
+    }
+
+    pub fn assistant(content: impl Into<String>) -> Self {
+        Self {
+            role: "assistant".to_string(),
+            content: Some(content.into()),
+            tool_calls: None,
+            tool_call_id: None,
+        }
+    }
+
+    pub fn assistant_with_tool_calls(tool_calls: Vec<ToolCall>) -> Self {
+        Self {
+            role: "assistant".to_string(),
+            content: None,
+            tool_calls: Some(tool_calls),
+            tool_call_id: None,
+        }
+    }
+
+    pub fn tool_result(tool_call_id: impl Into<String>, content: impl Into<String>) -> Self {
+        Self {
+            role: "tool".to_string(),
+            content: Some(content.into()),
+            tool_calls: None,
+            tool_call_id: Some(tool_call_id.into()),
+        }
+    }
+}
+
+/// A tool call requested by the model.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolCall {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub call_type: String,
+    pub function: FunctionCall,
+}
+
+/// Function name + arguments in a tool call.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FunctionCall {
+    pub name: String,
+    pub arguments: String,
+}
+
+/// Tool definition (OpenAI format).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolDefinition {
+    #[serde(rename = "type")]
+    pub tool_type: String,
+    pub function: FunctionDefinition,
+}
+
+impl ToolDefinition {
+    pub fn new(name: impl Into<String>, description: impl Into<String>, parameters: serde_json::Value) -> Self {
+        Self {
+            tool_type: "function".to_string(),
+            function: FunctionDefinition {
+                name: name.into(),
+                description: description.into(),
+                parameters,
+            },
+        }
+    }
+}
+
+/// Function schema within a tool definition.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FunctionDefinition {
+    pub name: String,
+    pub description: String,
+    pub parameters: serde_json::Value,
+}
+
+/// The result of a chat completion call.
+#[derive(Debug)]
+pub enum ChatResponse {
+    /// Model responded with text content.
+    Message(String),
+    /// Model wants to call tools.
+    ToolCalls(Vec<ToolCall>),
+}
+
+// ─── Streaming types ────────────────────────────────────────────────────────
+
+/// A single streaming chunk delta.
+#[derive(Debug)]
+pub enum StreamDelta {
+    /// A piece of text content.
+    Content(String),
+    /// Stream is done; final assembled tool calls (if any).
+    Done(Option<Vec<ToolCall>>),
+}
+
+// ─── Internal response types ────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct ApiResponse {
+    choices: Vec<ApiChoice>,
+}
+
+#[derive(Deserialize)]
+struct ApiChoice {
+    message: ApiMessage,
+}
+
+#[derive(Deserialize)]
+struct ApiMessage {
+    content: Option<String>,
+    tool_calls: Option<Vec<ToolCall>>,
+}
+
+#[derive(Deserialize)]
+struct StreamChunk {
+    choices: Vec<StreamChoice>,
+}
+
+#[derive(Deserialize)]
+struct StreamChoice {
+    delta: StreamDeltaRaw,
+    finish_reason: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct StreamDeltaRaw {
+    content: Option<String>,
+    tool_calls: Option<Vec<StreamToolCall>>,
+}
+
+#[derive(Deserialize)]
+struct StreamToolCall {
+    index: usize,
+    id: Option<String>,
+    #[serde(rename = "type")]
+    call_type: Option<String>,
+    function: Option<StreamFunction>,
+}
+
+#[derive(Deserialize)]
+struct StreamFunction {
+    name: Option<String>,
+    arguments: Option<String>,
+}
+
+// ─── Client ─────────────────────────────────────────────────────────────────
+
+/// GitHub Models API client.
+pub struct GithubModelsClient {
+    http: Client,
+    token: String,
+}
+
+impl GithubModelsClient {
+    /// Create a new client by obtaining a token from `gh auth token`.
+    pub async fn new() -> Result<Self> {
+        let token = get_gh_token().context("Failed to get GitHub token from `gh auth token`")?;
+        debug!("GitHub Models client initialized");
+        Ok(Self {
+            http: Client::new(),
+            token,
         })
     }
 
-    /// Gracefully shut down the client.
-    pub async fn stop(&self) -> anyhow::Result<()> {
-        tracing::info!("Stopping Copilot CLI client (facade mode)");
-        Ok(())
-    }
-}
-
-/// Configuration for a Copilot session.
-// TODO: Replace with real SDK when available
-#[derive(Debug, Clone)]
-pub struct SessionConfig {
-    pub system_prompt: Option<String>,
-    pub model: Option<String>,
-    pub handler: Option<Arc<dyn SessionHandler>>,
-}
-
-impl Default for SessionConfig {
-    #[allow(clippy::derivable_impls)]
-    fn default() -> Self {
-        Self {
-            system_prompt: None,
-            model: None,
-            handler: None,
-        }
-    }
-}
-
-impl SessionConfig {
-    pub fn with_handler(mut self, handler: Arc<dyn SessionHandler>) -> Self {
-        self.handler = Some(handler);
-        self
-    }
-
-    pub fn with_system_prompt(mut self, prompt: impl Into<String>) -> Self {
-        self.system_prompt = Some(prompt.into());
-        self
-    }
-
-    pub fn with_model(mut self, model: impl Into<String>) -> Self {
-        self.model = Some(model.into());
-        self
-    }
-}
-
-/// A Copilot session that can send/receive messages.
-// TODO: Replace with real SDK when available
-#[derive(Debug)]
-pub struct Session {
-    pub id: String,
-    _config: SessionConfig,
-}
-
-impl Session {
-    /// Send a message and wait for the response to complete.
-    pub async fn send_and_wait(&self, options: MessageOptions) -> anyhow::Result<()> {
-        tracing::debug!(session_id = %self.id, content = %options.content, "send_and_wait (facade mode - no-op)");
-        Ok(())
-    }
-}
-
-/// Options for sending a message to a session.
-#[derive(Debug, Clone)]
-pub struct MessageOptions {
-    pub content: String,
-}
-
-impl MessageOptions {
-    pub fn new(content: impl Into<String>) -> Self {
-        Self {
-            content: content.into(),
-        }
-    }
-}
-
-/// Handler trait for session events (mirrors SDK's SessionHandler).
-// TODO: Replace with real SDK when available
-#[async_trait::async_trait]
-pub trait SessionHandler: Send + Sync + std::fmt::Debug {
-    async fn on_event(&self, event: HandlerEvent) -> HandlerResponse;
-}
-
-/// Events received from the Copilot SDK during a session.
-// TODO: Replace with real SDK when available
-#[derive(Debug, Clone)]
-pub enum HandlerEvent {
-    SessionEvent {
-        event_type: String,
-        data: serde_json::Value,
-    },
-    PermissionRequest {
-        tool_name: String,
-        arguments: serde_json::Value,
-    },
-    ToolCall {
-        tool_name: String,
-        arguments: serde_json::Value,
-    },
-}
-
-/// Response from the handler back to the SDK.
-// TODO: Replace with real SDK when available
-#[derive(Debug, Clone)]
-pub enum HandlerResponse {
-    Ok,
-    Permission(PermissionResult),
-}
-
-/// Result of a permission request.
-// TODO: Replace with real SDK when available
-#[derive(Debug, Clone)]
-pub enum PermissionResult {
-    Approved,
-    Denied { reason: String },
-}
-
-// ─── Our wrapper types ──────────────────────────────────────────────────────
-
-/// Configuration for the CopilotManager.
-#[derive(Debug, Clone, Default)]
-pub struct CopilotConfig {
-    /// Transport type (e.g., "stdio", "tcp://host:port")
-    pub transport: Option<String>,
-    /// Default model to use for sessions
-    pub default_model: Option<String>,
-}
-
-/// Options for creating a new session through CopilotManager.
-#[derive(Debug, Clone)]
-pub struct SessionOptions {
-    /// System prompt to set session context
-    pub system_prompt: String,
-    /// Model override (falls back to CopilotConfig default)
-    pub model: Option<String>,
-    /// Tool schemas to register with the session
-    pub tools: Vec<ToolDefinition>,
-}
-
-/// Manages the Copilot SDK client lifecycle.
-pub struct CopilotManager {
-    config: CopilotConfig,
-    client: Option<CopilotClient>,
-    event_sender: broadcast::Sender<Event>,
-}
-
-impl CopilotManager {
-    /// Create a new CopilotManager with the given config and event bus sender.
-    pub fn new(config: CopilotConfig, event_sender: broadcast::Sender<Event>) -> Self {
-        Self {
-            config,
-            client: None,
-            event_sender,
-        }
-    }
-
-    /// Start the Copilot CLI client.
-    pub async fn start(&mut self) -> anyhow::Result<()> {
-        let options = ClientOptions {
-            transport: self.config.transport.clone(),
-        };
-        let client = CopilotClient::start(options).await?;
-        self.client = Some(client);
-        tracing::info!("CopilotManager started");
-        Ok(())
-    }
-
-    /// Create a new session with the given options.
-    pub async fn create_session(&self, options: SessionOptions) -> anyhow::Result<Session> {
-        let client = self
-            .client
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Copilot client not started"))?;
-
-        let handler = Arc::new(DaemonSessionHandler {
-            event_sender: self.event_sender.clone(),
-            session_name: "default".to_string(),
+    /// Non-streaming chat completion.
+    pub async fn chat_completion(
+        &self,
+        messages: &[ChatMessage],
+        tools: &[ToolDefinition],
+        model: &str,
+    ) -> Result<ChatResponse> {
+        let mut body = serde_json::json!({
+            "model": model,
+            "messages": messages,
+            "max_tokens": 4096,
         });
 
-        let mut config = SessionConfig::default()
-            .with_handler(handler)
-            .with_system_prompt(options.system_prompt);
-
-        if let Some(model) = options.model.or_else(|| self.config.default_model.clone()) {
-            config = config.with_model(model);
+        if !tools.is_empty() {
+            body["tools"] = serde_json::to_value(tools)?;
+            body["tool_choice"] = serde_json::json!("auto");
         }
 
-        let session = client.create_session(config).await?;
-        tracing::info!(session_id = %session.id, "Session created");
-        Ok(session)
-    }
+        let response = self
+            .http
+            .post(format!("{API_BASE}/chat/completions"))
+            .header("Authorization", format!("Bearer {}", self.token))
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .json(&body)
+            .send()
+            .await
+            .context("Failed to send request to GitHub Models API")?;
 
-    /// Gracefully shut down the Copilot client.
-    pub async fn stop(&mut self) -> anyhow::Result<()> {
-        if let Some(client) = self.client.take() {
-            client.stop().await?;
+        let status = response.status();
+        if !status.is_success() {
+            let error_body = response.text().await.unwrap_or_default();
+            anyhow::bail!("GitHub Models API returned {status}: {error_body}");
         }
-        tracing::info!("CopilotManager stopped");
-        Ok(())
+
+        let api_response: ApiResponse = response
+            .json()
+            .await
+            .context("Failed to parse GitHub Models API response")?;
+
+        let choice = api_response
+            .choices
+            .into_iter()
+            .next()
+            .context("No choices in API response")?;
+
+        if let Some(tool_calls) = choice.message.tool_calls {
+            if !tool_calls.is_empty() {
+                return Ok(ChatResponse::ToolCalls(tool_calls));
+            }
+        }
+
+        Ok(ChatResponse::Message(
+            choice.message.content.unwrap_or_default(),
+        ))
     }
-}
 
-// ─── Daemon session handler ─────────────────────────────────────────────────
+    /// Streaming chat completion. Calls `on_delta` for each content chunk.
+    /// Returns the final assembled response.
+    pub async fn chat_completion_stream<F>(
+        &self,
+        messages: &[ChatMessage],
+        tools: &[ToolDefinition],
+        model: &str,
+        mut on_delta: F,
+    ) -> Result<ChatResponse>
+    where
+        F: FnMut(&str),
+    {
+        let mut body = serde_json::json!({
+            "model": model,
+            "messages": messages,
+            "max_tokens": 4096,
+            "stream": true,
+        });
 
-/// Session handler that integrates with the io-daemon event bus.
-///
-/// - Forwards streaming token deltas as `Event::AgentDelta`
-/// - Auto-approves all permission requests (trusted daemon context)
-/// - Logs tool call events
-#[derive(Debug)]
-struct DaemonSessionHandler {
-    event_sender: broadcast::Sender<Event>,
-    session_name: String,
-}
+        if !tools.is_empty() {
+            body["tools"] = serde_json::to_value(tools)?;
+            body["tool_choice"] = serde_json::json!("auto");
+        }
 
-#[async_trait::async_trait]
-impl SessionHandler for DaemonSessionHandler {
-    async fn on_event(&self, event: HandlerEvent) -> HandlerResponse {
-        match event {
-            HandlerEvent::SessionEvent { event_type, data } => {
-                if event_type == "assistant.message_delta" {
-                    let content = data
-                        .get("deltaContent")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
+        let response = self
+            .http
+            .post(format!("{API_BASE}/chat/completions"))
+            .header("Authorization", format!("Bearer {}", self.token))
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .json(&body)
+            .send()
+            .await
+            .context("Failed to send streaming request to GitHub Models API")?;
 
-                    if !content.is_empty() {
-                        let _ = self.event_sender.send(Event::AgentDelta {
-                            agent_name: self.session_name.clone(),
-                            content,
-                            session_id: "active".to_string(),
-                        });
+        let status = response.status();
+        if !status.is_success() {
+            let error_body = response.text().await.unwrap_or_default();
+            anyhow::bail!("GitHub Models API returned {status}: {error_body}");
+        }
+
+        let mut stream = response.bytes_stream();
+        let mut buffer = String::new();
+        let mut full_content = String::new();
+        let mut tool_calls_builder: Vec<(String, String, String, String)> = Vec::new(); // (id, type, name, args)
+
+        while let Some(chunk) = stream.next().await {
+            let bytes = chunk.context("Stream read error")?;
+            buffer.push_str(&String::from_utf8_lossy(&bytes));
+
+            while let Some(newline_pos) = buffer.find('\n') {
+                let line = buffer[..newline_pos].trim().to_string();
+                buffer = buffer[newline_pos + 1..].to_string();
+
+                if line.is_empty() || !line.starts_with("data: ") {
+                    continue;
+                }
+
+                let data = &line[6..];
+                if data == "[DONE]" {
+                    break;
+                }
+
+                if let Ok(chunk) = serde_json::from_str::<StreamChunk>(data) {
+                    if let Some(choice) = chunk.choices.first() {
+                        // Handle content deltas
+                        if let Some(content) = &choice.delta.content {
+                            if !content.is_empty() {
+                                on_delta(content);
+                                full_content.push_str(content);
+                            }
+                        }
+
+                        // Handle tool call deltas
+                        if let Some(tc_deltas) = &choice.delta.tool_calls {
+                            for tc in tc_deltas {
+                                let idx = tc.index;
+                                // Ensure builder vec is large enough
+                                while tool_calls_builder.len() <= idx {
+                                    tool_calls_builder.push((
+                                        String::new(),
+                                        String::new(),
+                                        String::new(),
+                                        String::new(),
+                                    ));
+                                }
+                                if let Some(id) = &tc.id {
+                                    tool_calls_builder[idx].0 = id.clone();
+                                }
+                                if let Some(ct) = &tc.call_type {
+                                    tool_calls_builder[idx].1 = ct.clone();
+                                }
+                                if let Some(func) = &tc.function {
+                                    if let Some(name) = &func.name {
+                                        tool_calls_builder[idx].2 = name.clone();
+                                    }
+                                    if let Some(args) = &func.arguments {
+                                        tool_calls_builder[idx].3.push_str(args);
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-                HandlerResponse::Ok
-            }
-            HandlerEvent::PermissionRequest { tool_name, .. } => {
-                tracing::debug!(tool = %tool_name, "Auto-approving permission request");
-                HandlerResponse::Permission(PermissionResult::Approved)
-            }
-            HandlerEvent::ToolCall {
-                tool_name,
-                arguments,
-            } => {
-                tracing::info!(tool = %tool_name, args = %arguments, "Tool call received");
-                HandlerResponse::Ok
             }
         }
+
+        // Assemble final response
+        if !tool_calls_builder.is_empty()
+            && tool_calls_builder.iter().any(|(id, _, _, _)| !id.is_empty())
+        {
+            let tool_calls: Vec<ToolCall> = tool_calls_builder
+                .into_iter()
+                .filter(|(id, _, _, _)| !id.is_empty())
+                .map(|(id, call_type, name, arguments)| ToolCall {
+                    id,
+                    call_type: if call_type.is_empty() {
+                        "function".to_string()
+                    } else {
+                        call_type
+                    },
+                    function: FunctionCall { name, arguments },
+                })
+                .collect();
+            return Ok(ChatResponse::ToolCalls(tool_calls));
+        }
+
+        Ok(ChatResponse::Message(full_content))
     }
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+/// Get the GitHub token from `gh auth token`.
+fn get_gh_token() -> Result<String> {
+    let output = std::process::Command::new("gh")
+        .args(["auth", "token"])
+        .output()
+        .context("Failed to run `gh auth token`. Is the GitHub CLI installed?")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!(
+            "`gh auth token` failed (exit {}): {}",
+            output.status.code().unwrap_or(-1),
+            stderr.trim()
+        );
+    }
+
+    let token = String::from_utf8(output.stdout)
+        .context("gh auth token output is not valid UTF-8")?
+        .trim()
+        .to_string();
+
+    if token.is_empty() {
+        anyhow::bail!("`gh auth token` returned empty. Run `gh auth login` first.");
+    }
+
+    Ok(token)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_copilot_manager_lifecycle() {
-        let (sender, _) = broadcast::channel(16);
-        let mut manager = CopilotManager::new(CopilotConfig::default(), sender);
+    #[test]
+    fn test_chat_message_constructors() {
+        let sys = ChatMessage::system("hello");
+        assert_eq!(sys.role, "system");
+        assert_eq!(sys.content.as_deref(), Some("hello"));
 
-        manager.start().await.unwrap();
+        let user = ChatMessage::user("question");
+        assert_eq!(user.role, "user");
 
-        let session = manager
-            .create_session(SessionOptions {
-                system_prompt: "You are a helpful assistant.".to_string(),
-                model: None,
-                tools: vec![],
-            })
-            .await
-            .unwrap();
+        let asst = ChatMessage::assistant("answer");
+        assert_eq!(asst.role, "assistant");
 
-        assert!(!session.id.is_empty());
-
-        session
-            .send_and_wait(MessageOptions::new("Hello"))
-            .await
-            .unwrap();
-
-        manager.stop().await.unwrap();
+        let tool = ChatMessage::tool_result("call-1", "result");
+        assert_eq!(tool.role, "tool");
+        assert_eq!(tool.tool_call_id.as_deref(), Some("call-1"));
     }
 
-    #[tokio::test]
-    async fn test_daemon_handler_publishes_delta() {
-        let (sender, mut receiver) = broadcast::channel(16);
-        let handler = DaemonSessionHandler {
-            event_sender: sender,
-            session_name: "test-agent".to_string(),
-        };
-
-        let event = HandlerEvent::SessionEvent {
-            event_type: "assistant.message_delta".to_string(),
-            data: serde_json::json!({ "deltaContent": "Hello" }),
-        };
-
-        let response = handler.on_event(event).await;
-        assert!(matches!(response, HandlerResponse::Ok));
-
-        let published = receiver.try_recv().unwrap();
-        match published {
-            Event::AgentDelta {
-                agent_name,
-                content,
-                ..
-            } => {
-                assert_eq!(agent_name, "test-agent");
-                assert_eq!(content, "Hello");
-            }
-            _ => panic!("Expected AgentDelta event"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_daemon_handler_auto_approves_permissions() {
-        let (sender, _) = broadcast::channel(16);
-        let handler = DaemonSessionHandler {
-            event_sender: sender,
-            session_name: "test".to_string(),
-        };
-
-        let event = HandlerEvent::PermissionRequest {
-            tool_name: "file_read".to_string(),
-            arguments: serde_json::json!({}),
-        };
-
-        let response = handler.on_event(event).await;
-        assert!(matches!(
-            response,
-            HandlerResponse::Permission(PermissionResult::Approved)
-        ));
+    #[test]
+    fn test_tool_definition_new() {
+        let td = ToolDefinition::new("test_tool", "A test", serde_json::json!({"type": "object"}));
+        assert_eq!(td.tool_type, "function");
+        assert_eq!(td.function.name, "test_tool");
     }
 }
+

@@ -1,6 +1,6 @@
 [package]
 name = "io-daemon"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
 authors = ["Michael Jolley"]
 description = "A personal AI assistant daemon powered by GitHub Copilot SDK with dynamic multi-agent squad architecture"
@@ -14,7 +14,8 @@ toml = "0.8"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 rusqlite = { version = "0.31", features = ["bundled"] }
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
+futures = "0.3"
 chrono = { version = "0.4", features = ["serde"] }
 dirs = "6"
 clap = { version = "4", features = ["derive"] }
@@ -30,8 +31,6 @@ flate2 = "1"
 tar = "0.4"
 zip = "2"
 
-github-copilot-sdk = { git = "https://github.com/github/copilot-sdk", optional = true }
-
 # Feature-gated dependencies
 ratatui = { version = "0.29", optional = true }
 crossterm = { version = "0.28", optional = true }
@@ -42,4 +41,3 @@ default = ["tui", "telegram"]
 tui = ["dep:ratatui", "dep:crossterm"]
 telegram = ["dep:teloxide"]
 web = []  # Future: axum web frontend
-copilot-sdk = ["dep:github-copilot-sdk"]  # Use real SDK when available

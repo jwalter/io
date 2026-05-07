@@ -73,11 +73,14 @@ fn default_data_dir() -> PathBuf {
 }
 
 fn default_model() -> String {
-    "claude-sonnet-4-5".to_string()
+    "openai/gpt-4.1".to_string()
 }
 
 fn default_fallback_chain() -> Vec<String> {
-    vec!["claude-sonnet-4-5".to_string(), "gpt-4.1".to_string()]
+    vec![
+        "openai/gpt-4.1".to_string(),
+        "openai/gpt-4o-mini".to_string(),
+    ]
 }
 
 impl Config {

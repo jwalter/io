@@ -82,11 +82,8 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     // Create orchestrator
-    let copilot =
-        copilot::CopilotManager::new(copilot::CopilotConfig::default(), event_bus.sender());
     let orchestrator = orchestrator::Orchestrator::new(
         config.clone(),
-        copilot,
         squad_manager.clone(),
         event_bus.clone(),
     );
