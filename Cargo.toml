@@ -1,6 +1,6 @@
 [package]
 name = "io-daemon"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 authors = ["Michael Jolley"]
 description = "A personal AI assistant daemon powered by GitHub Copilot SDK with dynamic multi-agent squad architecture"

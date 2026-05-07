@@ -262,14 +262,10 @@ pub async fn apply_update(new_binary: &Path) -> Result<()> {
         info!("Update applied (old binary will be cleaned up on next start), restarting...");
     }
 
-    // Spawn the new binary with the same arguments and exit.
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    std::process::Command::new(&current_exe)
-        .args(&args)
-        .spawn()
-        .context("Failed to spawn updated binary")?;
-
-    std::process::exit(0);
+    // Exit with a non-zero code so systemd Restart=on-failure will restart us
+    // with the new binary in place.
+    info!("Exiting for restart with updated binary...");
+    std::process::exit(100);
 }
 
 /// Spawn a background task that periodically checks for updates.
@@ -312,23 +308,21 @@ pub fn spawn_update_checker(
 
                     if config.auto_apply {
                         info!("Auto-apply enabled, applying update...");
-                        let temp_dir = std::env::current_exe()
-                            .ok()
-                            .and_then(|p| p.parent().map(|d| d.to_path_buf()));
+                        let temp_dir = std::env::temp_dir().join("io-daemon-update");
+                        let _ = tokio::fs::create_dir_all(&temp_dir).await;
 
-                        if let Some(dir) = temp_dir {
-                            match download_and_verify(&update_info, &dir).await {
-                                Ok(binary_path) => {
-                                    if let Err(e) = apply_update(&binary_path).await {
-                                        error!("Failed to apply update: {e:#}");
-                                    }
+                        match download_and_verify(&update_info, &temp_dir).await {
+                            Ok(binary_path) => {
+                                if let Err(e) = apply_update(&binary_path).await {
+                                    error!("Failed to apply update: {e:#}");
                                 }
-                                Err(e) => {
-                                    error!("Failed to download/verify update: {e:#}");
-                                }
+                                // Clean up temp dir
+                                let _ = tokio::fs::remove_dir_all(&temp_dir).await;
                             }
-                        } else {
-                            error!("Could not determine directory for update download");
+                            Err(e) => {
+                                error!("Failed to download/verify update: {e:#}");
+                                let _ = tokio::fs::remove_dir_all(&temp_dir).await;
+                            }
                         }
                     }
                 }
