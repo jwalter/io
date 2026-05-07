@@ -217,6 +217,8 @@ impl GithubModelsClient {
         tools: &[ToolDefinition],
         model: &str,
     ) -> Result<ChatResponse> {
+        debug!(model = %model, message_count = messages.len(), "Sending chat completion request");
+
         let mut body = serde_json::json!({
             "model": model,
             "messages": messages,
@@ -243,6 +245,7 @@ impl GithubModelsClient {
         let status = response.status();
         if !status.is_success() {
             let error_body = response.text().await.unwrap_or_default();
+            warn!(model = %model, status = %status, "GitHub Models API request failed");
             anyhow::bail!("GitHub Models API returned {status}: {error_body}");
         }
 
@@ -259,10 +262,12 @@ impl GithubModelsClient {
 
         if let Some(tool_calls) = choice.message.tool_calls {
             if !tool_calls.is_empty() {
+                debug!(model = %model, tool_count = tool_calls.len(), "Model requested tool calls");
                 return Ok(ChatResponse::ToolCalls(tool_calls));
             }
         }
 
+        debug!(model = %model, "Model responded with message");
         Ok(ChatResponse::Message(
             choice.message.content.unwrap_or_default(),
         ))
@@ -280,6 +285,8 @@ impl GithubModelsClient {
     where
         F: FnMut(&str),
     {
+        debug!(model = %model, message_count = messages.len(), "Sending streaming chat completion request");
+
         let mut body = serde_json::json!({
             "model": model,
             "messages": messages,
@@ -307,6 +314,7 @@ impl GithubModelsClient {
         let status = response.status();
         if !status.is_success() {
             let error_body = response.text().await.unwrap_or_default();
+            warn!(model = %model, status = %status, "GitHub Models API streaming request failed");
             anyhow::bail!("GitHub Models API returned {status}: {error_body}");
         }
 
