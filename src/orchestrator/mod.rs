@@ -66,6 +66,9 @@ impl Orchestrator {
 
     /// Initialize the orchestrator's persistent Copilot session.
     pub async fn start(&mut self) -> Result<()> {
+        // Ensure the Copilot client is started before creating a session
+        self.copilot.start().await?;
+
         let options = SessionOptions {
             system_prompt: ORCHESTRATOR_SYSTEM_PROMPT.to_string(),
             model: Some(self.config.models.default.clone()),
