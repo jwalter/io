@@ -146,6 +146,7 @@ async fn main() -> anyhow::Result<()> {
         tool_registry,
         skill_catalog,
         event_bus.clone(),
+        db::Database::init(&config.data_dir)?,
     );
 
     // Spawn orchestrator bridge

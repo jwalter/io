@@ -10,6 +10,7 @@ use anyhow::Result;
 
 use crate::config::Config;
 use crate::copilot::{ChatMessage, ChatResponse, GithubModelsClient, ToolCall, ToolDefinition};
+use crate::db::Database;
 use crate::event_bus::{EventBus, MessageSource};
 use crate::skills::SkillCatalog;
 use crate::squad::SquadManager;
@@ -61,6 +62,9 @@ Use squad tools when the request involves:
 /// Maximum tool call rounds to prevent infinite loops.
 const MAX_TOOL_ROUNDS: usize = 10;
 
+/// The shared session ID — all interfaces share one conversation.
+const SESSION_ID: &str = "default";
+
 /// The Orchestrator manages message flow and agent coordination.
 pub struct Orchestrator {
     config: Arc<Config>,
@@ -69,8 +73,13 @@ pub struct Orchestrator {
     tool_registry: ToolRegistry,
     skill_catalog: SkillCatalog,
     event_bus: Arc<EventBus>,
-    /// Conversation history (per-session, simplified for now)
+    db: Database,
+    /// Conversation history (shared across all interfaces)
     messages: Vec<ChatMessage>,
+    /// Whether history has been loaded from DB
+    history_loaded: bool,
+    /// Cached system prompt (regenerated each startup)
+    system_prompt: String,
 }
 
 impl Orchestrator {
@@ -80,6 +89,7 @@ impl Orchestrator {
         tool_registry: ToolRegistry,
         skill_catalog: SkillCatalog,
         event_bus: Arc<EventBus>,
+        db: Database,
     ) -> Self {
         Self {
             config,
@@ -88,7 +98,10 @@ impl Orchestrator {
             tool_registry,
             skill_catalog,
             event_bus,
+            db,
             messages: Vec::new(),
+            history_loaded: false,
+            system_prompt: String::new(),
         }
     }
 
@@ -107,9 +120,7 @@ impl Orchestrator {
                 "Loaded skill catalog into system prompt"
             );
         }
-
-        // Seed conversation with system prompt
-        self.messages.push(ChatMessage::system(&system_prompt));
+        self.system_prompt = system_prompt;
 
         tracing::info!(
             model = %self.config.models.default,
@@ -118,21 +129,97 @@ impl Orchestrator {
         Ok(())
     }
 
+    /// Ensure conversation history is loaded from DB.
+    fn ensure_history_loaded(&mut self) {
+        if self.history_loaded {
+            return;
+        }
+        self.history_loaded = true;
+
+        // Always start with the system prompt
+        self.messages.push(ChatMessage::system(&self.system_prompt));
+
+        // Load persisted messages from DB
+        let max = self.config.history.max_messages;
+        match self.db.load_session_messages(SESSION_ID, max) {
+            Ok(stored) if !stored.is_empty() => {
+                tracing::info!(count = stored.len(), "Restored conversation history");
+                for msg in stored {
+                    // Reconstruct ChatMessage from stored data
+                    if msg.role == "assistant" && msg.tool_calls_json.is_some() {
+                        // Assistant message with tool calls
+                        if let Some(tc_json) = &msg.tool_calls_json {
+                            if let Ok(tool_calls) = serde_json::from_str::<Vec<ToolCall>>(tc_json) {
+                                self.messages
+                                    .push(ChatMessage::assistant_with_tool_calls(tool_calls));
+                                continue;
+                            }
+                        }
+                    }
+
+                    if msg.role == "tool" {
+                        if let (Some(tc_id), Some(content)) = (&msg.tool_call_id, &msg.content) {
+                            self.messages.push(ChatMessage::tool_result(tc_id, content));
+                            continue;
+                        }
+                    }
+
+                    // Standard user/assistant/system message
+                    let content = msg.content.unwrap_or_default();
+                    match msg.role.as_str() {
+                        "user" => self.messages.push(ChatMessage::user(&content)),
+                        "assistant" => self.messages.push(ChatMessage::assistant(&content)),
+                        _ => {} // skip unknown roles
+                    }
+                }
+            }
+            Ok(_) => {
+                tracing::debug!("No conversation history found, starting fresh");
+            }
+            Err(e) => {
+                tracing::warn!("Failed to load conversation history: {e:#}");
+            }
+        }
+    }
+
+    /// Persist a message to the database.
+    fn persist_message(
+        &self,
+        role: &str,
+        content: Option<&str>,
+        tool_call_id: Option<&str>,
+        tool_calls: Option<&[ToolCall]>,
+    ) {
+        let tc_json = tool_calls.and_then(|tcs| serde_json::to_string(tcs).ok());
+        if let Err(e) =
+            self.db
+                .save_message(SESSION_ID, role, content, tool_call_id, tc_json.as_deref())
+        {
+            tracing::warn!("Failed to persist message: {e:#}");
+        }
+        if let Err(e) = self.db.touch_session(SESSION_ID) {
+            tracing::warn!("Failed to touch session: {e:#}");
+        }
+    }
+
     /// Handle an incoming user message from any interface.
     pub async fn handle_message(
         &mut self,
         content: &str,
         _source: MessageSource,
     ) -> Result<String> {
-        let client = self
-            .client
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Orchestrator not started"))?;
+        // Load history from DB on first message (before borrowing client)
+        self.ensure_history_loaded();
 
-        // Append user message to history
+        if self.client.is_none() {
+            anyhow::bail!("Orchestrator not started");
+        }
+
+        // Append user message to history and persist
         self.messages.push(ChatMessage::user(content));
+        self.persist_message("user", Some(content), None, None);
 
-        let model = &self.config.models.default;
+        let model = self.config.models.default.clone();
         let tools = self.orchestrator_tools();
 
         tracing::debug!(model = %model, "Processing user message");
@@ -146,25 +233,31 @@ impl Orchestrator {
                 break;
             }
 
-            let response = client
-                .chat_completion(&self.messages, &tools, model)
+            let response = self
+                .client
+                .as_ref()
+                .unwrap()
+                .chat_completion(&self.messages, &tools, &model)
                 .await?;
 
             match response {
                 ChatResponse::Message(text) => {
-                    // Model responded directly — store and return
+                    // Model responded directly — store, persist, and return
                     self.messages.push(ChatMessage::assistant(&text));
+                    self.persist_message("assistant", Some(&text), None, None);
                     return Ok(text);
                 }
                 ChatResponse::ToolCalls(tool_calls) => {
                     // Model wants to call tools — execute them and continue
                     self.messages
                         .push(ChatMessage::assistant_with_tool_calls(tool_calls.clone()));
+                    self.persist_message("assistant", None, None, Some(&tool_calls));
 
                     for tc in &tool_calls {
                         let result = self.execute_tool_call(tc).await;
                         self.messages
                             .push(ChatMessage::tool_result(&tc.id, &result));
+                        self.persist_message("tool", Some(&result), Some(&tc.id), None);
                     }
                     // Loop back to let model process tool results
                 }
@@ -172,7 +265,9 @@ impl Orchestrator {
         }
 
         // Fallback if we hit max rounds
-        Ok("I'm having trouble completing that request. Please try again.".to_string())
+        let fallback = "I'm having trouble completing that request. Please try again.";
+        self.persist_message("assistant", Some(fallback), None, None);
+        Ok(fallback.to_string())
     }
 
     /// Execute a tool call and return the result as a string.

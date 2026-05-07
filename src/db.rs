@@ -5,6 +5,14 @@ use std::path::Path;
 
 use crate::models::{Agent, AgentStatus, Squad};
 
+/// A message loaded from the database.
+pub struct StoredMessage {
+    pub role: String,
+    pub content: Option<String>,
+    pub tool_call_id: Option<String>,
+    pub tool_calls_json: Option<String>,
+}
+
 pub struct Database {
     conn: Connection,
 }
@@ -33,8 +41,10 @@ impl Database {
                 id TEXT PRIMARY KEY,
                 session_id TEXT NOT NULL,
                 role TEXT NOT NULL,
-                content TEXT NOT NULL,
-                source TEXT NOT NULL,
+                content TEXT,
+                source TEXT NOT NULL DEFAULT '',
+                tool_call_id TEXT,
+                tool_calls TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
 
@@ -101,11 +111,82 @@ impl Database {
         ",
         )?;
 
+        // Add columns to messages table if they don't exist (migration for existing DBs)
+        for col in ["tool_call_id TEXT", "tool_calls TEXT"] {
+            let col_name = col.split_whitespace().next().unwrap_or("");
+            let has_col: bool = self
+                .conn
+                .prepare("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name = ?1")?
+                .query_row(params![col_name], |row| row.get(0))
+                .unwrap_or(false);
+            if !has_col {
+                self.conn
+                    .execute_batch(&format!("ALTER TABLE messages ADD COLUMN {col}"))?;
+            }
+        }
+
+        // Make content column nullable for existing DBs (tool-call-only assistant messages)
+        // SQLite doesn't support ALTER COLUMN, but the CREATE TABLE above already has it nullable
+
         Ok(())
     }
 
     pub fn conn(&self) -> &Connection {
         &self.conn
+    }
+
+    // --- Conversation persistence ---
+
+    /// Save a chat message to the database.
+    pub fn save_message(
+        &self,
+        session_id: &str,
+        role: &str,
+        content: Option<&str>,
+        tool_call_id: Option<&str>,
+        tool_calls_json: Option<&str>,
+    ) -> Result<()> {
+        let id = uuid::Uuid::new_v4().to_string();
+        self.conn.execute(
+            "INSERT INTO messages (id, session_id, role, content, tool_call_id, tool_calls) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![id, session_id, role, content, tool_call_id, tool_calls_json],
+        )?;
+        Ok(())
+    }
+
+    /// Load the most recent messages for a session, ordered oldest-first.
+    pub fn load_session_messages(
+        &self,
+        session_id: &str,
+        limit: usize,
+    ) -> Result<Vec<StoredMessage>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT role, content, tool_call_id, tool_calls FROM messages \
+             WHERE session_id = ?1 ORDER BY created_at DESC LIMIT ?2",
+        )?;
+
+        let rows = stmt.query_map(params![session_id, limit as i64], |row| {
+            Ok(StoredMessage {
+                role: row.get(0)?,
+                content: row.get(1)?,
+                tool_call_id: row.get(2)?,
+                tool_calls_json: row.get(3)?,
+            })
+        })?;
+
+        let mut messages: Vec<StoredMessage> = rows.filter_map(|r| r.ok()).collect();
+        messages.reverse(); // oldest first
+        Ok(messages)
+    }
+
+    /// Upsert a session record.
+    pub fn touch_session(&self, session_id: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO sessions (id, started_at) VALUES (?1, datetime('now')) \
+             ON CONFLICT(id) DO UPDATE SET ended_at = datetime('now')",
+            params![session_id],
+        )?;
+        Ok(())
     }
 
     // --- Squad operations ---

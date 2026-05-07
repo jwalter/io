@@ -15,6 +15,9 @@ pub struct Config {
 
     #[serde(default)]
     pub update: UpdateConfig,
+
+    #[serde(default)]
+    pub history: HistoryConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -47,6 +50,25 @@ impl Default for UpdateConfig {
             enabled: default_update_enabled(),
             check_interval_hours: default_check_interval_hours(),
             auto_apply: default_auto_apply(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HistoryConfig {
+    /// Maximum number of messages to restore from history on session resume.
+    #[serde(default = "default_max_history_messages")]
+    pub max_messages: usize,
+}
+
+fn default_max_history_messages() -> usize {
+    50
+}
+
+impl Default for HistoryConfig {
+    fn default() -> Self {
+        Self {
+            max_messages: default_max_history_messages(),
         }
     }
 }
@@ -109,6 +131,7 @@ impl Default for Config {
             models: ModelConfig::default(),
             telegram: None,
             update: UpdateConfig::default(),
+            history: HistoryConfig::default(),
         }
     }
 }
