@@ -1,6 +1,6 @@
 # Configuration
 
-io-daemon is configured via a TOML file at `~/.io-daemon/config.toml`. All sections are optional — the daemon uses sensible defaults when values are omitted.
+IO is configured via a TOML file at `~/.io-daemon/config.toml`. All sections are optional — the daemon uses sensible defaults when values are omitted.
 
 ## Full Reference
 
@@ -39,7 +39,7 @@ auto_apply = true
 - **Type:** `string`
 - **Default:** `~/.io-daemon`
 
-The root directory where io-daemon stores all persistent data including the SQLite database, squad configurations, wiki pages, and logs.
+The root directory where IO stores all persistent data including the SQLite database, squad configurations, wiki pages, and logs.
 
 ### `[models]`
 

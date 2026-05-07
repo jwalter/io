@@ -1,6 +1,6 @@
 # Knowledge System
 
-io-daemon's knowledge system provides long-term memory across sessions, agents, and squads. It combines structured search (SQLite FTS5) with human-readable storage (markdown wiki).
+IO's knowledge system provides long-term memory across sessions, agents, and squads. It combines structured search (SQLite FTS5) with human-readable storage (markdown wiki).
 
 ## Components
 

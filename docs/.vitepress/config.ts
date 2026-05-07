@@ -1,8 +1,8 @@
 import { defineConfig } from 'vitepress'
 
 export default defineConfig({
-  title: 'io-daemon',
-  description: 'A personal AI assistant daemon powered by the GitHub Copilot SDK',
+  title: 'IO',
+  description: 'IO — a personal AI assistant daemon powered by the GitHub Copilot SDK',
   base: '/io/',
 
   head: [

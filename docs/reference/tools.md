@@ -1,6 +1,6 @@
 # Tools
 
-io-daemon provides agents with a set of built-in tools for interacting with the local system and external services.
+IO provides agents with a set of built-in tools for interacting with the local system and external services.
 
 ## Tool Architecture
 
@@ -82,7 +82,7 @@ The tool system is designed to be extensible:
 
 ## Tool Permissions
 
-Tools execute with the same permissions as the io-daemon process. When running as a systemd service, this is typically the root user (or whichever user the service runs as).
+Tools execute with the same permissions as the IO process. When running as a systemd service, this is typically the root user (or whichever user the service runs as).
 
 Consider creating a dedicated user for the daemon in production:
 

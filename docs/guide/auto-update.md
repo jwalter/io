@@ -1,6 +1,6 @@
 # Auto-Update
 
-io-daemon includes a built-in self-update system that checks for new releases on GitHub and can automatically apply them.
+IO includes a built-in self-update system that checks for new releases on GitHub and can automatically apply them.
 
 ## How It Works
 

@@ -1,6 +1,6 @@
 # Telegram Bot
 
-io-daemon includes a Telegram bot interface powered by [teloxide](https://github.com/teloxide/teloxide), giving you mobile access to your AI assistant.
+IO includes a Telegram bot interface powered by [teloxide](https://github.com/teloxide/teloxide), giving you mobile access to your AI assistant.
 
 ## Setup
 
@@ -12,7 +12,7 @@ io-daemon includes a Telegram bot interface powered by [teloxide](https://github
 4. Choose a username (must end in `bot`, e.g., `io_assistant_bot`)
 5. BotFather will give you a **bot token** — save this
 
-### 2. Configure io-daemon
+### 2. Configure IO
 
 Add the Telegram section to `~/.io-daemon/config.toml`:
 
@@ -57,7 +57,7 @@ Any non-command message is treated as a chat message and routed to the orchestra
 
 ### Long Responses
 
-Telegram has a 4096-character message limit. io-daemon automatically splits long responses into multiple messages while preserving formatting.
+Telegram has a 4096-character message limit. IO automatically splits long responses into multiple messages while preserving formatting.
 
 ## Authentication
 

@@ -2,7 +2,7 @@
 layout: home
 
 hero:
-  name: io-daemon
+  name: IO
   text: Personal AI Assistant
   tagline: A Rust-powered daemon using GitHub Copilot SDK with dynamic multi-agent squads
   actions:

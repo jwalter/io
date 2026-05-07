@@ -1,10 +1,10 @@
 # Orchestrator
 
-The orchestrator is the routing brain of io-daemon. It receives every user message and determines which squad and agent(s) should handle the request. **It never generates responses directly.**
+The orchestrator is the routing brain of IO. It receives every user message and determines which squad and agent(s) should handle the request. **It never generates responses directly.**
 
 ## Design Philosophy
 
-Unlike typical chatbot architectures where a single model handles everything, io-daemon's orchestrator only makes routing decisions. This separation ensures:
+Unlike typical chatbot architectures where a single model handles everything, IO's orchestrator only makes routing decisions. This separation ensures:
 
 - **Specialization**: Each agent focuses on what it knows best
 - **Composability**: Squads can be dynamically assembled for any project

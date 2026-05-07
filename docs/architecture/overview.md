@@ -1,6 +1,6 @@
 # Architecture Overview
 
-io-daemon is a single Rust binary that runs as a background service, routing user messages through an orchestrator to specialized agent squads powered by the GitHub Copilot SDK.
+IO is a single Rust binary that runs as a background service, routing user messages through an orchestrator to specialized agent squads powered by the GitHub Copilot SDK.
 
 ## System Diagram
 
@@ -10,7 +10,7 @@ User → [TUI / Telegram] → Event Bus → Orchestrator → Squad Manager → A
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                      io-daemon                          │
+│                            IO                            │
 ├─────────────────────────────────────────────────────────┤
 │  Interfaces          │  Core                            │
 │  ┌──────────┐        │  ┌─────────────────────────┐    │
@@ -58,7 +58,7 @@ All event types derive `Serialize`/`Deserialize`, making them ready for WebSocke
 
 ### Orchestrator
 
-The orchestrator is the routing brain of io-daemon. It receives every user message and decides which squad and agent(s) should handle it. **It never generates responses directly** — it only routes.
+The orchestrator is the routing brain of IO. It receives every user message and decides which squad and agent(s) should handle it. **It never generates responses directly** — it only routes.
 
 See [Orchestrator](/architecture/orchestrator) for details.
 
@@ -70,7 +70,7 @@ See [Squads](/architecture/squads) for details.
 
 ### Interfaces
 
-io-daemon supports multiple simultaneous interfaces:
+IO supports multiple simultaneous interfaces:
 
 | Interface | Feature Flag | Status    |
 | --------- | ------------ | --------- |
@@ -82,7 +82,7 @@ All interfaces subscribe to the same event bus, so they can run concurrently.
 
 ### Storage
 
-io-daemon uses **hybrid storage**:
+IO uses **hybrid storage**:
 
 - **SQLite** (with FTS5) for message indexing, search, and session history
 - **Markdown files** for agent charters, squad decisions, routing rules, and the personal wiki
