@@ -411,7 +411,7 @@ impl GithubModelsClient {
 fn is_reasoning_model(model: &str) -> bool {
     // Strip any provider prefix (e.g. "openai/o3-mini" -> "o3-mini")
     let name = model.rsplit('/').next().unwrap_or(model);
-    name.starts_with("o1") || name.starts_with("o3") || name.starts_with("o4-mini")
+    name.starts_with("o1") || name.starts_with("o3") || name.starts_with("o4")
 }
 
 /// Adapt messages for the target model. Reasoning models (o1, o3, o4-mini)
@@ -512,6 +512,7 @@ mod tests {
         assert!(is_reasoning_model("openai/o3"));
         assert!(is_reasoning_model("openai/o3-mini"));
         assert!(is_reasoning_model("openai/o4-mini"));
+        assert!(is_reasoning_model("openai/o4"));
         assert!(is_reasoning_model("o3-mini"));
 
         assert!(!is_reasoning_model("openai/gpt-4.1"));
