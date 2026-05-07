@@ -83,18 +83,31 @@ See the [Configuration Reference](/guide/configuration) for all options.
 
 ## Running
 
+### Interactive Mode (TUI)
+
 ```bash
 io
 ```
 
-The daemon will:
+This launches the terminal chat interface where you can type messages and see IO's responses in real-time. The TUI shows a status bar, chat area with streaming responses, and an input prompt.
+
+### Headless Daemon Mode
+
+```bash
+io --daemon
+```
+
+Runs IO without the TUI — useful for systemd services or background operation. Interaction happens through configured interfaces like Telegram.
+
+In both modes, IO will:
 
 1. Load configuration from `~/.io/config.toml`
 2. Initialize the SQLite database
 3. Start the event bus
 4. Launch the orchestrator bridge
-5. Start enabled interfaces (TUI, Telegram)
-6. Begin checking for updates
+5. Scan for installed skills
+6. Start enabled interfaces (Telegram, etc.)
+7. Begin checking for updates
 
 ## Running as a Systemd Service
 
@@ -109,7 +122,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/io
+ExecStart=/usr/local/bin/io --daemon
 Restart=on-failure
 RestartSec=5
 Environment=RUST_LOG=info

@@ -28,8 +28,8 @@ use clap::Parser;
 #[derive(Parser, Debug)]
 #[command(name = "io", version, about = "Personal AI assistant daemon")]
 struct Cli {
-    /// Run in daemon mode (long-running)
-    #[arg(short, long, default_value_t = true)]
+    /// Run in headless daemon mode (no TUI)
+    #[arg(short, long, default_value_t = false)]
     daemon: bool,
 
     /// Path to config file (default: ~/.io/config.toml)
@@ -46,6 +46,8 @@ struct Cli {
 
 #[derive(clap::Subcommand, Debug)]
 enum Commands {
+    /// Launch the interactive chat TUI
+    Chat,
     /// Manage installed skills
     Skill {
         #[command(subcommand)]
@@ -78,10 +80,15 @@ enum SkillAction {
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    // Handle skill subcommands early (before daemon startup)
-    if let Some(Commands::Skill { action }) = cli.command {
-        return handle_skill_command(action).await;
+    // Handle subcommands early (before daemon startup)
+    match cli.command {
+        Some(Commands::Skill { action }) => return handle_skill_command(action).await,
+        Some(Commands::Chat) => {} // Fall through to normal startup with TUI forced
+        None => {}                 // Fall through to normal startup
     }
+
+    // Determine if TUI should run: `io chat` forces it, `io --daemon` disables it
+    let run_tui = cli.command.is_some() || !cli.daemon;
 
     // Initialize logging
     tracing_subscriber::fmt()
@@ -177,9 +184,26 @@ async fn main() -> anyhow::Result<()> {
         tracing::info!("Update checker started");
     }
 
-    tracing::info!("io running. Press Ctrl+C to stop.");
-    tokio::signal::ctrl_c().await?;
-    tracing::info!("Shutting down...");
+    // Run TUI or daemon mode
+    #[cfg(feature = "tui")]
+    if run_tui {
+        tracing::info!("Starting interactive TUI...");
+        let mut tui = interfaces::tui::TuiApp::new(event_bus.sender());
+        tui.run().await?;
+        tracing::info!("TUI exited, shutting down...");
+    } else {
+        tracing::info!("io running in daemon mode. Press Ctrl+C to stop.");
+        tokio::signal::ctrl_c().await?;
+        tracing::info!("Shutting down...");
+    }
+
+    #[cfg(not(feature = "tui"))]
+    {
+        let _ = run_tui; // suppress unused variable warning
+        tracing::info!("io running in daemon mode. Press Ctrl+C to stop.");
+        tokio::signal::ctrl_c().await?;
+        tracing::info!("Shutting down...");
+    }
 
     Ok(())
 }

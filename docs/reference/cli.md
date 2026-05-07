@@ -12,11 +12,23 @@ io [OPTIONS] [COMMAND]
 | ------------------------ | ------------------------------------------------ |
 | `--config <PATH>`        | Path to config file (default: `~/.io/config.toml`) |
 | `--log-level <LEVEL>`    | Log level (default: `info`)                      |
-| `-d`, `--daemon`         | Run in daemon mode (default: true)               |
+| `-d`, `--daemon`         | Run in headless daemon mode (no TUI)             |
 | `-h`, `--help`           | Print help information                           |
 | `-V`, `--version`        | Print version                                    |
 
 ## Commands
+
+### `io` (no command)
+
+Launches IO with the interactive TUI (terminal chat interface). The TUI runs alongside any configured interfaces (e.g., Telegram).
+
+### `io chat`
+
+Explicitly launches the interactive TUI. Same as running `io` without `--daemon`.
+
+### `io --daemon`
+
+Runs IO in headless mode (no TUI). Use this for systemd services or background operation.
 
 ### `io skill`
 
