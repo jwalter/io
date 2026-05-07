@@ -10,7 +10,7 @@ use anyhow::Result;
 
 use crate::config::Config;
 use crate::copilot::{ChatMessage, ChatResponse, GithubModelsClient, ToolCall, ToolDefinition};
-use crate::event_bus::{Event, EventBus, MessageSource};
+use crate::event_bus::{EventBus, MessageSource};
 use crate::squad::SquadManager;
 
 /// The Orchestrator system prompt — defines hybrid direct-response + routing behavior
@@ -84,23 +84,23 @@ impl Orchestrator {
         self.messages
             .push(ChatMessage::system(ORCHESTRATOR_SYSTEM_PROMPT));
 
-        tracing::info!("Orchestrator started with GitHub Models API");
+        tracing::info!(
+            model = %self.config.models.default,
+            "Orchestrator started with GitHub Models API"
+        );
         Ok(())
     }
 
     /// Handle an incoming user message from any interface.
-    pub async fn handle_message(&mut self, content: &str, source: MessageSource) -> Result<String> {
+    pub async fn handle_message(
+        &mut self,
+        content: &str,
+        _source: MessageSource,
+    ) -> Result<String> {
         let client = self
             .client
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Orchestrator not started"))?;
-
-        // Publish the user message event
-        self.event_bus.publish(Event::UserMessage {
-            content: content.to_string(),
-            source,
-            timestamp: chrono::Utc::now(),
-        });
 
         // Append user message to history
         self.messages.push(ChatMessage::user(content));
