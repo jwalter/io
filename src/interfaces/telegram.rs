@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use teloxide::prelude::*;
+use teloxide::types::ChatAction;
 use tokio::sync::broadcast;
 
 use crate::config::TelegramConfig;
@@ -71,6 +72,9 @@ impl TelegramBot {
                         return respond(());
                     }
 
+                    // Send typing indicator so the user knows we received their message
+                    let _ = bot.send_chat_action(msg.chat.id, ChatAction::Typing).await;
+
                     let session_id = format!("telegram-{}", msg.chat.id.0);
                     if let Ok(mut reg) = registry.lock() {
                         reg.insert(session_id, msg.chat.id);
@@ -103,6 +107,7 @@ impl TelegramBot {
         let bot = Bot::new(&self.config.bot_token);
         let chat_registry = self.chat_registry.clone();
         let mut buffer: HashMap<String, String> = HashMap::new();
+        let mut typing_sent: HashMap<String, tokio::time::Instant> = HashMap::new();
 
         while let Ok(event) = event_rx.recv().await {
             match event {
@@ -111,12 +116,35 @@ impl TelegramBot {
                     content,
                     session_id,
                 } => {
-                    buffer.entry(session_id).or_default().push_str(&content);
+                    buffer
+                        .entry(session_id.clone())
+                        .or_default()
+                        .push_str(&content);
+
+                    // Re-send typing indicator every 4 seconds to keep it active
+                    let should_send = typing_sent
+                        .get(&session_id)
+                        .map(|last| last.elapsed() >= std::time::Duration::from_secs(4))
+                        .unwrap_or(true);
+
+                    if should_send {
+                        let chat_id = chat_registry
+                            .lock()
+                            .ok()
+                            .and_then(|reg| reg.get(&session_id).copied());
+
+                        if let Some(chat_id) = chat_id {
+                            let _ = bot.send_chat_action(chat_id, ChatAction::Typing).await;
+                        }
+                        typing_sent.insert(session_id, tokio::time::Instant::now());
+                    }
                 }
                 Event::AgentComplete {
                     agent_name,
                     session_id,
                 } => {
+                    typing_sent.remove(&session_id);
+
                     if let Some(full_response) = buffer.remove(&session_id) {
                         let chat_id = chat_registry
                             .lock()
