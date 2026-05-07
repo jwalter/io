@@ -82,11 +82,8 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     // Create orchestrator
-    let orchestrator = orchestrator::Orchestrator::new(
-        config.clone(),
-        squad_manager.clone(),
-        event_bus.clone(),
-    );
+    let orchestrator =
+        orchestrator::Orchestrator::new(config.clone(), squad_manager.clone(), event_bus.clone());
 
     // Spawn orchestrator bridge
     let _bridge_handle = bridge::spawn_orchestrator_bridge(orchestrator, event_bus.clone());

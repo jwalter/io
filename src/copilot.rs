@@ -97,7 +97,11 @@ pub struct ToolDefinition {
 }
 
 impl ToolDefinition {
-    pub fn new(name: impl Into<String>, description: impl Into<String>, parameters: serde_json::Value) -> Self {
+    pub fn new(
+        name: impl Into<String>,
+        description: impl Into<String>,
+        parameters: serde_json::Value,
+    ) -> Self {
         Self {
             tool_type: "function".to_string(),
             function: FunctionDefinition {
@@ -374,7 +378,9 @@ impl GithubModelsClient {
 
         // Assemble final response
         if !tool_calls_builder.is_empty()
-            && tool_calls_builder.iter().any(|(id, _, _, _)| !id.is_empty())
+            && tool_calls_builder
+                .iter()
+                .any(|(id, _, _, _)| !id.is_empty())
         {
             let tool_calls: Vec<ToolCall> = tool_calls_builder
                 .into_iter()
@@ -454,4 +460,3 @@ mod tests {
         assert_eq!(td.function.name, "test_tool");
     }
 }
-

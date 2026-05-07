@@ -81,7 +81,8 @@ impl Orchestrator {
         self.client = Some(client);
 
         // Seed conversation with system prompt
-        self.messages.push(ChatMessage::system(ORCHESTRATOR_SYSTEM_PROMPT));
+        self.messages
+            .push(ChatMessage::system(ORCHESTRATOR_SYSTEM_PROMPT));
 
         tracing::info!("Orchestrator started with GitHub Models API");
         Ok(())
@@ -147,8 +148,8 @@ impl Orchestrator {
 
     /// Execute a tool call and return the result as a string.
     async fn execute_tool_call(&self, tool_call: &ToolCall) -> String {
-        let args: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)
-            .unwrap_or(serde_json::json!({}));
+        let args: serde_json::Value =
+            serde_json::from_str(&tool_call.function.arguments).unwrap_or(serde_json::json!({}));
 
         tracing::info!(
             tool = %tool_call.function.name,
@@ -203,15 +204,9 @@ impl Orchestrator {
             "squad_route" => {
                 let agent_name = args["agent_name"].as_str().unwrap_or("");
                 let task = args["task"].as_str().unwrap_or("");
-                format!(
-                    "Routed task to agent '{}': {}",
-                    agent_name,
-                    task
-                )
+                format!("Routed task to agent '{}': {}", agent_name, task)
             }
-            "squad_status" => {
-                "Squad status: operational (detailed status coming soon)".to_string()
-            }
+            "squad_status" => "Squad status: operational (detailed status coming soon)".to_string(),
             "squad_decide" => {
                 let title = args["title"].as_str().unwrap_or("");
                 let content = args["content"].as_str().unwrap_or("");
