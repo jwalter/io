@@ -88,7 +88,15 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Determine if TUI should run: `io chat` forces it, `io --daemon` disables it
-    let run_tui = cli.command.is_some() || !cli.daemon;
+    // Also require an actual terminal (don't attempt TUI under systemd/pipes)
+    let has_terminal = std::io::IsTerminal::is_terminal(&std::io::stdout());
+    let run_tui = if cli.daemon {
+        false
+    } else if matches!(cli.command, Some(Commands::Chat)) {
+        true // Explicit `io chat` — attempt TUI even if detection is wrong
+    } else {
+        has_terminal
+    };
 
     // Initialize logging
     tracing_subscriber::fmt()
