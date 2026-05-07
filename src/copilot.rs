@@ -404,8 +404,18 @@ impl GithubModelsClient {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-/// Get the GitHub token from `gh auth token`.
+/// Get the GitHub token, checking `GITHUB_TOKEN` env var first,
+/// then falling back to `gh auth token`.
 fn get_gh_token() -> Result<String> {
+    // Prefer environment variable (works in systemd, Docker, CI)
+    if let Ok(token) = std::env::var("GITHUB_TOKEN") {
+        let token = token.trim().to_string();
+        if !token.is_empty() {
+            return Ok(token);
+        }
+    }
+
+    // Fall back to gh CLI (works in interactive/dev shells)
     let output = std::process::Command::new("gh")
         .args(["auth", "token"])
         .output()
@@ -414,7 +424,7 @@ fn get_gh_token() -> Result<String> {
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         anyhow::bail!(
-            "`gh auth token` failed (exit {}): {}",
+            "`gh auth token` failed (exit {}): {}. Set GITHUB_TOKEN env var or run `gh auth login`.",
             output.status.code().unwrap_or(-1),
             stderr.trim()
         );
@@ -426,7 +436,9 @@ fn get_gh_token() -> Result<String> {
         .to_string();
 
     if token.is_empty() {
-        anyhow::bail!("`gh auth token` returned empty. Run `gh auth login` first.");
+        anyhow::bail!(
+            "`gh auth token` returned empty. Set GITHUB_TOKEN env var or run `gh auth login`."
+        );
     }
 
     Ok(token)
