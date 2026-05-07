@@ -111,6 +111,15 @@ impl TelegramBot {
 
         while let Ok(event) = event_rx.recv().await {
             match event {
+                Event::UserMessage {
+                    source: MessageSource::Telegram { chat_id },
+                    ..
+                } => {
+                    // Show "typing..." while processing
+                    let _ = bot
+                        .send_chat_action(ChatId(chat_id), teloxide::types::ChatAction::Typing)
+                        .await;
+                }
                 Event::AgentDelta {
                     agent_name: _,
                     content,
