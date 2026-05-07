@@ -3,7 +3,7 @@
 ## Usage
 
 ```bash
-io [OPTIONS]
+io [OPTIONS] [COMMAND]
 ```
 
 ## Options
@@ -11,12 +11,39 @@ io [OPTIONS]
 | Flag                     | Description                                      |
 | ------------------------ | ------------------------------------------------ |
 | `--config <PATH>`        | Path to config file (default: `~/.io/config.toml`) |
-| `--data-dir <PATH>`      | Override data directory                          |
-| `--no-update`            | Disable update checking for this run              |
-| `-v`, `--verbose`        | Increase log verbosity                           |
-| `-q`, `--quiet`          | Suppress non-error output                        |
+| `--log-level <LEVEL>`    | Log level (default: `info`)                      |
+| `-d`, `--daemon`         | Run in daemon mode (default: true)               |
 | `-h`, `--help`           | Print help information                           |
 | `-V`, `--version`        | Print version                                    |
+
+## Commands
+
+### `io skill`
+
+Manage installed Agent Skills.
+
+```bash
+io skill list                          # List installed skills
+io skill search <query>                # Search skills.sh registry
+io skill add <owner/repo@slug>         # Install a skill from skills.sh
+io skill remove <name>                 # Remove an installed skill
+```
+
+**Examples:**
+
+```bash
+# Search for PDF-related skills
+io skill search "pdf processing"
+
+# Install a skill
+io skill add anthropics/skills@pdf
+
+# List all installed skills
+io skill list
+
+# Remove a skill
+io skill remove pdf
+```
 
 ## Environment Variables
 
@@ -38,9 +65,6 @@ io --config /etc/io/config.toml
 
 # Run with debug logging
 RUST_LOG=debug io
-
-# Run without update checks
-io --no-update
 
 # Check version
 io --version

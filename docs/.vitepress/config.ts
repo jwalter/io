@@ -24,6 +24,7 @@ export default defineConfig({
             { text: 'Getting Started', link: '/guide/getting-started' },
             { text: 'Configuration', link: '/guide/configuration' },
             { text: 'Telegram Bot', link: '/guide/telegram' },
+            { text: 'Skills', link: '/guide/skills' },
             { text: 'Auto-Update', link: '/guide/auto-update' },
           ],
         },

@@ -3,6 +3,7 @@
 pub mod calendar;
 pub mod file_ops;
 pub mod shell;
+pub mod skill_activate;
 pub mod web;
 pub mod wiki;
 
@@ -13,6 +14,7 @@ use serde_json::{json, Value};
 use calendar::CalendarTool;
 use file_ops::FileOpsTool;
 use shell::ShellTool;
+use skill_activate::{ActivateSkillTool, SkillInstallTool, SkillSearchTool};
 use web::WebTool;
 use wiki::WikiTool;
 
@@ -58,6 +60,9 @@ impl ToolRegistry {
         registry.register(Box::new(WebTool));
         registry.register(Box::new(WikiTool::new()));
         registry.register(Box::new(CalendarTool::new()));
+        registry.register(Box::new(ActivateSkillTool));
+        registry.register(Box::new(SkillSearchTool));
+        registry.register(Box::new(SkillInstallTool));
         registry
     }
 

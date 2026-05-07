@@ -16,6 +16,7 @@ mod orchestrator;
 mod routing;
 mod session_pool;
 mod shutdown;
+mod skills;
 mod squad;
 mod tools;
 mod updater;
@@ -38,11 +39,49 @@ struct Cli {
     /// Log level
     #[arg(long, default_value = "info")]
     log_level: String,
+
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(clap::Subcommand, Debug)]
+enum Commands {
+    /// Manage installed skills
+    Skill {
+        #[command(subcommand)]
+        action: SkillAction,
+    },
+}
+
+#[derive(clap::Subcommand, Debug)]
+enum SkillAction {
+    /// List installed skills
+    List,
+    /// Search skills.sh registry
+    Search {
+        /// Search query
+        query: String,
+    },
+    /// Install a skill from skills.sh (format: owner/repo@slug)
+    Add {
+        /// Install specifier (e.g., anthropics/skills@pdf)
+        spec: String,
+    },
+    /// Remove an installed skill
+    Remove {
+        /// Skill name to remove
+        name: String,
+    },
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
+
+    // Handle skill subcommands early (before daemon startup)
+    if let Some(Commands::Skill { action }) = cli.command {
+        return handle_skill_command(action).await;
+    }
 
     // Initialize logging
     tracing_subscriber::fmt()
@@ -81,12 +120,16 @@ async fn main() -> anyhow::Result<()> {
         Arc::new(db::Database::init(&config.data_dir)?),
     ));
 
-    // Create orchestrator with tool registry
+    // Create orchestrator with tool registry and skill catalog
     let tool_registry = tools::ToolRegistry::register_defaults();
+    let skill_entries = skills::scan_all_skills(None);
+    let skill_catalog = skills::SkillCatalog::new(skill_entries);
+    tracing::info!(skills = skill_catalog.len(), "Scanned for installed skills");
     let orchestrator = orchestrator::Orchestrator::new(
         config.clone(),
         squad_manager.clone(),
         tool_registry,
+        skill_catalog,
         event_bus.clone(),
     );
 
@@ -138,5 +181,58 @@ async fn main() -> anyhow::Result<()> {
     tokio::signal::ctrl_c().await?;
     tracing::info!("Shutting down...");
 
+    Ok(())
+}
+
+/// Handle `io skill` subcommands.
+async fn handle_skill_command(action: SkillAction) -> anyhow::Result<()> {
+    match action {
+        SkillAction::List => {
+            let entries = skills::scan_all_skills(None);
+            if entries.is_empty() {
+                println!("No skills installed.");
+                println!("\nInstall skills with: io skill add <owner/repo@slug>");
+                println!("Search for skills:   io skill search <query>");
+            } else {
+                println!("Installed skills ({}):\n", entries.len());
+                for entry in &entries {
+                    let scope = match entry.scope {
+                        skills::types::SkillScope::User => "user",
+                        skills::types::SkillScope::Project => "project",
+                    };
+                    println!("  {} ({})", entry.name, scope);
+                    println!("    {}", entry.description);
+                    println!("    {}\n", entry.location.display());
+                }
+            }
+        }
+        SkillAction::Search { query } => {
+            println!("Searching skills.sh for '{query}'...\n");
+            let results = skills::registry::search_skills(&query, 10).await?;
+            if results.is_empty() {
+                println!("No skills found for '{query}'.");
+            } else {
+                println!("Found {} skills:\n", results.len());
+                for skill in &results {
+                    println!("  {} ({} installs)", skill.name, skill.installs);
+                    println!("    Source: {}", skill.source);
+                    println!("    Install: io skill add {}@{}\n", skill.source, skill.id);
+                }
+            }
+        }
+        SkillAction::Add { spec } => {
+            let (owner, repo, slug) = skills::registry::parse_install_spec(&spec)?;
+            println!("Installing skill '{slug}' from {owner}/{repo}...");
+            let path = skills::registry::install_skill(&owner, &repo, &slug).await?;
+            println!("Installed to {}", path.display());
+            println!(
+                "\nRestart IO to activate the skill, or it will be picked up on next startup."
+            );
+        }
+        SkillAction::Remove { name } => {
+            skills::registry::remove_skill(&name)?;
+            println!("Removed skill '{name}'.");
+        }
+    }
     Ok(())
 }

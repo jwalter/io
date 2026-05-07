@@ -11,6 +11,7 @@ use anyhow::Result;
 use crate::config::Config;
 use crate::copilot::{ChatMessage, ChatResponse, GithubModelsClient, ToolCall, ToolDefinition};
 use crate::event_bus::{EventBus, MessageSource};
+use crate::skills::SkillCatalog;
 use crate::squad::SquadManager;
 use crate::tools::ToolRegistry;
 
@@ -32,6 +33,9 @@ Use these tools for practical tasks the user asks for:
 - web: Fetch web pages or make HTTP requests
 - wiki: Search and read Wikipedia articles
 - calendar: Query and manage calendar events
+- activate_skill: Load a skill's full instructions when a task matches an available skill
+- skill_search: Search the skills.sh registry for community skills
+- skill_install: Install a skill from skills.sh
 
 ## When to delegate to squads
 Use squad tools when the request involves:
@@ -63,6 +67,7 @@ pub struct Orchestrator {
     client: Option<GithubModelsClient>,
     squad_manager: Arc<SquadManager>,
     tool_registry: ToolRegistry,
+    skill_catalog: SkillCatalog,
     event_bus: Arc<EventBus>,
     /// Conversation history (per-session, simplified for now)
     messages: Vec<ChatMessage>,
@@ -73,6 +78,7 @@ impl Orchestrator {
         config: Arc<Config>,
         squad_manager: Arc<SquadManager>,
         tool_registry: ToolRegistry,
+        skill_catalog: SkillCatalog,
         event_bus: Arc<EventBus>,
     ) -> Self {
         Self {
@@ -80,6 +86,7 @@ impl Orchestrator {
             client: None,
             squad_manager,
             tool_registry,
+            skill_catalog,
             event_bus,
             messages: Vec::new(),
         }
@@ -90,9 +97,19 @@ impl Orchestrator {
         let client = GithubModelsClient::new().await?;
         self.client = Some(client);
 
+        // Build system prompt with skill catalog appended
+        let mut system_prompt = ORCHESTRATOR_SYSTEM_PROMPT.to_string();
+        let skills_xml = self.skill_catalog.to_prompt_xml();
+        if !skills_xml.is_empty() {
+            system_prompt.push_str(&skills_xml);
+            tracing::info!(
+                skills = self.skill_catalog.len(),
+                "Loaded skill catalog into system prompt"
+            );
+        }
+
         // Seed conversation with system prompt
-        self.messages
-            .push(ChatMessage::system(ORCHESTRATOR_SYSTEM_PROMPT));
+        self.messages.push(ChatMessage::system(&system_prompt));
 
         tracing::info!(
             model = %self.config.models.default,
