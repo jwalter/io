@@ -188,22 +188,9 @@ pub async fn download_and_verify(info: &UpdateInfo, temp_dir: &Path) -> Result<P
         .await
         .context("Failed to read archive bytes")?;
 
-    let binary_path = temp_dir.join(binary_name());
-
-    // Extract the binary from the archive.
-    if cfg!(target_os = "windows") {
-        extract_zip(&archive_bytes, &binary_path)?;
-    } else {
-        extract_tar_gz(&archive_bytes, &binary_path)?;
-    }
-
-    // Verify SHA256 checksum of the extracted binary.
-    let binary_bytes = tokio::fs::read(&binary_path)
-        .await
-        .context("Failed to read extracted binary for checksum verification")?;
-
+    // Verify SHA256 checksum of the downloaded archive.
     let mut hasher = Sha256::new();
-    hasher.update(&binary_bytes);
+    hasher.update(&archive_bytes);
     let computed = format!("{:x}", hasher.finalize());
 
     if computed != info.checksum {
@@ -214,7 +201,22 @@ pub async fn download_and_verify(info: &UpdateInfo, temp_dir: &Path) -> Result<P
         );
     }
 
-    info!("Update binary verified (SHA256 OK)");
+    info!("Archive checksum verified (SHA256 OK)");
+
+    let binary_path = temp_dir.join(binary_name());
+
+    // Extract the binary from the archive.
+    if cfg!(target_os = "windows") {
+        extract_zip(&archive_bytes, &binary_path)?;
+    } else {
+        extract_tar_gz(&archive_bytes, &binary_path)?;
+    }
+
+    // Verify the binary was extracted successfully.
+    if !binary_path.exists() {
+        anyhow::bail!("Extracted binary not found at {}", binary_path.display());
+    }
+
     Ok(binary_path)
 }
 
@@ -284,8 +286,16 @@ pub fn spawn_update_checker(
         let interval = tokio::time::Duration::from_secs(config.check_interval_hours * 3600);
         let current_version = env!("CARGO_PKG_VERSION");
 
+        // Check immediately on startup, then on interval
+        let mut first_run = true;
         loop {
-            tokio::time::sleep(interval).await;
+            if first_run {
+                first_run = false;
+                // Small delay to let other services initialize
+                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+            } else {
+                tokio::time::sleep(interval).await;
+            }
 
             match check_for_update(current_version).await {
                 Ok(Some(update_info)) => {
