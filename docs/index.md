@@ -4,7 +4,7 @@ layout: home
 hero:
   name: IO
   text: Personal AI Assistant
-  tagline: A Rust-powered daemon using GitHub Copilot SDK with dynamic multi-agent squads
+  tagline: A Rust-powered daemon using the GitHub Models API with dynamic multi-agent squads
   actions:
     - theme: brand
       text: Get Started
@@ -18,8 +18,8 @@ hero:
 
 features:
   - icon: 🤖
-    title: Orchestrator Routing
-    details: The orchestrator routes every request to specialized agent squads — it never generates responses directly.
+    title: Hybrid Orchestrator
+    details: The orchestrator uses the LLM to decide — answering simple questions directly and delegating complex tasks to specialist agent squads.
   - icon: 👥
     title: Dynamic Squads
     details: Per-project teams of specialized agents that persist, learn, and can be recalled across sessions.

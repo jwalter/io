@@ -2,8 +2,8 @@
 
 ## Prerequisites
 
-- A [GitHub Copilot](https://github.com/features/copilot) subscription
-- GitHub CLI authenticated (`gh auth login`)
+- A GitHub account with access to [GitHub Models](https://github.com/marketplace/models)
+- A `GITHUB_TOKEN` with Models API access (or GitHub CLI authenticated via `gh auth login`)
 
 ## Installation
 
@@ -47,7 +47,6 @@ cargo build --release
 | `tui`         | ✅      | Terminal UI via ratatui            |
 | `telegram`    | ✅      | Telegram bot via teloxide          |
 | `web`         | —       | Future Vue 3 web frontend         |
-| `copilot-sdk` | —       | Use real GitHub Copilot SDK crate  |
 
 Build with specific features:
 
@@ -67,8 +66,8 @@ Create a config file at `~/.io/config.toml`:
 data_dir = "~/.io"
 
 [models]
-default = "claude-sonnet-4-5"
-fallback_chain = ["claude-sonnet-4-5", "gpt-4.1"]
+default = "openai/gpt-4.1"
+fallback_chain = ["openai/gpt-4.1", "openai/gpt-4o-mini"]
 
 [telegram]
 bot_token = "YOUR_BOT_TOKEN"
@@ -114,6 +113,7 @@ ExecStart=/usr/local/bin/io
 Restart=on-failure
 RestartSec=5
 Environment=RUST_LOG=info
+Environment=GITHUB_TOKEN=ghp_your_token_here
 
 [Install]
 WantedBy=multi-user.target

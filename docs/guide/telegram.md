@@ -35,12 +35,12 @@ systemctl restart io
 You should see in the logs:
 
 ```
-INFO io_daemon: Telegram bot started
+INFO io: Telegram bot started
 ```
 
 ## Usage
 
-Send any message to your bot and it will be routed through the orchestrator to the appropriate squad.
+Send any message to your bot and the orchestrator will handle it — answering directly for simple questions or delegating to specialist squads for complex tasks. While processing, the bot shows a "typing..." indicator.
 
 ### Available Commands
 
@@ -53,7 +53,7 @@ Send any message to your bot and it will be routed through the orchestrator to t
 
 ### Text Messages
 
-Any non-command message is treated as a chat message and routed to the orchestrator. The orchestrator determines which squad and agent(s) should handle the request.
+Any non-command message is treated as a chat message and sent to the orchestrator. The LLM decides whether to respond directly or delegate to a squad.
 
 ### Long Responses
 

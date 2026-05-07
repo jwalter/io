@@ -3,7 +3,7 @@ name = "io"
 version = "0.2.0"
 edition = "2021"
 authors = ["Michael Jolley"]
-description = "A personal AI assistant daemon powered by GitHub Copilot SDK with dynamic multi-agent squad architecture"
+description = "A personal AI assistant daemon powered by the GitHub Models API with dynamic multi-agent squad architecture"
 license = "MIT"
 
 [dependencies]

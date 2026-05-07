@@ -17,15 +17,15 @@ IO uses a **hybrid approach**: the orchestrator handles simple, conversational m
 User message arrives
        │
        ▼
-  Is it conversational?
+  LLM decides (via tool calls)
   ┌─────┴─────┐
-  │ Yes       │ No
+  │ Text      │ Tool calls
   ▼           ▼
 Respond    Delegate to
 directly   squad agents
 ```
 
-When the full Copilot SDK is integrated, the LLM itself makes this decision naturally — it either responds with text (direct) or calls squad management tools (delegation). During facade mode, a local heuristic handles the routing.
+The LLM itself makes this decision naturally — it either responds with text (direct) or calls squad management tools (delegation). The orchestrator maintains conversation history across the session, enabling multi-turn interactions.
 
 ### Direct Response Examples
 

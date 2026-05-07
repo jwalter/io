@@ -1,11 +1,13 @@
 # Architecture Overview
 
-IO is a single Rust binary that runs as a background service, routing user messages through an orchestrator to specialized agent squads powered by the GitHub Copilot SDK.
+IO is a single Rust binary that runs as a background service, routing user messages through an orchestrator that uses the GitHub Models API to handle requests directly or delegate to specialized agent squads.
 
 ## System Diagram
 
 ```
-User → [TUI / Telegram] → Event Bus → Orchestrator → Squad Manager → Agents → Copilot SDK
+User → [TUI / Telegram] → Event Bus → Orchestrator → GitHub Models API
+                                          ↕
+                                     Squad Manager → Agents
 ```
 
 ```
@@ -28,9 +30,9 @@ User → [TUI / Telegram] → Event Bus → Orchestrator → Squad Manager → A
 │                      │  └────────┬────────────────┘    │
 │                      │           │                      │
 │                      │  ┌────────▼────────────────┐    │
-│                      │  │ Agent Sessions (Copilot) │    │
-│                      │  │  • Parallel execution    │    │
-│                      │  │  • Tool access           │    │
+│                      │  │ GitHub Models API        │    │
+│                      │  │  • LLM chat completions  │    │
+│                      │  │  • Tool call support     │    │
 │                      │  │  • Streaming responses   │    │
 │                      │  └────────┬────────────────┘    │
 │                      │           │                      │
@@ -58,7 +60,7 @@ All event types derive `Serialize`/`Deserialize`, making them ready for WebSocke
 
 ### Orchestrator
 
-The orchestrator is the routing brain of IO. It receives every user message and decides which squad and agent(s) should handle it. **It never generates responses directly** — it only routes.
+The orchestrator is the routing brain of IO. It receives every user message and uses the LLM to decide whether to respond directly (for simple questions) or delegate to specialist agent squads (for complex project work).
 
 See [Orchestrator](/architecture/orchestrator) for details.
 

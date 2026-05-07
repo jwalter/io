@@ -1,7 +1,7 @@
 # Contributing to io
 
-Thank you for your interest in contributing to io — a personal AI
-assistant daemon powered by the GitHub Copilot SDK, written in Rust! This guide
+Thank you for your interest in contributing to IO — a personal AI
+assistant daemon powered by the GitHub Models API, written in Rust! This guide
 will help you get started.
 
 ## Code of Conduct
@@ -68,7 +68,7 @@ A brief overview of the `src/` layout:
 | `interfaces/` | External interface adapters |
 | `db.rs` | Database access layer |
 | `memory.rs` | Memory and context management |
-| `copilot.rs` | GitHub Copilot SDK integration |
+| `copilot.rs` | GitHub Models API client |
 | `event_bus.rs` | Internal event bus for pub/sub messaging |
 | `session_pool.rs` | Session pooling and lifecycle management |
 | `cost.rs` | Token and cost tracking |

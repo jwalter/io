@@ -20,9 +20,10 @@ io [OPTIONS]
 
 ## Environment Variables
 
-| Variable       | Description                                          |
-| -------------- | ---------------------------------------------------- |
-| `RUST_LOG`     | Set log level (`trace`, `debug`, `info`, `warn`, `error`) |
+| Variable        | Description                                          |
+| --------------- | ---------------------------------------------------- |
+| `GITHUB_TOKEN`  | GitHub token for Models API access (preferred over `gh auth token`) |
+| `RUST_LOG`      | Set log level (`trace`, `debug`, `info`, `warn`, `error`) |
 | `IO_CONFIG`    | Override config file path                            |
 | `IO_DATA_DIR`  | Override data directory                              |
 

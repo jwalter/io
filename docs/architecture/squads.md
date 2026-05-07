@@ -17,7 +17,7 @@ An agent is a specialized role within a squad. Each agent has:
 
 ### Hiring
 
-When the orchestrator determines that the current squad lacks expertise for a task, it can "hire" a new agent — generating a charter and adding it to the squad.
+When the orchestrator determines that the current squad lacks expertise for a task, it uses the `squad_hire` tool to add a new agent — generating a charter and adding it to the squad.
 
 ## Squad Lifecycle
 

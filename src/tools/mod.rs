@@ -76,7 +76,7 @@ impl ToolRegistry {
         self.tools.iter().map(|t| t.as_ref()).collect()
     }
 
-    /// Return tool definitions suitable for Copilot SDK registration.
+    /// Return tool definitions suitable for the GitHub Models API.
     pub fn to_definitions(&self) -> Vec<Value> {
         self.tools
             .iter()

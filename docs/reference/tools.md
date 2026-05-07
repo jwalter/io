@@ -15,7 +15,7 @@ pub trait Tool: Send + Sync {
 }
 ```
 
-Tools are registered in a global registry and made available to agents during their Copilot sessions.
+Tools are registered in a global registry and made available to the orchestrator via the GitHub Models API tool calling interface.
 
 ## Built-in Tools
 

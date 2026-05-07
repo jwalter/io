@@ -11,9 +11,9 @@ data_dir = "~/.io"
 # Model configuration
 [models]
 # Default model for agent sessions
-default = "claude-sonnet-4-5"
+default = "openai/gpt-4.1"
 # Fallback chain — if the primary model is unavailable, try the next
-fallback_chain = ["claude-sonnet-4-5", "gpt-4.1"]
+fallback_chain = ["openai/gpt-4.1", "openai/gpt-4o-mini"]
 
 # Telegram bot configuration (optional)
 [telegram]
@@ -43,11 +43,11 @@ The root directory where IO stores all persistent data including the SQLite data
 
 ### `[models]`
 
-Controls which AI models are used for agent sessions.
+Controls which AI models are used via the [GitHub Models API](https://github.com/marketplace/models). Model names use the `publisher/model` format.
 
 | Key              | Type       | Default              | Description                              |
 | ---------------- | ---------- | -------------------- | ---------------------------------------- |
-| `default`        | `string`   | `"claude-sonnet-4-5"` | Primary model for all agent sessions     |
+| `default`        | `string`   | `"openai/gpt-4.1"`  | Primary model for all sessions           |
 | `fallback_chain` | `string[]` | `[]`                 | Ordered list of fallback models          |
 
 The fallback chain is tried in order when the primary model is unavailable or rate-limited.
@@ -100,6 +100,7 @@ When `auto_apply` is `true`, the daemon downloads, verifies (SHA256), and replac
 
 ## Environment Variables
 
-| Variable    | Description                          |
-| ----------- | ------------------------------------ |
-| `RUST_LOG`  | Logging level (`trace`, `debug`, `info`, `warn`, `error`) |
+| Variable        | Description                          |
+| --------------- | ------------------------------------ |
+| `GITHUB_TOKEN`  | GitHub token for Models API access (preferred over `gh auth token`) |
+| `RUST_LOG`      | Logging level (`trace`, `debug`, `info`, `warn`, `error`) |

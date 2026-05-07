@@ -1,18 +1,18 @@
 # io
 
-A personal AI assistant daemon powered by the GitHub Copilot SDK, featuring a dynamic multi-agent "squad" architecture.
+A personal AI assistant daemon powered by the GitHub Models API, featuring a dynamic multi-agent "squad" architecture.
 
 [![CI](https://github.com/michaeljolley/io/actions/workflows/ci.yml/badge.svg)](https://github.com/michaeljolley/io/actions/workflows/ci.yml)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 ## Features
 
-- **Orchestrator** — routes requests to specialized agent squads (never generates directly)
+- **Orchestrator** — LLM-driven routing: answers simple questions directly, delegates complex tasks to agent squads
 - **Dynamic Squads** — per-project teams of specialized agents that persist and can be recalled
 - **Agent Lifecycle** — agents can be hired, retired, and transitioned between squads
 - **Knowledge System** — SQLite FTS5 + markdown wiki for long-term memory and cross-squad knowledge sharing
 - **Terminal TUI** — ratatui-based chat interface
-- **Telegram Bot** — teloxide-powered mobile interface with authentication
+- **Telegram Bot** — teloxide-powered mobile interface with authentication and typing indicators
 - **Self-Updating** — checks GitHub Releases and auto-applies updates
 - **Tool System** — file ops, shell commands, web fetch, wiki, and calendar
 - **Model Fallback** — tiered model selection with automatic fallback chains
@@ -61,12 +61,11 @@ cargo build --release --no-default-features --features tui
 | `tui`         | ✅      | Terminal UI via ratatui              |
 | `telegram`    | ✅      | Telegram bot via teloxide            |
 | `web`         | —       | Future Vue 3 web frontend           |
-| `copilot-sdk` | —       | Use real GitHub Copilot SDK crate    |
 
 ## Getting Started
 
-1. **Authenticate with GitHub Copilot** — ensure you have a valid Copilot
-   subscription and have authenticated via `gh auth login`.
+1. **Set up authentication** — IO needs a GitHub token with Models API access.
+   Set the `GITHUB_TOKEN` environment variable, or authenticate via `gh auth login`.
 
 2. **Create a config file** at `~/.io/config.toml`:
 
@@ -74,8 +73,8 @@ cargo build --release --no-default-features --features tui
    data_dir = "~/.io"
 
    [models]
-   default = "claude-sonnet-4-5"
-   fallback_chain = ["claude-sonnet-4-5", "gpt-4.1"]
+   default = "openai/gpt-4.1"
+   fallback_chain = ["openai/gpt-4.1", "openai/gpt-4o-mini"]
 
    [telegram]
    bot_token = "YOUR_BOT_TOKEN"
@@ -101,8 +100,8 @@ src/
 ├── config.rs            # TOML config with defaults
 ├── event_bus.rs         # Tokio broadcast event system
 ├── db.rs                # SQLite with FTS5 migrations
-├── copilot.rs           # GitHub Copilot SDK facade
-├── orchestrator/mod.rs  # Request routing, squad recall
+├── copilot.rs           # GitHub Models API client
+├── orchestrator/mod.rs  # LLM-driven routing and squad delegation
 ├── squad/
 │   ├── mod.rs           # Squad CRUD, agent management
 │   └── lifecycle.rs     # Charter templates, state machine
@@ -131,19 +130,22 @@ src/
 ## Architecture
 
 ```
-User → [TUI / Telegram] → Event Bus → Orchestrator → Squad Manager → Agents → Copilot SDK
+User → [TUI / Telegram] → Event Bus → Orchestrator → GitHub Models API
+                                          ↕
+                                     Squad Manager → Agents
 ```
 
-The **Orchestrator** receives every user message and routes it to the
-appropriate squad — it never generates responses directly. Each **Squad** is a
-persistent, per-project team of specialized agents that can be hired, retired,
-or transferred. Agents share knowledge through a SQLite FTS5-backed
-**Knowledge System** with a markdown wiki, enabling cross-squad learning.
+The **Orchestrator** receives every user message and uses the LLM to decide
+how to handle it. For simple questions, it responds directly. For complex
+project work, it delegates to specialist agent **Squads** via tool calls.
+Each squad is a persistent, per-project team of specialized agents that can be
+hired, retired, or transferred. Agents share knowledge through a SQLite
+FTS5-backed **Knowledge System** with a markdown wiki, enabling cross-squad
+learning.
 
-The daemon communicates with GitHub Copilot models through a tiered
-**Model Fallback** chain, automatically stepping down to cheaper models when
-primary models are unavailable. A **Cost Tracker** monitors token usage and
-issues budget warnings.
+The daemon communicates with AI models through the **GitHub Models API**
+(`models.github.ai`), using a tiered **Model Fallback** chain that
+automatically steps down to cheaper models when primary models are unavailable.
 
 ## Roadmap
 
