@@ -87,5 +87,5 @@ Tools execute with the same permissions as the IO process. When running as a sys
 Consider creating a dedicated user for the daemon in production:
 
 ```bash
-useradd -r -s /bin/nologin io-daemon
+useradd -r -s /bin/nologin io
 ```

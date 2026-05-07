@@ -1,12 +1,12 @@
 # Configuration
 
-IO is configured via a TOML file at `~/.io-daemon/config.toml`. All sections are optional — the daemon uses sensible defaults when values are omitted.
+IO is configured via a TOML file at `~/.io/config.toml`. All sections are optional — the daemon uses sensible defaults when values are omitted.
 
 ## Full Reference
 
 ```toml
 # Root directory for all daemon data (squads, wiki, database, logs)
-data_dir = "~/.io-daemon"
+data_dir = "~/.io"
 
 # Model configuration
 [models]
@@ -37,7 +37,7 @@ auto_apply = true
 ### `data_dir`
 
 - **Type:** `string`
-- **Default:** `~/.io-daemon`
+- **Default:** `~/.io`
 
 The root directory where IO stores all persistent data including the SQLite database, squad configurations, wiki pages, and logs.
 
@@ -80,7 +80,7 @@ When `auto_apply` is `true`, the daemon downloads, verifies (SHA256), and replac
 ## Data Directory Layout
 
 ```
-~/.io-daemon/
+~/.io/
 ├── config.toml              # Configuration file
 ├── daemon.db                # SQLite database (FTS5)
 ├── squads/

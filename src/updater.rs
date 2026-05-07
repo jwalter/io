@@ -81,17 +81,17 @@ fn current_target() -> &'static str {
 fn archive_name() -> String {
     let target = current_target();
     if cfg!(target_os = "windows") {
-        format!("io-daemon-{target}.zip")
+        format!("io-{target}.zip")
     } else {
-        format!("io-daemon-{target}.tar.gz")
+        format!("io-{target}.tar.gz")
     }
 }
 
 fn binary_name() -> &'static str {
     if cfg!(target_os = "windows") {
-        "io-daemon.exe"
+        "io.exe"
     } else {
-        "io-daemon"
+        "io"
     }
 }
 
@@ -108,10 +108,7 @@ pub async fn check_for_update(current_version: &str) -> Result<Option<UpdateInfo
     let client = reqwest::Client::new();
     let release: GitHubRelease = client
         .get("https://api.github.com/repos/michaeljolley/io/releases/latest")
-        .header(
-            "User-Agent",
-            format!("io-daemon/{}", env!("CARGO_PKG_VERSION")),
-        )
+        .header("User-Agent", format!("io/{}", env!("CARGO_PKG_VERSION")))
         .send()
         .await
         .context("Failed to fetch latest release from GitHub")?
@@ -147,10 +144,7 @@ pub async fn check_for_update(current_version: &str) -> Result<Option<UpdateInfo
 
     let sums_text = client
         .get(&sums_url)
-        .header(
-            "User-Agent",
-            format!("io-daemon/{}", env!("CARGO_PKG_VERSION")),
-        )
+        .header("User-Agent", format!("io/{}", env!("CARGO_PKG_VERSION")))
         .send()
         .await
         .context("Failed to download sha256sums.txt")?
@@ -177,10 +171,7 @@ pub async fn download_and_verify(info: &UpdateInfo, temp_dir: &Path) -> Result<P
     // Download the archive bytes.
     let archive_bytes = client
         .get(&info.download_url)
-        .header(
-            "User-Agent",
-            format!("io-daemon/{}", env!("CARGO_PKG_VERSION")),
-        )
+        .header("User-Agent", format!("io/{}", env!("CARGO_PKG_VERSION")))
         .send()
         .await
         .context("Failed to download release archive")?
@@ -308,7 +299,7 @@ pub fn spawn_update_checker(
 
                     if config.auto_apply {
                         info!("Auto-apply enabled, applying update...");
-                        let temp_dir = std::env::temp_dir().join("io-daemon-update");
+                        let temp_dir = std::env::temp_dir().join("io-update");
                         let _ = tokio::fs::create_dir_all(&temp_dir).await;
 
                         match download_and_verify(&update_info, &temp_dir).await {

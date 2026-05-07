@@ -177,13 +177,12 @@ async fn handle_command(
         "/start" => {
             bot.send_message(
                 msg.chat.id,
-                "👋 io-daemon ready. Send me a message to get started.",
+                "👋 io ready. Send me a message to get started.",
             )
             .await?;
         }
         "/status" => {
-            bot.send_message(msg.chat.id, "🟢 io-daemon is running.")
-                .await?;
+            bot.send_message(msg.chat.id, "🟢 io is running.").await?;
         }
         "/squad" => {
             let response = match cmd_ctx {

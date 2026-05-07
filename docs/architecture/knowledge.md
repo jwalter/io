@@ -17,10 +17,10 @@ This enables fast, relevance-ranked search across all knowledge.
 
 ### Markdown Wiki
 
-A personal knowledge base stored at `~/.io-daemon/wiki/`:
+A personal knowledge base stored at `~/.io/wiki/`:
 
 ```
-~/.io-daemon/wiki/
+~/.io/wiki/
 ├── rust-patterns.md
 ├── docker-cheatsheet.md
 ├── meeting-notes-2025.md

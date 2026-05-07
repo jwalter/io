@@ -3,14 +3,14 @@
 ## Usage
 
 ```bash
-io-daemon [OPTIONS]
+io [OPTIONS]
 ```
 
 ## Options
 
 | Flag                     | Description                                      |
 | ------------------------ | ------------------------------------------------ |
-| `--config <PATH>`        | Path to config file (default: `~/.io-daemon/config.toml`) |
+| `--config <PATH>`        | Path to config file (default: `~/.io/config.toml`) |
 | `--data-dir <PATH>`      | Override data directory                          |
 | `--no-update`            | Disable update checking for this run              |
 | `-v`, `--verbose`        | Increase log verbosity                           |
@@ -30,19 +30,19 @@ io-daemon [OPTIONS]
 
 ```bash
 # Run with default settings
-io-daemon
+io
 
 # Run with custom config
-io-daemon --config /etc/io-daemon/config.toml
+io --config /etc/io/config.toml
 
 # Run with debug logging
-RUST_LOG=debug io-daemon
+RUST_LOG=debug io
 
 # Run without update checks
-io-daemon --no-update
+io --no-update
 
 # Check version
-io-daemon --version
+io --version
 ```
 
 ## Exit Codes

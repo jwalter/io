@@ -1,6 +1,6 @@
-# Contributing to io-daemon
+# Contributing to io
 
-Thank you for your interest in contributing to io-daemon — a personal AI
+Thank you for your interest in contributing to io — a personal AI
 assistant daemon powered by the GitHub Copilot SDK, written in Rust! This guide
 will help you get started.
 

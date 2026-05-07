@@ -37,23 +37,23 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           cd target/${{ matrix.target }}/release
-          tar czf ../../../io-daemon-${{ matrix.target }}.tar.gz io-daemon
+          tar czf ../../../io-${{ matrix.target }}.tar.gz io
           cd ../../..
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
         run: |
           cd target/${{ matrix.target }}/release
-          Compress-Archive -Path io-daemon.exe -DestinationPath ../../../io-daemon-${{ matrix.target }}.zip
+          Compress-Archive -Path io.exe -DestinationPath ../../../io-${{ matrix.target }}.zip
           cd ../../..
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: io-daemon-${{ matrix.target }}
+          name: io-${{ matrix.target }}
           path: |
-            io-daemon-*.tar.gz
-            io-daemon-*.zip
+            io-*.tar.gz
+            io-*.zip
 
   release:
     needs: [build]
@@ -69,13 +69,13 @@ jobs:
       - name: Generate checksums
         run: |
           cd artifacts
-          sha256sum io-daemon-* > sha256sums.txt
+          sha256sum io-* > sha256sums.txt
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: |
-            artifacts/io-daemon-*.tar.gz
-            artifacts/io-daemon-*.zip
+            artifacts/io-*.tar.gz
+            artifacts/io-*.zip
             artifacts/sha256sums.txt

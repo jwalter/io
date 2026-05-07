@@ -25,13 +25,13 @@ use std::sync::Arc;
 use clap::Parser;
 
 #[derive(Parser, Debug)]
-#[command(name = "io-daemon", version, about = "Personal AI assistant daemon")]
+#[command(name = "io", version, about = "Personal AI assistant daemon")]
 struct Cli {
     /// Run in daemon mode (long-running)
     #[arg(short, long, default_value_t = true)]
     daemon: bool,
 
-    /// Path to config file (default: ~/.io-daemon/config.toml)
+    /// Path to config file (default: ~/.io/config.toml)
     #[arg(short, long)]
     config: Option<std::path::PathBuf>,
 
@@ -55,7 +55,7 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    tracing::info!("io-daemon starting...");
+    tracing::info!("io starting...");
 
     // Load config
     let config = config::Config::load(cli.config.as_deref())?;
@@ -129,7 +129,7 @@ async fn main() -> anyhow::Result<()> {
         tracing::info!("Update checker started");
     }
 
-    tracing::info!("io-daemon running. Press Ctrl+C to stop.");
+    tracing::info!("io running. Press Ctrl+C to stop.");
     tokio::signal::ctrl_c().await?;
     tracing::info!("Shutting down...");
 

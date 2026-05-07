@@ -14,7 +14,7 @@ IO includes a Telegram bot interface powered by [teloxide](https://github.com/te
 
 ### 2. Configure IO
 
-Add the Telegram section to `~/.io-daemon/config.toml`:
+Add the Telegram section to `~/.io/config.toml`:
 
 ```toml
 [telegram]
@@ -29,7 +29,7 @@ Keep your bot token secret. If compromised, use `/revoke` with BotFather to gene
 ### 3. Restart the Daemon
 
 ```bash
-systemctl restart io-daemon
+systemctl restart io
 ```
 
 You should see in the logs:

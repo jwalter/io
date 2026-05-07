@@ -20,10 +20,10 @@ Download the latest prebuilt binary from [Releases](https://github.com/michaeljo
 
 ```bash
 # Example: Linux x86_64
-curl -sL https://github.com/michaeljolley/io/releases/latest/download/io-daemon-x86_64-unknown-linux-gnu.tar.gz \
+curl -sL https://github.com/michaeljolley/io/releases/latest/download/io-x86_64-unknown-linux-gnu.tar.gz \
   | tar xz
-chmod +x io-daemon
-mv io-daemon /usr/local/bin/
+chmod +x io
+mv io /usr/local/bin/
 ```
 
 ### Cargo Install
@@ -61,10 +61,10 @@ cargo build --release --all-features
 
 ## Configuration
 
-Create a config file at `~/.io-daemon/config.toml`:
+Create a config file at `~/.io/config.toml`:
 
 ```toml
-data_dir = "~/.io-daemon"
+data_dir = "~/.io"
 
 [models]
 default = "claude-sonnet-4-5"
@@ -85,12 +85,12 @@ See the [Configuration Reference](/guide/configuration) for all options.
 ## Running
 
 ```bash
-io-daemon
+io
 ```
 
 The daemon will:
 
-1. Load configuration from `~/.io-daemon/config.toml`
+1. Load configuration from `~/.io/config.toml`
 2. Initialize the SQLite database
 3. Start the event bus
 4. Launch the orchestrator bridge
@@ -102,7 +102,7 @@ The daemon will:
 For always-on operation on Linux:
 
 ```bash
-cat > /etc/systemd/system/io-daemon.service << 'EOF'
+cat > /etc/systemd/system/io.service << 'EOF'
 [Unit]
 Description=IO personal AI assistant
 After=network-online.target
@@ -110,7 +110,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/io-daemon
+ExecStart=/usr/local/bin/io
 Restart=on-failure
 RestartSec=5
 Environment=RUST_LOG=info
@@ -120,12 +120,12 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable --now io-daemon
+systemctl enable --now io
 ```
 
 Check status:
 
 ```bash
-systemctl status io-daemon
-journalctl -u io-daemon -f
+systemctl status io
+journalctl -u io -f
 ```

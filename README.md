@@ -1,4 +1,4 @@
-# io-daemon
+# io
 
 A personal AI assistant daemon powered by the GitHub Copilot SDK, featuring a dynamic multi-agent "squad" architecture.
 
@@ -68,10 +68,10 @@ cargo build --release --no-default-features --features tui
 1. **Authenticate with GitHub Copilot** — ensure you have a valid Copilot
    subscription and have authenticated via `gh auth login`.
 
-2. **Create a config file** at `~/.io-daemon/config.toml`:
+2. **Create a config file** at `~/.io/config.toml`:
 
    ```toml
-   data_dir = "~/.io-daemon"
+   data_dir = "~/.io"
 
    [models]
    default = "claude-sonnet-4-5"
@@ -90,7 +90,7 @@ cargo build --release --no-default-features --features tui
 3. **Run the daemon:**
 
    ```bash
-   io-daemon
+   io
    ```
 
 ## Project Structure

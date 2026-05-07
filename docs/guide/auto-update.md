@@ -49,10 +49,10 @@ The updater detects the correct binary at compile time:
 
 | OS      | Architecture | Archive                                       |
 | ------- | ------------ | --------------------------------------------- |
-| Linux   | x86_64       | `io-daemon-x86_64-unknown-linux-gnu.tar.gz`   |
-| Windows | x86_64       | `io-daemon-x86_64-pc-windows-msvc.zip`        |
-| macOS   | x86_64       | `io-daemon-x86_64-apple-darwin.tar.gz`        |
-| macOS   | ARM64        | `io-daemon-aarch64-apple-darwin.tar.gz`       |
+| Linux   | x86_64       | `io-x86_64-unknown-linux-gnu.tar.gz`   |
+| Windows | x86_64       | `io-x86_64-pc-windows-msvc.zip`        |
+| macOS   | x86_64       | `io-x86_64-apple-darwin.tar.gz`        |
+| macOS   | ARM64        | `io-aarch64-apple-darwin.tar.gz`       |
 
 ## Security
 
@@ -65,7 +65,7 @@ The updater detects the correct binary at compile time:
 When running as a systemd service with `Restart=on-failure`, the update process works seamlessly:
 
 1. Daemon downloads and verifies the new binary
-2. Replaces `/usr/local/bin/io-daemon`
+2. Replaces `/usr/local/bin/io`
 3. Exits with code 0
 4. Systemd restarts the service with the new binary
 

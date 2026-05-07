@@ -125,7 +125,7 @@ impl KnowledgeSharingManager {
             extracted_at: now,
         };
 
-        // Write to ~/.io-daemon/skills/{skill_name}.md
+        // Write to ~/.io/skills/{skill_name}.md
         let skills_dir = skills_directory()?;
         fs::create_dir_all(&skills_dir).with_context(|| {
             format!(
@@ -263,10 +263,10 @@ impl KnowledgeSharingManager {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Returns the skills directory path (~/.io-daemon/skills/).
+/// Returns the skills directory path (~/.io/skills/).
 fn skills_directory() -> Result<PathBuf> {
     let home = dirs::home_dir().context("Could not determine home directory")?;
-    Ok(home.join(".io-daemon").join("skills"))
+    Ok(home.join(".io").join("skills"))
 }
 
 /// Determine if a history entry type is worth promoting.

@@ -16,7 +16,7 @@ impl WikiTool {
     pub fn new() -> Self {
         let wiki_dir = dirs::home_dir()
             .unwrap_or_else(|| PathBuf::from("."))
-            .join(".io-daemon")
+            .join(".io")
             .join("wiki");
         Self { wiki_dir }
     }

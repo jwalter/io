@@ -64,7 +64,7 @@ See [Orchestrator](/architecture/orchestrator) for details.
 
 ### Squad Manager
 
-Manages the lifecycle of agent squads — creating, recalling, and persisting them. Squads are per-project teams stored at `~/.io-daemon/squads/`.
+Manages the lifecycle of agent squads — creating, recalling, and persisting them. Squads are per-project teams stored at `~/.io/squads/`.
 
 See [Squads](/architecture/squads) for details.
 

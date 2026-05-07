@@ -6,7 +6,7 @@ Squads are persistent, per-project teams of specialized AI agents. Unlike epheme
 
 ### Squad
 
-A squad is a team of agents assigned to a specific project. It persists at `~/.io-daemon/squads/{project-slug}/` and is recalled whenever you work on that project.
+A squad is a team of agents assigned to a specific project. It persists at `~/.io/squads/{project-slug}/` and is recalled whenever you work on that project.
 
 ### Agent
 
@@ -33,7 +33,7 @@ When the orchestrator determines that the current squad lacks expertise for a ta
 ## File Structure
 
 ```
-~/.io-daemon/squads/
+~/.io/squads/
 └── my-web-app/
     ├── squad.toml       # Metadata: project path, created date, last active
     ├── routing.md       # Pattern → agent routing rules

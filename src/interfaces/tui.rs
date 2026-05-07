@@ -240,7 +240,7 @@ impl TuiApp {
         // Status bar
         let squad_display = self.squad_name.as_deref().unwrap_or("none");
         let status_text = format!(
-            " io-daemon v0.1.0 | Squad: {} | Agents: {}",
+            " io v0.1.0 | Squad: {} | Agents: {}",
             squad_display, self.agent_count
         );
         let status = Paragraph::new(status_text)

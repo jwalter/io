@@ -69,7 +69,7 @@ pub struct TelegramConfig {
 fn default_data_dir() -> PathBuf {
     dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join(".io-daemon")
+        .join(".io")
 }
 
 fn default_model() -> String {
