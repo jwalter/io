@@ -4,3 +4,8 @@
 *.swp
 *.swo
 .env
+
+# Docs
+docs/node_modules
+docs/.vitepress/dist
+docs/.vitepress/cache
