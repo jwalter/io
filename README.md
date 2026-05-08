@@ -1,166 +1,212 @@
-# io
+# 🤖 IO
 
-A personal AI assistant daemon powered by the GitHub Models API, featuring a dynamic multi-agent "squad" architecture.
+A personal AI assistant daemon built on the GitHub Copilot SDK. IO runs 24/7 on your machine, reachable via Telegram and a terminal TUI.
 
 [![CI](https://github.com/michaeljolley/io/actions/workflows/ci.yml/badge.svg)](https://github.com/michaeljolley/io/actions/workflows/ci.yml)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
 
-## Features
+## ✨ Features
 
-- **Orchestrator** — LLM-driven routing: answers simple questions directly, delegates complex tasks to agent squads
-- **Dynamic Squads** — per-project teams of specialized agents that persist and can be recalled
-- **Agent Lifecycle** — agents can be hired, retired, and transitioned between squads
-- **Knowledge System** — SQLite FTS5 + markdown wiki for long-term memory and cross-squad knowledge sharing
-- **Terminal TUI** — ratatui-based chat interface
-- **Telegram Bot** — teloxide-powered mobile interface with authentication and typing indicators
-- **Self-Updating** — checks GitHub Releases and auto-applies updates
-- **Tool System** — file ops, shell commands, web fetch, wiki, and calendar
-- **Model Fallback** — tiered model selection with automatic fallback chains
-- **Cost Tracking** — usage monitoring with budget warnings
+- **Copilot SDK Integration** — powered by GitHub's Copilot SDK for LLM conversations with tool calling
+- **Multi-Interface** — Telegram bot + terminal TUI + HTTP API (future web UI)
+- **Persistent Memory** — wiki-based knowledge base stored at `~/.io/wiki/`
+- **Squad System** — persistent project teams that remember decisions, context, and history
+- **Skills** — modular skill system; install from git repos or the [skills.sh](https://skills.sh) registry
+- **Adaptive Sessions** — infinite sessions with automatic context compaction
+- **Worker Agents** — delegated task execution through specialized agent sessions
+- **Self-Updating** — checks for updates and can apply them automatically
 
-## Installation
+## 📋 Prerequisites
 
-### GitHub Releases
+- **Node.js** >= 18
+- **GitHub Copilot subscription** — IO uses the Copilot SDK, which requires an active Copilot license
+- **GitHub CLI** (`gh`) — authenticated via `gh auth login`
 
-Download a prebuilt binary from
-[Releases](https://github.com/michaeljolley/io/releases) for your platform:
+## 🚀 Quick Start
 
-| Platform       | Target               |
-| -------------- | -------------------- |
-| Linux x86_64   | `x86_64-unknown-linux-gnu` |
-| Windows x86_64 | `x86_64-pc-windows-msvc`  |
-| macOS x86_64   | `x86_64-apple-darwin`      |
-| macOS ARM64    | `aarch64-apple-darwin`     |
-
-### Cargo Install
+### Install
 
 ```bash
-cargo install --git https://github.com/michaeljolley/io.git
+npm install -g io-assistant
 ```
 
-### Building from Source
+### Setup
+
+Run the setup wizard to configure your Telegram bot token and user ID:
 
 ```bash
-git clone https://github.com/michaeljolley/io.git
-cd io
-
-# Default (TUI + Telegram)
-cargo build --release
-
-# All features
-cargo build --release --all-features
-
-# TUI only
-cargo build --release --no-default-features --features tui
+io setup
 ```
 
-#### Feature Flags
+This creates a config file at `~/.io/config.json`.
 
-| Flag          | Default | Description                          |
-| ------------- | ------- | ------------------------------------ |
-| `tui`         | ✅      | Terminal UI via ratatui              |
-| `telegram`    | ✅      | Telegram bot via teloxide            |
-| `web`         | —       | Future Vue 3 web frontend           |
+### Run
 
-## Getting Started
+```bash
+# Interactive TUI mode
+io
 
-1. **Set up authentication** — IO needs a GitHub token with Models API access.
-   Set the `GITHUB_TOKEN` environment variable, or authenticate via `gh auth login`.
+# Background daemon (Telegram + HTTP API)
+io --daemon
 
-2. **Create a config file** at `~/.io/config.toml`:
+# Allow IO to modify its own source code
+io --self-edit
+```
 
-   ```toml
-   data_dir = "~/.io"
+## 💬 CLI Usage
 
-   [models]
-   default = "openai/gpt-4.1"
-   fallback_chain = ["openai/gpt-4.1", "openai/gpt-4o-mini"]
+| Command | Description |
+| --- | --- |
+| `io` | Start interactive TUI mode |
+| `io --daemon` | Run as background daemon (Telegram + API) |
+| `io --self-edit` | Allow IO to modify its own source |
+| `io setup` | Configure Telegram bot token and user ID |
+| `io skill list` | List installed skills |
+| `io skill add <repo-url>` | Install a skill from a git repository |
+| `io skill remove <slug>` | Remove an installed skill |
+| `io skill search <query>` | Search the skills.sh registry |
 
-   [telegram]
-   bot_token = "YOUR_BOT_TOKEN"
-   allowed_users = ["yourusername"]
+## ⚙️ Configuration
 
-   [update]
-   enabled = true
-   check_interval_hours = 12
-   auto_apply = true
-   ```
+IO stores its configuration at `~/.io/config.json`. The setup wizard (`io setup`) handles initial configuration, but you can also edit the file directly.
 
-3. **Run the daemon:**
+```jsonc
+{
+  // Telegram bot token from @BotFather
+  "telegramBotToken": "123456:ABC-DEF...",
 
-   ```bash
-   io
-   ```
+  // Your Telegram user ID (for authentication)
+  "telegramUserId": 123456789,
 
-## Project Structure
+  // Enable self-edit mode by default
+  "selfEdit": false
+}
+```
+
+All persistent data is stored under `~/.io/`:
+
+| Path | Purpose |
+| --- | --- |
+| `~/.io/config.json` | User configuration |
+| `~/.io/wiki/` | Knowledge base (markdown files) |
+| `~/.io/io.db` | SQLite database (squads, tasks) |
+| `~/.io/skills/` | Installed skills |
+
+## 🧩 Skills System
+
+Skills are modular extensions that add new tools and capabilities to IO. Each skill is a directory containing a `SKILL.md` manifest and tool definitions.
+
+### Managing Skills
+
+```bash
+# Search the skills.sh registry
+io skill search "github"
+
+# Install from a git repo
+io skill add https://github.com/user/my-skill.git
+
+# List installed skills
+io skill list
+
+# Remove a skill
+io skill remove my-skill
+```
+
+### Creating a Skill
+
+A skill is a directory with a `SKILL.md` file that describes the skill and its tools. See the [Contributing Guide](CONTRIBUTING.md) for details on the skill format.
+
+## 👥 Squad System
+
+Squads are persistent project teams that IO manages. Each squad:
+
+- Is associated with a specific project or domain
+- Remembers decisions, context, and conversation history
+- Can have multiple specialized agents working together
+- Persists across sessions in the SQLite database
+
+IO's orchestrator automatically creates and manages squads based on your conversations.
+
+## 🏗️ Architecture
+
+```
+User → [TUI / Telegram / HTTP API]
+                ↓
+         Orchestrator (Copilot SDK)
+          ↕           ↕
+     Squad Manager   Wiki/Memory
+          ↓
+     Worker Agents
+```
+
+IO is built around the **Copilot SDK** which handles all LLM interactions, including tool calling and context management. The **Orchestrator** manages the primary conversation session with automatic context compaction for infinite-length sessions.
+
+For complex tasks, the orchestrator delegates work to **Worker Agents** — short-lived agent sessions that execute specific tasks and report back.
+
+The **Squad System** provides persistent project context, while the **Wiki** serves as a long-term knowledge base that spans all conversations.
+
+## 🏗️ Project Structure
 
 ```
 src/
-├── main.rs              # Entry point, CLI, initialization
-├── config.rs            # TOML config with defaults
-├── event_bus.rs         # Tokio broadcast event system
-├── db.rs                # SQLite with FTS5 migrations
-├── copilot.rs           # GitHub Models API client
-├── orchestrator/mod.rs  # LLM-driven routing and squad delegation
-├── squad/
-│   ├── mod.rs           # Squad CRUD, agent management
-│   └── lifecycle.rs     # Charter templates, state machine
-├── routing.rs           # @mention parsing, fan-out
-├── session_pool.rs      # Semaphore-based session pool
-├── memory.rs            # Knowledge store, episode summarizer
-├── knowledge_sharing.rs # Cross-squad learning
-├── tools/
-│   ├── mod.rs           # Tool trait, registry
-│   ├── file_ops.rs      # File read/write/search
-│   ├── shell.rs         # Command execution
-│   ├── web.rs           # URL fetching
-│   ├── wiki.rs          # Wiki CRUD
-│   └── calendar.rs      # Event management
-├── interfaces/
-│   ├── mod.rs           # Feature-gated modules
-│   ├── tui.rs           # Ratatui terminal UI
-│   └── telegram.rs      # Teloxide bot
-├── updater.rs           # Self-update from GitHub Releases
-├── fallback.rs          # Model selection + fallback
-├── shutdown.rs          # Graceful shutdown controller
-├── cost.rs              # Usage tracking
-└── models/mod.rs        # Shared types
+├── index.ts              # CLI entry (commander)
+├── daemon.ts             # Daemon startup/shutdown
+├── config.ts             # Config loading
+├── paths.ts              # Path constants
+├── update.ts             # Self-update checker
+├── copilot/
+│   ├── client.ts         # CopilotClient singleton
+│   ├── orchestrator.ts   # Main session management
+│   ├── agents.ts         # Worker agent sessions
+│   ├── tools.ts          # Tool definitions
+│   ├── skills.ts         # Skills loader
+│   └── system-message.ts # System prompt builder
+├── store/
+│   ├── db.ts             # SQLite database
+│   ├── squads.ts         # Squad CRUD
+│   └── tasks.ts          # Agent task tracking
+├── wiki/
+│   ├── fs.ts             # Wiki filesystem
+│   └── search.ts         # Wiki search
+├── telegram/
+│   ├── bot.ts            # Grammy Telegram bot
+│   └── handlers.ts       # Command handlers
+├── tui/
+│   └── index.ts          # Terminal UI
+└── api/
+    └── server.ts         # Express HTTP + SSE
 ```
 
-## Architecture
+## 🛠️ Development
 
+```bash
+# Clone the repository
+git clone https://github.com/michaeljolley/io.git
+cd io
+
+# Install dependencies
+npm install
+
+# Run in development mode (watch)
+npm run dev
+
+# Build for production
+npm run build
+
+# Run the TUI directly
+npm run tui
+
+# Run the daemon directly
+npm run daemon
 ```
-User → [TUI / Telegram] → Event Bus → Orchestrator → GitHub Models API
-                                          ↕
-                                     Squad Manager → Agents
-```
 
-The **Orchestrator** receives every user message and uses the LLM to decide
-how to handle it. For simple questions, it responds directly. For complex
-project work, it delegates to specialist agent **Squads** via tool calls.
-Each squad is a persistent, per-project team of specialized agents that can be
-hired, retired, or transferred. Agents share knowledge through a SQLite
-FTS5-backed **Knowledge System** with a markdown wiki, enabling cross-squad
-learning.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed development guidelines.
 
-The daemon communicates with AI models through the **GitHub Models API**
-(`models.github.ai`), using a tiered **Model Fallback** chain that
-automatically steps down to cheaper models when primary models are unavailable.
-
-## Roadmap
-
-- Vue 3 web frontend with WebSocket relay
-- Skills marketplace integration ([skills.sh](https://skills.sh))
-- Full event loop wiring
-
-## Contributing
-
-Contributions are welcome! Please open an issue or submit a pull request.
-
-## Code of Conduct
-
-Please read the [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
-
-## License
+## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).
+
+## 🤝 Contributing
+
+Contributions are welcome! Please read the [Contributing Guide](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md) before submitting a pull request.
