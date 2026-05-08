@@ -147,9 +147,11 @@ impl Database {
         tool_calls_json: Option<&str>,
     ) -> Result<()> {
         let id = uuid::Uuid::new_v4().to_string();
+        // Use empty string for content when None — existing DBs have NOT NULL constraint
+        let content_val = content.unwrap_or("");
         self.conn.execute(
             "INSERT INTO messages (id, session_id, role, content, source, tool_call_id, tool_calls) VALUES (?1, ?2, ?3, ?4, '', ?5, ?6)",
-            params![id, session_id, role, content, tool_call_id, tool_calls_json],
+            params![id, session_id, role, content_val, tool_call_id, tool_calls_json],
         )?;
         Ok(())
     }
