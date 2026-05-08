@@ -71,7 +71,10 @@ const MAX_TOOL_RESULT_CHARS: usize = 4000;
 /// Token budget for gpt-5-mini (conservative — leaves room for response).
 const BUDGET_SMALL: usize = 12_000;
 
-/// Token budget for large models like gpt-5 (conservative).
+/// Token budget for standard models (gpt-5 has 16k on GitHub Models).
+const BUDGET_STANDARD: usize = 12_000;
+
+/// Token budget for large-context models (gpt-4.1, etc.).
 const BUDGET_LARGE: usize = 100_000;
 
 /// The Orchestrator manages message flow and agent coordination.
@@ -249,8 +252,11 @@ impl Orchestrator {
         let name = model.rsplit('/').next().unwrap_or(model);
         if name.contains("mini") {
             BUDGET_SMALL
-        } else {
+        } else if name.starts_with("gpt-4.1") || name.starts_with("gpt-4o") {
             BUDGET_LARGE
+        } else {
+            // gpt-5, gpt-5-mini, and unknown models get standard budget
+            BUDGET_STANDARD
         }
     }
 
@@ -325,12 +331,33 @@ impl Orchestrator {
 
             tracing::debug!(model = %model, tokens = self.estimate_tokens(), "Sending request");
 
-            let response = self
+            let result = self
                 .client
                 .as_ref()
                 .unwrap()
                 .chat_completion(&self.messages, &tools, &model)
-                .await?;
+                .await;
+
+            // Handle 413 by aggressively trimming and retrying once
+            let response = match &result {
+                Err(e)
+                    if format!("{e}").contains("413")
+                        || format!("{e}").contains("Payload Too Large") =>
+                {
+                    tracing::warn!("Got 413, aggressively trimming context and retrying");
+                    // Keep only system prompt + last 4 messages
+                    while self.messages.len() > 5 {
+                        self.messages.remove(1);
+                    }
+                    self.client
+                        .as_ref()
+                        .unwrap()
+                        .chat_completion(&self.messages, &tools, &model)
+                        .await?
+                }
+                Err(_) => result?,
+                Ok(_) => result?,
+            };
 
             match response {
                 ChatResponse::Message(text) => {

@@ -131,8 +131,38 @@ fn run_handler(
                 }
                 Err(e) => {
                     error!("Orchestrator failed to handle message: {e:#}");
+                    // Surface the error to the user so they know something went wrong
+                    let user_msg = format!(
+                        "Sorry, I ran into an error processing your request: {}",
+                        summarize_error(&e)
+                    );
+                    event_bus.publish(Event::AgentDelta {
+                        agent_name: "orchestrator".to_string(),
+                        content: user_msg,
+                        session_id: session_id.clone(),
+                    });
+                    event_bus.publish(Event::AgentComplete {
+                        agent_name: "orchestrator".to_string(),
+                        session_id,
+                    });
                 }
             }
         }
     });
+}
+
+/// Produce a user-friendly error summary (avoid leaking raw internals).
+fn summarize_error(e: &anyhow::Error) -> String {
+    let msg = format!("{e}");
+    if msg.contains("413") || msg.contains("Payload Too Large") || msg.contains("tokens_limit") {
+        "The conversation got too long for the model. Try starting a new topic or saying \"let's start fresh\".".to_string()
+    } else if msg.contains("429") || msg.contains("Too Many Requests") {
+        "Rate limited by the API. Please wait a moment and try again.".to_string()
+    } else if msg.contains("401") || msg.contains("Unauthorized") {
+        "Authentication failed. Check your GitHub token.".to_string()
+    } else if msg.contains("Network") || msg.contains("reqwest") {
+        "Network error — couldn't reach the API. Check your connection.".to_string()
+    } else {
+        format!("{e}")
+    }
 }
