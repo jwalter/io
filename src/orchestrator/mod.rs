@@ -65,6 +65,15 @@ const MAX_TOOL_ROUNDS: usize = 10;
 /// The shared session ID — all interfaces share one conversation.
 const SESSION_ID: &str = "default";
 
+/// Maximum characters for a single tool result before truncation.
+const MAX_TOOL_RESULT_CHARS: usize = 4000;
+
+/// Token budget for gpt-5-mini (conservative — leaves room for response).
+const BUDGET_SMALL: usize = 12_000;
+
+/// Token budget for large models like gpt-5 (conservative).
+const BUDGET_LARGE: usize = 100_000;
+
 /// The Orchestrator manages message flow and agent coordination.
 pub struct Orchestrator {
     config: Arc<Config>,
@@ -202,6 +211,86 @@ impl Orchestrator {
         }
     }
 
+    /// Estimate token count for the current messages (chars / 4 heuristic).
+    fn estimate_tokens(&self) -> usize {
+        self.messages
+            .iter()
+            .map(|msg| {
+                let content_len = msg.content.as_deref().map_or(0, |c| c.len());
+                let tc_len = msg
+                    .tool_calls
+                    .as_ref()
+                    .map_or(0, |tcs| serde_json::to_string(tcs).map_or(0, |s| s.len()));
+                (content_len + tc_len) / 4
+            })
+            .sum()
+    }
+
+    /// Select the appropriate model based on current context size.
+    fn select_model(&self) -> &str {
+        let tokens = self.estimate_tokens();
+        let threshold = self.config.models.escalation_threshold;
+
+        if tokens > threshold {
+            tracing::debug!(
+                tokens,
+                threshold,
+                model = %self.config.models.escalation,
+                "Context exceeds threshold, escalating model"
+            );
+            &self.config.models.escalation
+        } else {
+            &self.config.models.default
+        }
+    }
+
+    /// Get the token budget for the given model.
+    fn token_budget_for(model: &str) -> usize {
+        let name = model.rsplit('/').next().unwrap_or(model);
+        if name.contains("mini") {
+            BUDGET_SMALL
+        } else {
+            BUDGET_LARGE
+        }
+    }
+
+    /// Trim conversation history to fit within the model's token budget.
+    /// Keeps: system prompt (first message) + most recent messages.
+    fn trim_to_budget(&mut self, model: &str) {
+        let budget = Self::token_budget_for(model);
+        let tokens = self.estimate_tokens();
+
+        if tokens <= budget {
+            return;
+        }
+
+        tracing::info!(
+            tokens,
+            budget,
+            model,
+            "Trimming conversation history to fit token budget"
+        );
+
+        // Keep system prompt (index 0) and remove oldest non-system messages
+        // until we're under budget
+        while self.estimate_tokens() > budget && self.messages.len() > 2 {
+            self.messages.remove(1); // remove oldest after system prompt
+        }
+    }
+
+    /// Truncate a tool result if it's too long.
+    fn truncate_tool_result(result: &str) -> String {
+        if result.len() <= MAX_TOOL_RESULT_CHARS {
+            result.to_string()
+        } else {
+            format!(
+                "{}...\n[truncated — {} chars total]",
+                &result[..MAX_TOOL_RESULT_CHARS],
+                result.len()
+            )
+        }
+    }
+
     /// Handle an incoming user message from any interface.
     pub async fn handle_message(
         &mut self,
@@ -219,19 +308,22 @@ impl Orchestrator {
         self.messages.push(ChatMessage::user(content));
         self.persist_message("user", Some(content), None, None);
 
-        let model = self.config.models.default.clone();
         let tools = self.orchestrator_tools();
-
-        tracing::debug!(model = %model, "Processing user message");
 
         // Tool call loop — model may respond with text or request tool calls
         let mut rounds = 0;
         loop {
             rounds += 1;
             if rounds > MAX_TOOL_ROUNDS {
-                tracing::warn!(model = %model, "Tool call loop exceeded max rounds, returning partial response");
+                tracing::warn!("Tool call loop exceeded max rounds, returning partial response");
                 break;
             }
+
+            // Select model adaptively and trim context to fit
+            let model = self.select_model().to_string();
+            self.trim_to_budget(&model);
+
+            tracing::debug!(model = %model, tokens = self.estimate_tokens(), "Sending request");
 
             let response = self
                 .client
@@ -254,7 +346,8 @@ impl Orchestrator {
                     self.persist_message("assistant", None, None, Some(&tool_calls));
 
                     for tc in &tool_calls {
-                        let result = self.execute_tool_call(tc).await;
+                        let raw_result = self.execute_tool_call(tc).await;
+                        let result = Self::truncate_tool_result(&raw_result);
                         self.messages
                             .push(ChatMessage::tool_result(&tc.id, &result));
                         self.persist_message("tool", Some(&result), Some(&tc.id), None);

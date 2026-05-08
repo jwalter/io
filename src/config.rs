@@ -78,6 +78,14 @@ pub struct ModelConfig {
     #[serde(default = "default_model")]
     pub default: String,
 
+    /// Model to escalate to when context exceeds the default model's budget.
+    #[serde(default = "default_escalation_model")]
+    pub escalation: String,
+
+    /// Token threshold to switch from default to escalation model.
+    #[serde(default = "default_escalation_threshold")]
+    pub escalation_threshold: usize,
+
     #[serde(default = "default_fallback_chain")]
     pub fallback_chain: Vec<String>,
 }
@@ -95,14 +103,19 @@ fn default_data_dir() -> PathBuf {
 }
 
 fn default_model() -> String {
-    "openai/gpt-4.1".to_string()
+    "openai/gpt-5-mini".to_string()
+}
+
+fn default_escalation_model() -> String {
+    "openai/gpt-5".to_string()
+}
+
+fn default_escalation_threshold() -> usize {
+    8000
 }
 
 fn default_fallback_chain() -> Vec<String> {
-    vec![
-        "openai/gpt-4.1".to_string(),
-        "openai/gpt-4o-mini".to_string(),
-    ]
+    vec!["openai/gpt-5-mini".to_string(), "openai/gpt-5".to_string()]
 }
 
 impl Config {

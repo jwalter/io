@@ -148,7 +148,7 @@ impl Database {
     ) -> Result<()> {
         let id = uuid::Uuid::new_v4().to_string();
         self.conn.execute(
-            "INSERT INTO messages (id, session_id, role, content, tool_call_id, tool_calls) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO messages (id, session_id, role, content, source, tool_call_id, tool_calls) VALUES (?1, ?2, ?3, ?4, '', ?5, ?6)",
             params![id, session_id, role, content, tool_call_id, tool_calls_json],
         )?;
         Ok(())
