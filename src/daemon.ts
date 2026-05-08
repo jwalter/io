@@ -6,7 +6,7 @@ import { getDb, closeDb } from "./store/db.js";
 import { clearStaleTasks } from "./store/tasks.js";
 import { config } from "./config.js";
 import { ensureWikiStructure } from "./wiki/fs.js";
-import { checkForUpdate } from "./update.js";
+import { autoUpdate } from "./update.js";
 import { readdirSync, statSync, rmSync } from "fs";
 import { join } from "path";
 import { SESSIONS_DIR } from "./paths.js";
@@ -47,6 +47,21 @@ function pruneOldSessions(): void {
 
 export async function startDaemon(): Promise<void> {
   console.log("[io] Starting IO daemon...");
+
+  // Auto-update on startup
+  const updated = await autoUpdate();
+  if (updated) {
+    // Re-exec the process with the new version
+    const { spawn } = await import("child_process");
+    const child = spawn(process.execPath, [...process.execArgv, ...process.argv.slice(1)], {
+      detached: true,
+      stdio: "inherit",
+      env: { ...process.env, IO_RESTARTED: "1" },
+    });
+    child.unref();
+    process.exit(0);
+  }
+
   if (config.selfEditEnabled) {
     console.log("[io] ⚠ Self-edit mode enabled");
   }
@@ -105,15 +120,6 @@ export async function startDaemon(): Promise<void> {
   }
 
   console.log("[io] IO is fully operational.");
-
-  // Non-blocking update check
-  checkForUpdate()
-    .then(({ updateAvailable, current, latest }) => {
-      if (updateAvailable) {
-        console.log(`[io] ⬆ Update available: v${current} → v${latest}`);
-      }
-    })
-    .catch(() => {});
 
   // Notify Telegram if restarting
   if (config.telegramEnabled && process.env.IO_RESTARTED === "1") {

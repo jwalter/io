@@ -27,6 +27,29 @@ export async function checkForUpdate(): Promise<UpdateInfo> {
   }
 }
 
+/**
+ * Auto-update: install the latest version globally and return true if updated.
+ * Returns false if already up-to-date or if the update fails.
+ */
+export async function autoUpdate(): Promise<boolean> {
+  const info = await checkForUpdate();
+  if (!info.updateAvailable) return false;
+
+  console.log(`[io] ⬆ Updating: v${info.current} → v${info.latest}...`);
+  try {
+    execSync(`npm install -g ${PACKAGE_NAME}@latest`, {
+      encoding: "utf-8",
+      timeout: 60_000,
+      stdio: "pipe",
+    });
+    console.log(`[io] ✓ Updated to v${info.latest}. Restarting...`);
+    return true;
+  } catch (err) {
+    console.error(`[io] ⚠ Auto-update failed:`, err instanceof Error ? err.message : err);
+    return false;
+  }
+}
+
 function compareSemver(a: string, b: string): number {
   const pa = a.split(".").map(Number);
   const pb = b.split(".").map(Number);
