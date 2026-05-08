@@ -28,7 +28,7 @@ A personal AI assistant daemon built on the GitHub Copilot SDK. IO runs 24/7 on 
 ### Install
 
 ```bash
-npm install -g io-assistant
+npm install -g heyio
 ```
 
 ### Setup

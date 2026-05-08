@@ -1,5 +1,5 @@
 {
-  "name": "io-assistant",
+  "name": "heyio",
   "version": "1.0.0",
   "description": "IO — a personal AI assistant daemon built on the GitHub Copilot SDK",
   "bin": {

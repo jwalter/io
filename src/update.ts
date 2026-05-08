@@ -1,6 +1,6 @@
 import { execSync } from "child_process";
 
-const PACKAGE_NAME = "io-assistant";
+const PACKAGE_NAME = "heyio";
 
 interface UpdateInfo {
   updateAvailable: boolean;
