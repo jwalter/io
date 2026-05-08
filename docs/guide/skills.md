@@ -4,11 +4,12 @@ IO supports the open [Agent Skills](https://agentskills.io) format — a lightwe
 
 ## What Are Skills?
 
-Skills are folders containing a `SKILL.md` file with metadata and instructions that teach IO how to perform specific tasks. Unlike compiled tools, skills are **contextual instructions** that the LLM loads on demand.
+Skills are folders containing a `SKILL.md` file — a plain markdown document with instructions that teach IO how to perform specific tasks. Unlike compiled tools, skills are **contextual instructions** that the LLM loads on demand.
 
 ```
 my-skill/
-├── SKILL.md          # Required: metadata + instructions
+├── SKILL.md          # Required: instructions (plain markdown)
+├── agents/           # Optional: Copilot SDK custom agents
 ├── scripts/          # Optional: executable code
 ├── references/       # Optional: documentation
 └── assets/           # Optional: templates, resources
@@ -18,42 +19,40 @@ my-skill/
 
 IO uses **progressive disclosure** to keep token usage low:
 
-1. **Discovery** — On startup, IO scans skill directories and loads only name + description (~100 tokens each)
-2. **Activation** — When a task matches a skill's description, IO loads the full `SKILL.md` instructions
-3. **Resources** — Scripts and reference files are loaded only when the instructions reference them
+1. **Discovery** — On startup, IO scans `~/.io/skills/` for subdirectories containing a `SKILL.md` file. It parses only the first heading (name) and first paragraph (description) from each file.
+2. **Activation** — When a task matches a skill's description, IO loads the full `SKILL.md` instructions into the conversation context.
+3. **Resources** — Scripts and reference files are loaded only when the instructions reference them.
 
 ## Installing Skills
 
 ### From skills.sh
 
-[skills.sh](https://skills.sh) is an open registry of 34,000+ community skills:
+[skills.sh](https://skills.sh) is an open registry of community skills. Use the CLI to discover and install them:
 
 ```bash
 # Search for skills
 io skill search "pdf processing"
 
-# Install a skill
-io skill add anthropics/skills@pdf
+# Install a skill (provide the git repo URL)
+io skill add https://github.com/anthropics/skills-pdf.git
 
 # List installed skills
 io skill list
 
-# Remove a skill
-io skill remove pdf
+# Remove a skill by slug (folder name)
+io skill remove skills-pdf
 ```
+
+The `add` command clones the git repository into `~/.io/skills/`. If the cloned repo does not contain a `SKILL.md` file, the install is rolled back automatically.
 
 ### Manually
 
-Place a skill folder in any of these directories:
+Create a subdirectory in `~/.io/skills/` containing a `SKILL.md` file:
 
-| Scope   | Path                    | Description                    |
-| ------- | ----------------------- | ------------------------------ |
-| User    | `~/.io/skills/`         | IO-specific, available always  |
-| User    | `~/.agents/skills/`     | Cross-client interop           |
-| Project | `./.io/skills/`         | Project-specific               |
-| Project | `./.agents/skills/`     | Cross-client interop           |
-
-Project-scope skills override user-scope when names collide.
+```bash
+mkdir -p ~/.io/skills/my-skill
+# then create ~/.io/skills/my-skill/SKILL.md
+```
 
 ## Writing a Skill
 
@@ -63,21 +62,13 @@ Project-scope skills override user-scope when names collide.
 mkdir -p ~/.io/skills/my-skill
 ```
 
-Create `~/.io/skills/my-skill/SKILL.md`:
+Create `~/.io/skills/my-skill/SKILL.md` as a **plain markdown** file. IO extracts the skill name from the first `#` heading and the description from the first paragraph after it:
 
-```yaml
----
-name: my-skill
-description: "Brief description of what the skill does. Include trigger keywords like 'when asked to X' or 'use for Y'."
-license: MIT
-metadata:
-  author: your-name
-  version: "1.0"
----
+```markdown
+# My Skill
 
-# My Skill Instructions
-
-Step-by-step instructions for IO go here. Write in clear, imperative language.
+Brief description of what the skill does. Include trigger keywords
+like "when asked to X" or "use for Y" so IO knows when to activate it.
 
 ## When to use
 
@@ -106,19 +97,12 @@ sudo systemctl restart io
 
 ### Tips
 
-- **Name**: lowercase, alphanumeric + hyphens, must match the folder name
-- **Description**: include trigger keywords — IO uses this to decide when to activate the skill
+- **Folder name** becomes the skill's slug — use lowercase, alphanumeric + hyphens
+- **First heading** (`# ...`) is used as the display name
+- **First paragraph** after the heading is used as the description — include trigger keywords so IO knows when to activate the skill
 - **Body**: keep under 5,000 tokens (~500 lines) for best performance
 - **References**: link to specific files (`references/spec.md`), not directories
 
 ## LLM Integration
 
-The orchestrator exposes three skill-related tools to the LLM:
-
-| Tool             | Description                                        |
-| ---------------- | -------------------------------------------------- |
-| `activate_skill` | Load a skill's full instructions into context       |
-| `skill_search`   | Search the skills.sh registry                      |
-| `skill_install`  | Install a skill from skills.sh                     |
-
-When IO starts, all installed skills' names and descriptions are injected into the system prompt as an `<available_skills>` catalog. The LLM uses `activate_skill` to load full instructions only when needed.
+IO passes installed skill directories to the Copilot SDK via the `skillDirectories` session config. The SDK handles skill discovery and activation automatically — skill names and descriptions are injected into the system prompt, and the full `SKILL.md` content is loaded into context when the LLM determines a skill is relevant to the current task.

@@ -1,173 +1,112 @@
 # Tools
 
-IO provides the orchestrator with a set of built-in tools for interacting with the local system and external services. The LLM decides when to call these tools based on the user's request.
+IO exposes a set of built-in tools to the orchestrator LLM via the GitHub Copilot SDK. The model decides when to call these tools based on the user's request. All tool calls are **auto-approved** — no user confirmation is needed.
 
-## Tool Architecture
+## Defining Tools
 
-All tools implement the `Tool` trait:
+Tools are defined with the `defineTool` helper from `@github/copilot-sdk` and use [Zod](https://zod.dev/) for parameter validation:
 
-```rust
-#[async_trait]
-pub trait Tool: Send + Sync {
-    fn name(&self) -> &str;
-    fn description(&self) -> &str;
-    fn parameters_schema(&self) -> Value;
-    async fn execute(&self, args: Value) -> Result<ToolResult>;
-}
+```ts
+import { defineTool } from "@github/copilot-sdk";
+import { z } from "zod";
+
+const myTool = defineTool("my_tool", {
+  description: "A brief description of what this tool does",
+  parameters: z.object({
+    input: z.string().describe("The input to process"),
+  }),
+  handler: async ({ input }) => {
+    return `Processed: ${input}`;
+  },
+});
 ```
 
-Tools are registered in the `ToolRegistry` and automatically exposed to the orchestrator's LLM via the GitHub Models API tool calling interface. The orchestrator merges registry tools with its built-in squad management tools so the model can call any of them.
+The `defineTool` function takes a tool name and an options object with:
+
+- **`description`** — tells the LLM when to use this tool
+- **`parameters`** — a Zod schema that validates and types the incoming arguments
+- **`handler`** — an async function that receives the validated parameters and returns a string result
 
 ## Built-in Tools
 
-### File Operations
+All tools are created in `src/copilot/tools.ts` via the `createTools(deps)` factory. The factory receives a `ToolDeps` object that injects wiki, squad, and other service functions.
 
-Read, write, search, and list files on the local filesystem.
+### Wiki Tools
 
-| Function    | Description                           |
-| ----------- | ------------------------------------- |
-| `read`      | Read file contents                    |
-| `write`     | Write or overwrite a file             |
-| `search`    | Search file contents with regex       |
-| `list`      | List directory contents               |
+| Tool | Description | Parameters |
+| --- | --- | --- |
+| `wiki_read` | Read a page from IO's knowledge base wiki | `path: string` — relative path to the wiki page |
+| `wiki_write` | Write or update a page in the knowledge base | `path: string` — relative path under `pages/` ending in `.md`; `content: string` — Markdown content |
+| `wiki_search` | Search the knowledge base for matching pages | `query: string` — search query |
+
+### Squad Tools
+
+| Tool | Description | Parameters |
+| --- | --- | --- |
+| `squad_create` | Create a persistent project squad that remembers decisions and context | `slug: string` — unique identifier; `name: string` — display name; `project_path: string` — path to project directory |
+| `squad_recall` | Recall a squad's context and past decisions | `slug: string` — squad slug |
+| `squad_status` | List all squads and their status | _(none)_ |
+| `squad_log_decision` | Log an important decision for a squad | `slug: string` — squad slug; `decision: string` — the decision made; `context?: string` — reasoning |
 
 ### Shell
 
-Execute shell commands and capture output.
-
-| Function    | Description                           |
-| ----------- | ------------------------------------- |
-| `execute`   | Run a command and return stdout/stderr |
+| Tool | Description | Parameters |
+| --- | --- | --- |
+| `shell` | Run a shell command on the user's machine | `command: string` — the command to run; `timeout_secs?: number` — timeout in seconds (default: 60); `working_dir?: string` — working directory |
 
 ::: warning
-Shell commands execute with the daemon's permissions. The tool includes basic safety checks but should be used with caution.
+Shell commands execute with the IO process's permissions. Output is truncated to 8 000 characters.
 :::
 
 ### Web
 
-Fetch content from URLs.
+| Tool | Description | Parameters |
+| --- | --- | --- |
+| `web_fetch` | Fetch a URL and return its content as text | `url: string` — URL to fetch; `max_length?: number` — max characters to return (default: 5 000) |
 
-| Function    | Description                           |
-| ----------- | ------------------------------------- |
-| `fetch`     | HTTP GET a URL and return content      |
-| `search`    | Web search (when configured)          |
+### File Operations
 
-### Wiki
-
-CRUD operations on the markdown knowledge base.
-
-| Function    | Description                           |
-| ----------- | ------------------------------------- |
-| `read`      | Read a wiki page                      |
-| `write`     | Create or update a wiki page          |
-| `list`      | List all wiki pages                   |
-| `search`    | Full-text search across wiki          |
-
-### Calendar
-
-Manage events and scheduling.
-
-| Function    | Description                           |
-| ----------- | ------------------------------------- |
-| `list`      | List upcoming events                  |
-| `create`    | Create a new event                    |
-| `delete`    | Remove an event                       |
+| Tool | Description | Parameters |
+| --- | --- | --- |
+| `file_ops` | Read, write, or list files on the local filesystem | `operation: "read" \| "write" \| "list"` — operation to perform; `path: string` — file or directory path; `content?: string` — content to write; `recursive?: boolean` — recurse into subdirectories |
 
 ## Adding a New Tool
 
-Adding a custom tool to IO takes three steps:
+1. **Define the tool** in `src/copilot/tools.ts` inside the `createTools()` function using `defineTool`:
 
-### 1. Implement the `Tool` trait
-
-Create a new file in `src/tools/` (e.g., `src/tools/my_tool.rs`):
-
-```rust
-use anyhow::Result;
-use async_trait::async_trait;
-use serde_json::{json, Value};
-
-use super::{Tool, ToolResult};
-
-pub struct MyTool;
-
-#[async_trait]
-impl Tool for MyTool {
-    fn name(&self) -> &str {
-        "my_tool"
-    }
-
-    fn description(&self) -> &str {
-        "A brief description of what this tool does"
-    }
-
-    fn parameters_schema(&self) -> Value {
-        json!({
-            "type": "object",
-            "properties": {
-                "input": {
-                    "type": "string",
-                    "description": "The input to process"
-                }
-            },
-            "required": ["input"]
-        })
-    }
-
-    async fn execute(&self, args: Value) -> Result<ToolResult> {
-        let input = args["input"].as_str().unwrap_or("");
-
-        // Your tool logic here
-        let output = format!("Processed: {input}");
-
-        Ok(ToolResult {
-            success: true,
-            output,
-            metadata: None,
-        })
-    }
-}
+```ts
+const myTool = defineTool("my_tool", {
+  description: "Describe what this tool does",
+  parameters: z.object({
+    input: z.string().describe("The input to process"),
+  }),
+  handler: async ({ input }) => {
+    // Your logic here
+    return `Result: ${input}`;
+  },
+});
 ```
 
-### 2. Register the module
+2. **Add it to the returned array** at the bottom of `createTools()`:
 
-Add your module to `src/tools/mod.rs`:
-
-```rust
-pub mod my_tool;
+```ts
+return [
+  wikiRead, wikiWrite, wikiSearch,
+  squadCreate, squadRecall, squadStatus, squadLogDecision,
+  shell, webFetch, fileOps,
+  myTool,  // ← add here
+];
 ```
 
-### 3. Register in the default registry
-
-In `src/tools/mod.rs`, add your tool to `register_defaults()`:
-
-```rust
-pub fn register_defaults() -> Self {
-    let mut registry = Self::new();
-    registry.register(Box::new(FileOpsTool));
-    registry.register(Box::new(ShellTool));
-    registry.register(Box::new(WebTool));
-    registry.register(Box::new(WikiTool::new()));
-    registry.register(Box::new(CalendarTool::new()));
-    registry.register(Box::new(my_tool::MyTool));  // Add here
-    registry
-}
-```
-
-That's it — the orchestrator will automatically pick up the new tool and make it available to the LLM. The model will call your tool when it determines the user's request matches the tool's description.
+That's it — the orchestrator automatically picks up every tool in the array and exposes it to the LLM.
 
 ### Tips
 
-- **Name**: Use `snake_case` — this is the name the LLM uses to call the tool
-- **Description**: Be specific — the LLM uses this to decide when to call your tool
-- **Parameters schema**: Follow [JSON Schema](https://json-schema.org/) — the LLM generates arguments matching this schema
-- **Error handling**: Return `Err(...)` for hard failures; use `ToolResult { success: false, ... }` for soft failures the LLM can recover from
+- **Name**: Use `snake_case` — this is the identifier the LLM uses to call the tool
+- **Description**: Be specific — the LLM relies on this to decide when your tool is relevant
+- **Parameters**: Use Zod's `.describe()` on each field so the model knows what to pass
+- **Error handling**: Return an error string from the handler; the LLM will see the message and can retry or adjust
 
 ## Tool Permissions
 
-Tools execute with the same permissions as the IO process. When running as a systemd service, this is typically the root user (or whichever user the service runs as).
-
-Consider creating a dedicated user for the daemon in production:
-
-```bash
-useradd -r -s /bin/nologin io
-```
+Tools execute with the same permissions as the IO process. When running as a daemon, ensure the process user has only the access it needs.

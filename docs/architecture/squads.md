@@ -6,96 +6,75 @@ Squads are persistent, per-project teams of specialized AI agents. Unlike epheme
 
 ### Squad
 
-A squad is a team of agents assigned to a specific project. It persists at `~/.io/squads/{project-slug}/` and is recalled whenever you work on that project.
+A squad is a project workspace stored in SQLite. Each squad tracks a project path and is recalled whenever you work on that project. Squads are created via the `squad` tool when the orchestrator decides project-specific work is needed.
 
-### Agent
+### CopilotSession (Worker Agent)
 
-An agent is a specialized role within a squad. Each agent has:
+Each squad member gets a `CopilotSession` — a long-lived worker agent backed by the Copilot SDK. The session receives the project path and accumulated decisions as context, enabling continuity across conversations. Sessions are persisted by storing the `copilot_session_id` in the database and resuming when the squad is recalled.
 
-- **Charter** (`charter.md`): Defines identity, role, and specializations
-- **History** (`history.md`): Accumulated learnings about the project
+### Decisions
 
-### Hiring
+Significant decisions are stored in the `squad_decisions` table and injected into the agent's system prompt on each session, so context is never lost.
 
-When the orchestrator determines that the current squad lacks expertise for a task, it uses the `squad_hire` tool to add a new agent — generating a charter and adding it to the squad.
+## Data Model
+
+Squads and their decisions are stored in SQLite:
+
+```
+squads
+├── id              (INTEGER PRIMARY KEY)
+├── slug            (TEXT UNIQUE)
+├── name            (TEXT)
+├── project_path    (TEXT)
+├── copilot_session_id (TEXT, nullable)
+├── status          (TEXT: idle | working | error)
+├── created_at      (DATETIME)
+└── updated_at      (DATETIME)
+
+squad_decisions
+├── id              (INTEGER PRIMARY KEY)
+├── squad_slug      (TEXT → squads.slug)
+├── decision        (TEXT)
+├── context         (TEXT, nullable)
+└── created_at      (DATETIME)
+```
 
 ## Squad Lifecycle
 
 ```
-1. New project → orchestrator creates a squad
-2. First task → orchestrator hires initial agents
-3. Ongoing work → agents accumulate history
-4. New domain → orchestrator hires specialists
-5. Project dormant → squad persists on disk
-6. Project revisited → squad is recalled with full context
+1. New project → orchestrator creates a squad (via squad tool)
+2. Task delegated → CopilotSession created with project context + decisions
+3. Agent works → uses shell, file_ops, and squad_log_decision tools
+4. Decision made → logged to squad_decisions table
+5. Task complete → session persists, status returns to idle
+6. Project revisited → session resumed with full decision history
 ```
 
-## File Structure
+## Agent Tools
 
-```
-~/.io/squads/
-└── my-web-app/
-    ├── squad.toml       # Metadata: project path, created date, last active
-    ├── routing.md       # Pattern → agent routing rules
-    ├── decisions.md     # Append-only decision log
-    └── agents/
-        ├── frontend-dev/
-        │   ├── charter.md   # "You are a frontend specialist..."
-        │   └── history.md   # "Project uses React 18, TypeScript strict..."
-        └── api-engineer/
-            ├── charter.md
-            └── history.md
-```
+Each worker agent session is equipped with three tools:
 
-## Charter Templates
-
-When a new agent is hired, a charter is generated from a template:
-
-```markdown
-# {Agent Name}
-
-## Role
-{Role description}
-
-## Specializations
-- {Specialization 1}
-- {Specialization 2}
-
-## Guidelines
-- Always consider the project's existing patterns
-- Document decisions in the squad decision log
-- Share learnings that might benefit other agents
-```
-
-The orchestrator customizes the template based on the specific hiring context.
+- **`shell`** — Run shell commands (git, build tools, etc.) with configurable timeout and working directory
+- **`file_ops`** — Read, write, or list files on the local filesystem
+- **`squad_log_decision`** — Persist an important decision so it survives across sessions
 
 ## Decision Log
 
-Every significant decision made by a squad is recorded in `decisions.md`:
+Decisions are stored in the `squad_decisions` table and summarized when building agent context:
 
-```markdown
-## 2025-05-06: Auth Module Refactoring
-
-**Agent**: security-specialist
-**Decision**: Use bcrypt for password hashing instead of argon2
-**Rationale**: Project already has bcrypt as a dependency, and the threat
-model doesn't require argon2's memory-hard properties.
+```
+- [2025-05-06T10:30:00Z] Use bcrypt for password hashing instead of argon2 (Project already has bcrypt as a dependency)
+- [2025-05-06T11:15:00Z] Adopt Vitest over Jest for new test files (Aligns with existing project tooling)
 ```
 
-This provides an audit trail and helps agents make consistent decisions over time.
+The `getDecisionsSummary()` function formats the last 20 decisions into the agent's system prompt, providing an audit trail and enabling consistent decisions over time.
 
-## Routing Rules
+## Key Source Files
 
-`routing.md` defines patterns for routing messages to specific agents:
-
-```markdown
-## Routing Rules
-
-- Frontend, UI, CSS, React → frontend-dev
-- API, endpoint, REST, GraphQL → api-engineer
-- Security, auth, permissions → security-specialist
-- Default → frontend-dev (primary agent)
-```
+| File | Purpose |
+| --- | --- |
+| `src/store/squads.ts` | CRUD operations for squads and decisions |
+| `src/copilot/agents.ts` | CopilotSession lifecycle, task delegation, agent tools |
 
 ## Cross-Squad Knowledge
 

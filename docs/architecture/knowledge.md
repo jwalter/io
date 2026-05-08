@@ -1,112 +1,99 @@
 # Knowledge System
 
-IO's knowledge system provides long-term memory across sessions, agents, and squads. It combines structured search (SQLite FTS5) with human-readable storage (markdown wiki).
+IO's knowledge system provides long-term memory across sessions, agents, and squads through a filesystem-based markdown wiki.
 
-## Components
+## Wiki
 
-### SQLite FTS5 Index
-
-The daemon maintains a full-text search index over:
-
-- **Message history**: All user and agent messages
-- **Wiki pages**: Personal knowledge base entries
-- **Agent histories**: Accumulated project learnings
-- **Decision logs**: Recorded squad decisions
-
-This enables fast, relevance-ranked search across all knowledge.
-
-### Markdown Wiki
-
-A personal knowledge base stored at `~/.io/wiki/`:
+A personal knowledge base stored as plain markdown files at `~/.io/wiki/`:
 
 ```
 ~/.io/wiki/
-├── rust-patterns.md
-├── docker-cheatsheet.md
-├── meeting-notes-2025.md
-└── project-ideas.md
+├── index.md                  # Auto-maintained index of all pages
+├── log.md                    # Append-only operation log
+├── pages/
+│   ├── preferences/
+│   │   └── editor.md
+│   ├── projects/
+│   │   └── my-web-app.md
+│   ├── people/
+│   │   └── teammates.md
+│   └── general/
+│       └── rust-patterns.md
+└── sources/
+    └── raw-meeting-notes.txt
 ```
 
-Wiki pages support YAML frontmatter for metadata:
+### Topics and File Paths
+
+Topics map directly to file paths under `pages/`. For example:
+
+- `"preferences/editor"` → `~/.io/wiki/pages/preferences/editor.md`
+- `"projects/my-web-app"` → `~/.io/wiki/pages/projects/my-web-app.md`
+
+Default page categories: `preferences`, `projects`, `people`, `general`.
+
+### Content Format
+
+Pages are plain markdown — no YAML frontmatter. Tags and metadata are expressed in the markdown content itself:
 
 ```markdown
----
-title: Rust Patterns
-tags: [rust, programming, patterns]
-created: 2025-05-01
-updated: 2025-05-06
----
-
 # Rust Patterns
+
+Tags: rust, programming, patterns
 
 ## Error Handling
 Use `thiserror` for library errors and `anyhow` for application errors...
 ```
 
-### Agent Memory
+### Atomic Writes
 
-Each agent accumulates project-specific learnings in `history.md`:
+All writes use an atomic write-then-rename pattern to prevent corruption:
 
-```markdown
-## Project Learnings
+1. Write content to a temporary file in the same directory
+2. `fsync` the file descriptor
+3. Rename the temp file to the target path
 
-- Uses React 18 with TypeScript strict mode
-- State management via Zustand (not Redux)
-- API follows REST conventions with /api/v2 prefix
-- Tests use Vitest + React Testing Library
-```
+This ensures pages are never left in a partial state.
 
-This context is injected into agent sessions, enabling them to make informed decisions without re-discovering project patterns.
+## Operations
 
-## Knowledge Flow
+The wiki supports four core operations:
 
-```
-User Message
-     │
-     ▼
-Search FTS5 Index → Relevant context
-     │
-     ▼
-Inject into Agent Session
-     │
-     ▼
-Agent Response
-     │
-     ▼
-Store in FTS5 Index (for future searches)
-```
+| Operation | Description |
+| --------- | ----------- |
+| **read** | Read a page by its relative path |
+| **write** | Write/overwrite a page (must be under `pages/`, must end in `.md`) |
+| **list** | List all `.md` pages under `pages/` |
+| **search** | Search across all page contents by substring match |
 
-## Wiki Commands
+### Path Safety
 
-Through the Telegram bot or TUI:
-
-| Command               | Description                        |
-| --------------------- | ---------------------------------- |
-| `/wiki search <query>` | Search the knowledge base          |
-| `/wiki list`           | List all wiki pages                |
-| `/wiki read <topic>`   | Read a specific page               |
-
-Agents can also read and write wiki pages through the wiki tool, enabling them to persist learnings that span sessions.
-
-## Cross-Squad Sharing
-
-Knowledge sharing happens at two levels:
-
-1. **Wiki**: Shared across all squads — any agent can read/write wiki pages
-2. **Agent history**: Squad-specific — stays with the agent and its project
-
-This means general knowledge (language best practices, deployment patterns) flows freely, while project-specific context (architecture decisions, codebase patterns) stays scoped.
+All paths are validated to prevent directory traversal — resolved paths must stay within the wiki directory.
 
 ## Search
 
-All search is powered by SQLite FTS5, which supports:
+Search uses simple case-insensitive string matching across all page contents. For each match, a contextual snippet (±100 characters around the match) is returned along with the page path and title.
 
-- Ranked relevance scoring
-- Phrase matching
-- Boolean operators (AND, OR, NOT)
-- Prefix matching
-
-```sql
-SELECT * FROM knowledge WHERE knowledge MATCH 'rust AND error handling'
-ORDER BY rank;
+```typescript
+searchWiki("error handling")
+// → [{ path: "pages/general/rust-patterns.md",
+//       title: "Rust Patterns",
+//       snippet: "…Use thiserror for library errors…" }]
 ```
+
+Titles are extracted from the first markdown heading in each page, falling back to the filename.
+
+## Raw Sources
+
+The `sources/` directory stores raw, unstructured content (meeting notes, paste dumps, etc.) that hasn't been organized into wiki pages. Source filenames are sanitized to alphanumeric characters, dots, hyphens, and underscores.
+
+## Cross-Squad Sharing
+
+The wiki is shared across all squads — any agent can read and write wiki pages through the wiki tool, enabling learnings from one project to benefit others.
+
+## Key Source Files
+
+| File | Purpose |
+| --- | --- |
+| `src/wiki/fs.ts` | Filesystem operations: read, write, list, atomic writes, path validation |
+| `src/wiki/search.ts` | Substring search across wiki pages, summary generation |

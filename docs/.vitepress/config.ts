@@ -2,7 +2,7 @@ import { defineConfig } from 'vitepress'
 
 export default defineConfig({
   title: 'IO',
-  description: 'IO — a personal AI assistant daemon powered by the GitHub Models API',
+  description: 'IO — a personal AI assistant powered by the GitHub Copilot SDK',
   base: '/io/',
 
   head: [
@@ -62,7 +62,7 @@ export default defineConfig({
 
     footer: {
       message: 'Released under the MIT License.',
-      copyright: 'Copyright © 2025 Michael Jolley',
+      copyright: 'Copyright © 2026 Michael Jolley',
     },
 
     search: {

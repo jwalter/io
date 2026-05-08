@@ -1,111 +1,109 @@
 # Architecture Overview
 
-IO is a single Rust binary that runs as a background service, routing user messages through an orchestrator that uses the GitHub Models API to handle requests directly or delegate to specialized agent squads.
+IO is a Node.js daemon that routes user messages through an orchestrator powered by the GitHub Copilot SDK, handling requests directly or delegating to specialized agent squads.
 
-## System Diagram
+## Technology Stack
+
+- **Runtime**: Node.js 22+ with TypeScript (ESM)
+- **AI Engine**: GitHub Copilot SDK (`@github/copilot-sdk`)
+- **Database**: SQLite via `better-sqlite3`
+- **Telegram**: grammy
+- **CLI**: Commander.js
+- **TUI**: Node.js readline
+- **Web API**: Express with Server-Sent Events (SSE)
+
+## High-Level Architecture
 
 ```
-User → [TUI / Telegram] → Event Bus → Orchestrator → GitHub Models API
-                                          ↕
-                                     Squad Manager → Agents
-```
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                            IO                            │
-├─────────────────────────────────────────────────────────┤
-│  Interfaces          │  Core                            │
-│  ┌──────────┐        │  ┌─────────────────────────┐    │
-│  │ TUI      │◄──────►│  │ Orchestrator            │    │
-│  │ (ratatui)│        │  │  • Route messages        │    │
-│  └──────────┘        │  │  • Compose/recall squads │    │
-│  ┌──────────┐        │  │  • Manage sessions       │    │
-│  │ Telegram │◄──────►│  └────────┬────────────────┘    │
-│  │(teloxide)│        │           │                      │
-│  └──────────┘        │  ┌────────▼────────────────┐    │
-│                      │  │ Squad Manager            │    │
-│                      │  │  • Create/recall squads  │    │
-│                      │  │  • Hire new agents       │    │
-│                      │  │  • Agent lifecycle       │    │
-│                      │  └────────┬────────────────┘    │
-│                      │           │                      │
-│                      │  ┌────────▼────────────────┐    │
-│                      │  │ GitHub Models API        │    │
-│                      │  │  • LLM chat completions  │    │
-│                      │  │  • Tool call support     │    │
-│                      │  │  • Streaming responses   │    │
-│                      │  └────────┬────────────────┘    │
-│                      │           │                      │
-│  Storage             │  ┌────────▼────────────────┐    │
-│  ┌──────────┐        │  │ Tool Registry            │    │
-│  │ SQLite   │◄──────►│  │  • File ops              │    │
-│  │ (index)  │        │  │  • Shell commands        │    │
-│  └──────────┘        │  │  • Web search/fetch      │    │
-│  ┌──────────┐        │  │  • Calendar              │    │
-│  │ Markdown │◄──────►│  │  • Wiki/notes            │    │
-│  │ (state)  │        │  └─────────────────────────┘    │
-│  └──────────┘        │                                  │
-├─────────────────────────────────────────────────────────┤
-│  Event Bus (tokio broadcast channels)                   │
-└─────────────────────────────────────────────────────────┘
+┌─────────────┐  ┌──────────────┐  ┌────────────┐
+│  Telegram    │  │     TUI      │  │  Web API   │
+│  (grammy)   │  │  (readline)  │  │ (Express)  │
+└──────┬──────┘  └──────┬───────┘  └─────┬──────┘
+       │                │                 │
+       └────────────────┼─────────────────┘
+                        │
+              ┌─────────▼──────────┐
+              │    Orchestrator    │
+              │  (CopilotSession)  │
+              └─────────┬──────────┘
+                        │
+          ┌─────────────┼──────────────┐
+          │             │              │
+   ┌──────▼──────┐ ┌───▼───┐  ┌──────▼──────┐
+   │   Squad     │ │ Wiki  │  │   Skills    │
+   │   Agents    │ │       │  │   Loader    │
+   └──────┬──────┘ └───┬───┘  └─────────────┘
+          │            │
+   ┌──────▼────────────▼──────┐
+   │        SQLite DB         │
+   │  (squads, decisions,     │
+   │   state, wiki index)     │
+   └──────────────────────────┘
 ```
 
 ## Key Components
 
-### Event Bus
+### CopilotClient
 
-All communication between components flows through a tokio broadcast channel-based event bus. This decouples interfaces from core logic and makes it trivial to add new subscribers (e.g., a future WebSocket relay for the web frontend).
-
-All event types derive `Serialize`/`Deserialize`, making them ready for WebSocket transmission.
+Singleton in `src/copilot/client.ts`. Created with `autoStart` and `autoRestart` enabled. Exposes `getClient()`, `resetClient()`, and `stopClient()`. The orchestrator validates the configured model against `client.listModels()` at startup and runs a periodic health-check that reconnects automatically if the client disconnects.
 
 ### Orchestrator
 
-The orchestrator is the routing brain of IO. It receives every user message and uses the LLM to decide whether to respond directly (for simple questions) or delegate to specialist agent squads (for complex project work).
+The central routing brain (`src/copilot/orchestrator.ts`). It owns a single `CopilotSession` with streaming enabled and `infiniteSessions` for automatic context compaction. Every user message — regardless of origin — enters through `sendToOrchestrator()`, which enqueues it into a serial processing queue. The orchestrator decides whether to respond directly or delegate work to a squad agent. Failed requests are retried up to three times with automatic session/client recovery.
 
 See [Orchestrator](/architecture/orchestrator) for details.
 
-### Squad Manager
+### Squad Agents
 
-Manages the lifecycle of agent squads — creating, recalling, and persisting them. Squads are per-project teams stored at `~/.io/squads/`.
+Worker sessions managed by `src/copilot/agents.ts`. Each squad maps to a project directory and gets its own `CopilotSession` with project-specific context (past decisions, file system access). Agents are created or resumed on demand via `delegateToAgent()`, which runs tasks in the background and reports results through a callback. Each agent session has `shell`, `file_ops`, and `squad_log_decision` tools.
 
 See [Squads](/architecture/squads) for details.
 
+### Wiki
+
+Markdown-based knowledge store in `src/wiki/`. `fs.ts` handles reading, writing, and structure of wiki pages under `~/.io/wiki/pages/`. `search.ts` provides full-text search across all pages. The orchestrator exposes wiki access through `wiki_read`, `wiki_write`, and `wiki_search` tools.
+
+### Skills Loader
+
+`src/copilot/skills.ts` scans `~/.io/skills/` for subdirectories containing a `SKILL.md` file. Qualifying directories (and their `agents/` subdirectories) are passed to the Copilot SDK as `skillDirectories`. Skills can be installed from git repos via `io skill add <repo-url>`, listed, removed, or discovered through the `skills.sh` registry.
+
+### Store
+
+SQLite database via `better-sqlite3` (`src/store/db.ts`), stored at `~/.io/io.db` with WAL mode. Tables:
+
+- **`io_state`** — key-value store for session IDs and config state
+- **`squads`** — squad metadata (slug, name, project path, Copilot session ID, status)
+- **`squad_decisions`** — persistent decision log per squad
+- **`conversation_log`** — rolling log of user/assistant messages (capped at 1000 rows)
+- **`agent_tasks`** — background task tracking for squad agents
+
 ### Interfaces
 
-IO supports multiple simultaneous interfaces:
+IO supports three simultaneous interfaces:
 
-| Interface | Feature Flag | Status    |
-| --------- | ------------ | --------- |
-| TUI       | `tui`        | Available |
-| Telegram  | `telegram`   | Available |
-| Web       | `web`        | Planned   |
+| Interface | Module              | Status    |
+| --------- | ------------------- | --------- |
+| TUI       | `src/tui/index.ts`  | Available |
+| Telegram  | `src/telegram/bot.ts` | Available |
+| Web API   | `src/api/server.ts` | Available |
 
-All interfaces subscribe to the same event bus, so they can run concurrently.
+All interfaces feed messages into the same orchestrator queue via `sendToOrchestrator()` with a `MessageSource` tag indicating origin (`telegram`, `tui`, or `background`).
 
-### Storage
+## Copilot SDK Integration
 
-IO uses **hybrid storage**:
+- **`CopilotClient`** singleton manages the SDK lifecycle (`autoStart`, `autoRestart`)
+- Sessions use **`infiniteSessions`** for automatic context compaction (background at 80%, buffer exhaustion at 95%)
+- Tools are registered via **`defineTool()`** with Zod schemas for parameter validation
+- Model selection defaults to `gpt-4.1` and is validated against available models at startup
+- Streaming is enabled on the orchestrator session; agent sessions run without streaming
+- Permissions are auto-approved via `approveAll` for both orchestrator and agent sessions
 
-- **SQLite** (with FTS5) for message indexing, search, and session history
-- **Markdown files** for agent charters, squad decisions, routing rules, and the personal wiki
+## Data Flow
 
-This combines the queryability of a database with the human-readability and version-control-friendliness of plain text.
-
-## Async Runtime
-
-Built on [Tokio](https://tokio.rs/) with broadcast channels for the event bus. The orchestrator runs on a dedicated OS thread due to SQLite's `!Send` constraint, communicating with the main runtime via message passing.
-
-## Feature Flags
-
-The binary is compiled with Cargo feature flags that enable/disable interfaces:
-
-```bash
-# Default: TUI + Telegram
-cargo build --release
-
-# TUI only
-cargo build --release --no-default-features --features tui
-
-# Telegram only
-cargo build --release --no-default-features --features telegram
-```
+1. **Message arrives** from any interface (Telegram, TUI, or Web API)
+2. **Orchestrator receives it** via `sendToOrchestrator()`, which tags it with the source and enqueues it
+3. **Serial processing**: messages are processed one at a time through `executeOnSession()`
+4. **Routing decision**: the LLM decides to handle directly or delegate to a squad via `delegateToAgent()`
+5. **If squad**: creates or resumes a worker agent session with project-specific context and tools
+6. **Tools execute** (wiki, shell, file_ops, web_fetch, squad management, etc.)
+7. **Response streams back** to the originating interface via the message callback

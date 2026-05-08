@@ -1,80 +1,39 @@
 # Auto-Update
 
-IO includes a built-in self-update system that checks for new releases on GitHub and can automatically apply them.
+IO automatically keeps itself up to date via npm. Every time the daemon starts, it checks for a newer version and installs it — no configuration or manual intervention required.
 
 ## How It Works
 
-1. **Check**: The daemon queries the [GitHub Releases API](https://api.github.com/repos/michaeljolley/io/releases/latest) for the latest version
-2. **Compare**: Current version (compiled into the binary) is compared against the latest release tag using [semver](https://semver.org/)
-3. **Download**: If a newer version exists, the platform-appropriate archive is downloaded
-4. **Verify**: SHA256 checksum of the downloaded archive is verified against `sha256sums.txt` from the release
-5. **Replace**: The current binary is replaced with the new version
-6. **Restart**: On systemd, the service automatically restarts with the new binary
+1. **Check** — On startup, the daemon runs `npm view heyio version` to fetch the latest published version from the npm registry
+2. **Compare** — The result is compared against the version in the running `package.json` using semver
+3. **Install** — If a newer version exists, `npm install -g heyio@latest` is executed automatically
+4. **Re-exec** — After a successful install, the daemon spawns a new process with the updated code and exits the old one so the new version takes over immediately
 
-## Schedule
+The entire flow happens before the daemon begins normal operation, so you are always running the latest release.
 
-- **On startup**: First check runs 5 seconds after the daemon starts
-- **Periodic**: Subsequent checks run every `check_interval_hours` (default: 12 hours)
+## No Configuration Needed
 
-## Configuration
+Auto-update is always on. There are no flags to toggle or intervals to set — the check runs once at startup and either updates or continues with the current version.
 
-```toml
-[update]
-enabled = true              # Set to false to disable all update checks
-check_interval_hours = 12   # Hours between checks
-auto_apply = true           # Automatically install updates
+If the npm registry is unreachable or the install fails for any reason, the daemon logs a warning and continues running the current version normally.
+
+## Manual Update
+
+You can update at any time by running:
+
+```bash
+npm install -g heyio@latest
 ```
 
-### Disabling Updates
+Then restart the daemon to pick up the new version.
 
-```toml
-[update]
-enabled = false
-```
+## How Re-exec Works
 
-### Manual Updates Only
+When an update is installed, the daemon re-launches itself so the new code is loaded without requiring a separate restart:
 
-To be notified of updates without auto-installing:
+1. A new detached child process is spawned using the same Node executable and arguments
+2. The environment variable `IO_RESTARTED=1` is set on the child so it can detect a post-update restart
+3. The child is `unref()`'d so it is not tied to the parent
+4. The original process exits with code 0
 
-```toml
-[update]
-auto_apply = false
-```
-
-The daemon will log when a new version is available but won't apply it automatically.
-
-## Platform Detection
-
-The updater detects the correct binary at compile time:
-
-| OS      | Architecture | Archive                                       |
-| ------- | ------------ | --------------------------------------------- |
-| Linux   | x86_64       | `io-x86_64-unknown-linux-gnu.tar.gz`   |
-| Windows | x86_64       | `io-x86_64-pc-windows-msvc.zip`        |
-| macOS   | x86_64       | `io-x86_64-apple-darwin.tar.gz`        |
-| macOS   | ARM64        | `io-aarch64-apple-darwin.tar.gz`       |
-
-## Security
-
-- Downloads only from `github.com/michaeljolley/io/releases`
-- SHA256 checksums verified before applying
-- Executable permissions set on Unix after extraction
-
-## Systemd Integration
-
-When running as a systemd service with `Restart=on-failure`, the update process works seamlessly:
-
-1. Daemon downloads and verifies the new binary
-2. Replaces `/usr/local/bin/io`
-3. Exits with code 0
-4. Systemd restarts the service with the new binary
-
-```ini
-[Service]
-Restart=on-failure
-RestartSec=5
-```
-
-::: tip
-Use `Restart=on-failure` rather than `Restart=always` so the daemon can exit cleanly after an update and restart with the new binary.
-:::
+This means the transition is seamless — the new version picks up exactly where the old one would have started.

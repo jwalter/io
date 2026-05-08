@@ -4,7 +4,7 @@ layout: home
 hero:
   name: IO
   text: Personal AI Assistant
-  tagline: A Rust-powered daemon using the GitHub Models API with dynamic multi-agent squads
+  tagline: Your AI-powered personal assistant, built with the GitHub Copilot SDK
   actions:
     - theme: brand
       text: Get Started
@@ -18,21 +18,21 @@ hero:
 
 features:
   - icon: 🤖
-    title: Hybrid Orchestrator
-    details: The orchestrator uses the LLM to decide — answering simple questions directly and delegating complex tasks to specialist agent squads.
+    title: Smart Orchestrator
+    details: Uses Copilot SDK sessions with infinite context and automatic compaction to handle conversations of any length.
   - icon: 👥
-    title: Dynamic Squads
-    details: Per-project teams of specialized agents that persist, learn, and can be recalled across sessions.
+    title: Project Squads
+    details: Persistent teams of specialized agents stored in SQLite, recalled across sessions for per-project continuity.
   - icon: 🧠
-    title: Knowledge System
-    details: SQLite FTS5 + markdown wiki for long-term memory and cross-squad knowledge sharing.
+    title: Knowledge Wiki
+    details: Markdown-based wiki for long-term memory and cross-squad knowledge sharing.
   - icon: 📱
     title: Multi-Interface
-    details: Terminal TUI and Telegram bot today, with a Vue 3 web frontend on the roadmap.
-  - icon: 🔄
-    title: Self-Updating
-    details: Automatically checks GitHub Releases and applies updates with SHA256 verification.
+    details: Telegram bot (grammy), terminal TUI (readline), and Web API (Express SSE) — use IO from anywhere.
   - icon: 🛠️
-    title: Extensible Tools
-    details: Built-in tools for file ops, shell commands, web fetch, wiki, and calendar — with a skills marketplace planned.
+    title: Skills System
+    details: Load skills from SKILL.md files and a skills.sh registry to extend IO with new capabilities.
+  - icon: 🔄
+    title: Auto-Update
+    details: npm-based self-update on startup keeps IO current without manual intervention.
 ---

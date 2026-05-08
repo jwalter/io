@@ -1,106 +1,58 @@
 # Configuration
 
-IO is configured via a TOML file at `~/.io/config.toml`. All sections are optional — the daemon uses sensible defaults when values are omitted.
+IO is configured via a JSON file at `~/.io/config.json`. All fields are optional — IO uses sensible defaults when values are omitted.
 
-## Full Reference
+## Config File Location
 
-```toml
-# Root directory for all daemon data (squads, wiki, database, logs)
-data_dir = "~/.io"
+`~/.io/config.json` — created automatically by `io setup`, or you can create it manually.
 
-# Model configuration
-[models]
-# Default model for agent sessions
-default = "openai/gpt-4.1"
-# Fallback chain — if the primary model is unavailable, try the next
-fallback_chain = ["openai/gpt-4.1", "openai/gpt-4o-mini"]
+## Reference
 
-# Telegram bot configuration (optional)
-[telegram]
-# Bot token from @BotFather
-bot_token = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
-# Telegram usernames allowed to interact with the bot
-allowed_users = ["yourusername"]
-
-# Auto-update configuration
-[update]
-# Enable/disable update checking
-enabled = true
-# How often to check for updates (hours)
-check_interval_hours = 12
-# Automatically download and apply updates without prompting
-auto_apply = true
+```json
+{
+  "telegramBotToken": "bot-token-from-botfather",
+  "authorizedUserId": 123456789,
+  "telegramEnabled": true,
+  "selfEditEnabled": false,
+  "defaultModel": "openai/gpt-4.1",
+  "apiPort": 3170
+}
 ```
 
-## Sections
-
-### `data_dir`
-
-- **Type:** `string`
-- **Default:** `~/.io`
-
-The root directory where IO stores all persistent data including the SQLite database, squad configurations, wiki pages, and logs.
-
-### `[models]`
-
-Controls which AI models are used via the [GitHub Models API](https://github.com/marketplace/models). Model names use the `publisher/model` format.
-
-| Key              | Type       | Default              | Description                              |
-| ---------------- | ---------- | -------------------- | ---------------------------------------- |
-| `default`        | `string`   | `"openai/gpt-4.1"`  | Primary model for all sessions           |
-| `fallback_chain` | `string[]` | `[]`                 | Ordered list of fallback models          |
-
-The fallback chain is tried in order when the primary model is unavailable or rate-limited.
-
-### `[telegram]`
-
-Configures the Telegram bot interface. If this section is omitted, the Telegram interface is disabled.
-
-| Key             | Type       | Default | Description                                  |
-| --------------- | ---------- | ------- | -------------------------------------------- |
-| `bot_token`     | `string`   | —       | Bot token from [@BotFather](https://t.me/botfather) |
-| `allowed_users` | `string[]` | `[]`    | Usernames authorized to use the bot          |
+| Field              | Type      | Default | Description                                                        |
+| ------------------ | --------- | ------- | ------------------------------------------------------------------ |
+| `telegramBotToken` | `string`  | —       | Bot token from [@BotFather](https://t.me/botfather)                |
+| `authorizedUserId` | `number`  | —       | Telegram user ID authorized to interact with the bot               |
+| `telegramEnabled`  | `boolean` | `false` | Enable the Telegram bot interface                                  |
+| `selfEditEnabled`  | `boolean` | `false` | Allow IO to modify its own configuration and skills at runtime     |
+| `defaultModel`     | `string`  | —       | Override the default model (e.g. `"openai/gpt-4.1"`)              |
+| `apiPort`          | `number`  | `3170`  | Port for the local API server                                      |
 
 ::: warning
-Always keep your bot token secret. Never commit it to version control.
+Always keep your bot token secret. Never commit `config.json` to version control.
 :::
 
-### `[update]`
+## Model Selection
 
-Controls the self-update system.
+The Copilot SDK handles model selection automatically — the orchestrator chooses the best model for each operation. You can override the default with the `defaultModel` field, but in most cases no manual model configuration is needed.
 
-| Key                    | Type   | Default | Description                                    |
-| ---------------------- | ------ | ------- | ---------------------------------------------- |
-| `enabled`              | `bool` | `true`  | Whether to check for updates                   |
-| `check_interval_hours` | `u64`  | `12`    | Hours between update checks                    |
-| `auto_apply`           | `bool` | `true`  | Automatically apply updates when found          |
+## Data Directory
 
-When `auto_apply` is `true`, the daemon downloads, verifies (SHA256), and replaces itself automatically. When `false`, it logs a message about the available update.
-
-## Data Directory Layout
+IO stores all persistent data in `~/.io/`:
 
 ```
 ~/.io/
-├── config.toml              # Configuration file
-├── daemon.db                # SQLite database (FTS5)
-├── squads/
-│   └── {project-slug}/
-│       ├── squad.toml       # Squad metadata
-│       ├── routing.md       # Pattern → agent routing rules
-│       ├── decisions.md     # Decision log
-│       └── agents/
-│           └── {agent-name}/
-│               ├── charter.md   # Agent identity and role
-│               └── history.md   # Accumulated learnings
-├── wiki/                    # Personal knowledge base
-│   └── {topic}.md
-└── logs/
-    └── {date}.log
+├── config.json          # Configuration
+├── io.db                # SQLite database (squads, decisions, state)
+├── wiki/                # Knowledge wiki (markdown files)
+├── skills/              # Installed skills (SKILL.md files)
+├── sessions/            # Session data
+└── logs/                # Log files
 ```
 
 ## Environment Variables
 
-| Variable        | Description                          |
-| --------------- | ------------------------------------ |
-| `GITHUB_TOKEN`  | GitHub token for Models API access (preferred over `gh auth token`) |
-| `RUST_LOG`      | Logging level (`trace`, `debug`, `info`, `warn`, `error`) |
+| Variable   | Description                                                  |
+| ---------- | ------------------------------------------------------------ |
+| `IO_HOME`  | Override the data directory (default: `~/.io/`)              |
+| `NODE_ENV` | Standard Node.js environment (`development`, `production`)   |

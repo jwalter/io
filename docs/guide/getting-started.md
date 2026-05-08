@@ -2,143 +2,86 @@
 
 ## Prerequisites
 
-- A GitHub account with access to [GitHub Models](https://github.com/marketplace/models)
-- A `GITHUB_TOKEN` with Models API access (or GitHub CLI authenticated via `gh auth login`)
+- Node.js 22+
+- A GitHub account with Copilot access (the Copilot SDK handles auth via GitHub CLI or token)
 
 ## Installation
 
-### GitHub Releases (Recommended)
+```bash
+npm install -g heyio
+```
 
-Download the latest prebuilt binary from [Releases](https://github.com/michaeljolley/io/releases):
+## Initial Setup
 
-| Platform       | Target                       |
-| -------------- | ---------------------------- |
-| Linux x86_64   | `x86_64-unknown-linux-gnu`   |
-| Windows x86_64 | `x86_64-pc-windows-msvc`     |
-| macOS x86_64   | `x86_64-apple-darwin`        |
-| macOS ARM64    | `aarch64-apple-darwin`       |
+Run the interactive setup wizard:
 
 ```bash
-# Example: Linux x86_64
-curl -sL https://github.com/michaeljolley/io/releases/latest/download/io-x86_64-unknown-linux-gnu.tar.gz \
-  | tar xz
-chmod +x io
-mv io /usr/local/bin/
+io setup
 ```
 
-### Cargo Install
+This will guide you through:
 
-```bash
-cargo install --git https://github.com/michaeljolley/io.git
-```
+1. GitHub authentication (Copilot SDK handles this automatically via `gh` CLI)
+2. Telegram bot token (optional)
+3. Telegram authorized user ID (optional)
 
-### Building from Source
+Configuration is saved to `~/.io/config.json`.
 
-```bash
-git clone https://github.com/michaeljolley/io.git
-cd io
-cargo build --release
-```
+## Quick Start
 
-#### Feature Flags
-
-| Flag          | Default | Description                       |
-| ------------- | ------- | --------------------------------- |
-| `tui`         | ✅      | Terminal UI via ratatui            |
-| `telegram`    | ✅      | Telegram bot via teloxide          |
-| `web`         | —       | Future Vue 3 web frontend         |
-
-Build with specific features:
-
-```bash
-# TUI only
-cargo build --release --no-default-features --features tui
-
-# All features
-cargo build --release --all-features
-```
-
-## Configuration
-
-Create a config file at `~/.io/config.toml`:
-
-```toml
-data_dir = "~/.io"
-
-[models]
-default = "openai/gpt-4.1"
-fallback_chain = ["openai/gpt-4.1", "openai/gpt-4o-mini"]
-
-[telegram]
-bot_token = "YOUR_BOT_TOKEN"
-allowed_users = ["yourusername"]
-
-[update]
-enabled = true
-check_interval_hours = 12
-auto_apply = true
-```
-
-See the [Configuration Reference](/guide/configuration) for all options.
-
-## Running
-
-### Interactive Mode (TUI)
+Start the TUI (interactive chat):
 
 ```bash
 io
 ```
 
-This launches the terminal chat interface where you can type messages and see IO's responses in real-time. The TUI shows a status bar, chat area with streaming responses, and an input prompt.
-
-### Headless Daemon Mode
+Start as a background daemon:
 
 ```bash
 io --daemon
 ```
 
-Runs IO without the TUI — useful for systemd services or background operation. Interaction happens through configured interfaces like Telegram.
+## Configuration File
 
-In both modes, IO will:
+IO stores config at `~/.io/config.json`:
 
-1. Load configuration from `~/.io/config.toml`
-2. Initialize the SQLite database
-3. Start the event bus
-4. Launch the orchestrator bridge
-5. Scan for installed skills
-6. Start enabled interfaces (Telegram, etc.)
-7. Begin checking for updates
+```json
+{
+  "telegramBotToken": "your-bot-token",
+  "authorizedUserId": 123456789,
+  "telegramEnabled": true
+}
+```
 
-## Running as a Systemd Service
+## Running as a systemd Service (Linux)
 
-For always-on operation on Linux:
+Create `/etc/systemd/system/io.service`:
 
-```bash
-cat > /etc/systemd/system/io.service << 'EOF'
+```ini
 [Unit]
-Description=IO personal AI assistant
-After=network-online.target
-Wants=network-online.target
+Description=IO AI Assistant Daemon
+After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/io --daemon
-Restart=on-failure
-RestartSec=5
-Environment=RUST_LOG=info
-Environment=GITHUB_TOKEN=ghp_your_token_here
+User=your-user
+ExecStart=/usr/bin/env io --daemon
+Restart=always
+RestartSec=10
+Environment=NODE_ENV=production
 
 [Install]
 WantedBy=multi-user.target
-EOF
-
-systemctl daemon-reload
-systemctl enable --now io
 ```
 
-Check status:
+Then enable:
 
 ```bash
-systemctl status io
-journalctl -u io -f
+sudo systemctl enable --now io
 ```
+
+## Next Steps
+
+- [Configuration](./configuration.md) — Full config reference
+- [Telegram Setup](./telegram.md) — Detailed Telegram integration guide
+- [Skills](./skills.md) — Extend IO with custom skills
