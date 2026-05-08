@@ -1,0 +1,41 @@
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
+import { CONFIG_PATH, IO_HOME } from "./paths.js";
+
+export interface IOConfig {
+  telegramBotToken?: string;
+  authorizedUserId?: number;
+  telegramEnabled: boolean;
+  selfEditEnabled: boolean;
+  defaultModel?: string;
+  apiPort: number;
+}
+
+const DEFAULT_CONFIG: IOConfig = {
+  telegramEnabled: false,
+  selfEditEnabled: false,
+  apiPort: 3170,
+};
+
+function loadConfig(): IOConfig {
+  mkdirSync(IO_HOME, { recursive: true });
+
+  if (!existsSync(CONFIG_PATH)) {
+    writeFileSync(CONFIG_PATH, JSON.stringify(DEFAULT_CONFIG, null, 2));
+    return { ...DEFAULT_CONFIG };
+  }
+
+  try {
+    const raw = readFileSync(CONFIG_PATH, "utf-8");
+    const parsed = JSON.parse(raw) as Partial<IOConfig>;
+    return { ...DEFAULT_CONFIG, ...parsed };
+  } catch {
+    return { ...DEFAULT_CONFIG };
+  }
+}
+
+export const config = loadConfig();
+
+export function saveConfig(updates: Partial<IOConfig>): void {
+  Object.assign(config, updates);
+  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
+}
