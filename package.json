@@ -1,0 +1,54 @@
+{
+  "name": "heyio",
+  "version": "1.0.0",
+  "description": "IO — a personal AI assistant daemon built on the GitHub Copilot SDK",
+  "bin": {
+    "io": "dist/index.js"
+  },
+  "files": [
+    "dist/**/*.js",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "daemon": "tsx src/daemon.ts",
+    "tui": "tsx src/tui/index.ts",
+    "dev": "tsx --watch src/daemon.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "type": "module",
+  "keywords": [
+    "copilot",
+    "telegram",
+    "orchestrator",
+    "ai",
+    "cli",
+    "assistant"
+  ],
+  "author": "Michael Jolley",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/michaeljolley/io.git"
+  },
+  "homepage": "https://github.com/michaeljolley/io#readme",
+  "dependencies": {
+    "@github/copilot-sdk": "^0.2.2",
+    "better-sqlite3": "^12.6.2",
+    "commander": "^14.0.0",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "grammy": "^1.40.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.3.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

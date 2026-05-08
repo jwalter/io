@@ -1,6 +1,5 @@
-/target
-/.rustup
-/.cargo
+node_modules/
+dist/
 *.swp
 *.swo
 .env
