@@ -1,5 +1,13 @@
 #!/usr/bin/env node
 
+const [major] = process.versions.node.split(".").map(Number);
+if (major < 22) {
+  console.error(
+    `IO requires Node.js 22 or later (current: ${process.version}). Please upgrade: https://nodejs.org`
+  );
+  process.exit(1);
+}
+
 import { Command } from "commander";
 import { startDaemon } from "./daemon.js";
 import { startTui, setMessageHandler as setTuiHandler } from "./tui/index.js";

@@ -1,7 +1,7 @@
 {
   "name": "heyio",
-  "version": "1.0.0",
-  "description": "IO — a personal AI assistant daemon built on the GitHub Copilot SDK",
+  "version": "0.1.0",
+  "description": "IO — a personal AI assistant built on the GitHub Copilot SDK",
   "bin": {
     "io": "dist/index.js"
   },
@@ -17,7 +17,7 @@
     "prepublishOnly": "npm run build"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "type": "module",
   "keywords": [
@@ -32,7 +32,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/michaeljolley/io.git"
+    "url": "git+https://github.com/michaeljolley/io.git"
   },
   "homepage": "https://github.com/michaeljolley/io#readme",
   "dependencies": {
