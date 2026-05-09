@@ -48,17 +48,10 @@ function pruneOldSessions(): void {
 export async function startDaemon(): Promise<void> {
   console.log("[io] Starting IO daemon...");
 
-  // Auto-update on startup
+  // Auto-update on startup — exit after update; systemd will restart us
   const updated = await autoUpdate();
   if (updated) {
-    // Re-exec the process with the new version
-    const { spawn } = await import("child_process");
-    const child = spawn(process.execPath, [...process.execArgv, ...process.argv.slice(1)], {
-      detached: true,
-      stdio: "inherit",
-      env: { ...process.env, IO_RESTARTED: "1" },
-    });
-    child.unref();
+    console.log("[io] Exiting for systemd restart with updated version...");
     process.exit(0);
   }
 

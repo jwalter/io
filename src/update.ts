@@ -13,10 +13,11 @@ interface UpdateInfo {
 
 function getInstalledVersion(): string {
   try {
-    // Ask npm what version is installed globally — completely reliable
+    // Ask npm what version is installed globally — run from /tmp to avoid local package interference
     const output = execSync(`npm list -g ${PACKAGE_NAME} --depth=0 --json 2>/dev/null`, {
       encoding: "utf-8",
       timeout: 10_000,
+      cwd: "/tmp",
     });
     const data = JSON.parse(output);
     return data.dependencies?.[PACKAGE_NAME]?.version ?? "0.0.0";
@@ -40,6 +41,7 @@ export async function checkForUpdate(): Promise<UpdateInfo> {
     const latest = execSync(`npm view ${PACKAGE_NAME} version 2>/dev/null`, {
       encoding: "utf-8",
       timeout: 10_000,
+      cwd: "/tmp",
     }).trim();
 
     if (!latest) return { updateAvailable: false, current, latest: current };
@@ -65,6 +67,7 @@ export async function autoUpdate(): Promise<boolean> {
       encoding: "utf-8",
       timeout: 60_000,
       stdio: "pipe",
+      cwd: "/tmp",
     });
     console.log(`[io] ✓ Updated to v${info.latest}. Restarting...`);
     return true;
