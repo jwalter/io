@@ -11,6 +11,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "postinstall": "npm rebuild better-sqlite3",
     "daemon": "tsx src/daemon.ts",
     "tui": "tsx src/tui/index.ts",
     "dev": "tsx --watch src/daemon.ts",
