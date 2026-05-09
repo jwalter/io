@@ -1,4 +1,6 @@
 import { execSync } from "child_process";
+import { readFileSync } from "fs";
+import { createRequire } from "module";
 
 const PACKAGE_NAME = "heyio";
 
@@ -8,10 +10,28 @@ interface UpdateInfo {
   latest: string;
 }
 
+function getInstalledVersion(): string {
+  try {
+    const require = createRequire(import.meta.url);
+    const pkgPath = require.resolve(`${PACKAGE_NAME}/package.json`);
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+    return pkg.version ?? "0.0.0";
+  } catch {
+    // Fallback: read our own package.json
+    try {
+      const require = createRequire(import.meta.url);
+      const pkgPath = require.resolve("../package.json");
+      const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+      return pkg.version ?? "0.0.0";
+    } catch {
+      return "0.0.0";
+    }
+  }
+}
+
 export async function checkForUpdate(): Promise<UpdateInfo> {
   try {
-    const packageJson = await import("../package.json", { with: { type: "json" } }).catch(() => null);
-    const current = (packageJson?.default?.version as string) ?? "0.0.0";
+    const current = getInstalledVersion();
 
     const latest = execSync(`npm view ${PACKAGE_NAME} version 2>/dev/null`, {
       encoding: "utf-8",
