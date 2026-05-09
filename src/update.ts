@@ -1,6 +1,7 @@
 import { execSync } from "child_process";
 import { readFileSync } from "fs";
-import { createRequire } from "module";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
 
 const PACKAGE_NAME = "heyio";
 
@@ -12,20 +13,13 @@ interface UpdateInfo {
 
 function getInstalledVersion(): string {
   try {
-    const require = createRequire(import.meta.url);
-    const pkgPath = require.resolve(`${PACKAGE_NAME}/package.json`);
+    // Resolve package.json relative to this file: dist/update.js → ../package.json
+    const __dirname = dirname(fileURLToPath(import.meta.url));
+    const pkgPath = join(__dirname, "..", "package.json");
     const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
     return pkg.version ?? "0.0.0";
   } catch {
-    // Fallback: read our own package.json
-    try {
-      const require = createRequire(import.meta.url);
-      const pkgPath = require.resolve("../package.json");
-      const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
-      return pkg.version ?? "0.0.0";
-    } catch {
-      return "0.0.0";
-    }
+    return "0.0.0";
   }
 }
 
