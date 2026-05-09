@@ -13,13 +13,23 @@ interface UpdateInfo {
 
 function getInstalledVersion(): string {
   try {
-    // Resolve package.json relative to this file: dist/update.js → ../package.json
-    const __dirname = dirname(fileURLToPath(import.meta.url));
-    const pkgPath = join(__dirname, "..", "package.json");
-    const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
-    return pkg.version ?? "0.0.0";
+    // Ask npm what version is installed globally — completely reliable
+    const output = execSync(`npm list -g ${PACKAGE_NAME} --depth=0 --json 2>/dev/null`, {
+      encoding: "utf-8",
+      timeout: 10_000,
+    });
+    const data = JSON.parse(output);
+    return data.dependencies?.[PACKAGE_NAME]?.version ?? "0.0.0";
   } catch {
-    return "0.0.0";
+    // Fallback: read package.json relative to this file
+    try {
+      const __dirname = dirname(fileURLToPath(import.meta.url));
+      const pkgPath = join(__dirname, "..", "package.json");
+      const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+      return pkg.version ?? "0.0.0";
+    } catch {
+      return "0.0.0";
+    }
   }
 }
 
