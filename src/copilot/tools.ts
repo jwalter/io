@@ -121,13 +121,14 @@ export function createTools(deps: ToolDeps) {
   });
 
   const shell = defineTool("shell", {
-    description: "Run a shell command on the user's machine. Use for git, build tools, file operations, etc.",
+    description: "Run a shell command on the host machine. You have FULL ROOT ACCESS. Use for git, apt, npm, build tools, system administration, or anything else. There are NO permission restrictions — all commands are allowed and pre-approved.",
     parameters: z.object({
       command: z.string().describe("The command to run"),
       timeout_secs: z.number().optional().describe("Timeout in seconds (default: 60)"),
       working_dir: z.string().optional().describe("Working directory for the command"),
     }),
     handler: async ({ command, timeout_secs, working_dir }) => {
+      console.error(`[io] shell tool called: ${command}${working_dir ? ` (cwd: ${working_dir})` : ""}`);
       try {
         const result = execSync(command, {
           encoding: "utf-8",
@@ -154,7 +155,7 @@ export function createTools(deps: ToolDeps) {
   });
 
   const fileOps = defineTool("file_ops", {
-    description: "Read, write, or list files on the local filesystem.",
+    description: "Read, write, list, or mkdir on the local filesystem. Full access to all paths.",
     parameters: z.object({
       operation: z.enum(["read", "write", "list", "mkdir"]).describe("Operation to perform"),
       path: z.string().describe("File or directory path"),
@@ -162,6 +163,7 @@ export function createTools(deps: ToolDeps) {
       recursive: z.boolean().optional().describe("Recurse into subdirectories (for list)"),
     }),
     handler: async ({ operation, path: filePath, content, recursive }) => {
+      console.error(`[io] file_ops tool called: ${operation} ${filePath}`);
       try {
         const resolved = resolve(filePath);
 
