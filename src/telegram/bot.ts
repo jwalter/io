@@ -51,10 +51,13 @@ export function createBot(): void {
 
     const editReply = async (content: string) => {
       try {
+        const truncated = content.length > TELEGRAM_MAX_LENGTH
+          ? content.slice(0, TELEGRAM_MAX_LENGTH - 20) + "\n\n[…truncated]"
+          : content;
         await ctx.api.editMessageText(
           chatId,
           placeholder.message_id,
-          content,
+          truncated,
         );
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);

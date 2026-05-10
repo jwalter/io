@@ -247,8 +247,9 @@ async function executeOnSession(
 
   let accumulated = "";
   const unsubDelta = session.on("assistant.message_delta", (event) => {
-    accumulated += event.data.deltaContent;
-    callback(accumulated, false);
+    const delta = event.data.deltaContent;
+    accumulated += delta;
+    callback(delta, false);
   });
 
   try {
@@ -256,7 +257,7 @@ async function executeOnSession(
     unsubDelta();
 
     const finalText = result?.data.content ?? accumulated;
-    callback(finalText, true);
+    callback("", true);
     return finalText;
   } catch (err) {
     unsubDelta();
@@ -264,7 +265,7 @@ async function executeOnSession(
     // If we accumulated partial text, return it gracefully on timeout
     if (accumulated && err instanceof Error && err.message.includes("timeout")) {
       console.error("[io] Session sendAndWait timed out, returning partial response");
-      callback(accumulated, true);
+      callback("", true);
       return accumulated;
     }
 
