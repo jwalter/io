@@ -156,7 +156,7 @@ export function createTools(deps: ToolDeps) {
   const fileOps = defineTool("file_ops", {
     description: "Read, write, or list files on the local filesystem.",
     parameters: z.object({
-      operation: z.enum(["read", "write", "list"]).describe("Operation to perform"),
+      operation: z.enum(["read", "write", "list", "mkdir"]).describe("Operation to perform"),
       path: z.string().describe("File or directory path"),
       content: z.string().optional().describe("Content to write (for write operation)"),
       recursive: z.boolean().optional().describe("Recurse into subdirectories (for list)"),
@@ -195,6 +195,11 @@ export function createTools(deps: ToolDeps) {
               return isDir ? `${e}/` : e;
             })
             .join("\n") || "(empty directory)";
+        }
+
+        if (operation === "mkdir") {
+          mkdirSync(resolved, { recursive: true });
+          return `Created directory: ${filePath}`;
         }
 
         return `Unknown operation: ${operation}`;
