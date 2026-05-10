@@ -379,6 +379,13 @@ export async function initOrchestrator(copilotClient: CopilotClient): Promise<vo
     console.error("[io] Could not validate models:", err instanceof Error ? err.message : err);
   }
 
+  // Log built-in tools for diagnostics
+  try {
+    const toolsList = await copilotClient.rpc.tools.list({});
+    const toolNames = toolsList.tools.map((t: { name: string }) => t.name);
+    console.error(`[io] Built-in tools: ${toolNames.join(", ")}`);
+  } catch { /* non-fatal */ }
+
   // Start health check timer
   healthCheckTimer = setInterval(() => {
     if (!client || client.getState() !== "connected") {
