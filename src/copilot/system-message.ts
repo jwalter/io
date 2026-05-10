@@ -87,7 +87,7 @@ Squads are persistent project teams. When a user works on a codebase:
 
 ### System
 - \`shell\`: Run a shell command.
-- \`web_fetch\`: Fetch a URL and return content.
+- \`web_fetch\`: (built-in) Fetch a URL and return content.
 
 ## Guidelines
 

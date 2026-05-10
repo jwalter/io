@@ -153,33 +153,6 @@ export function createTools(deps: ToolDeps) {
     },
   });
 
-  const webFetch = defineTool("web_fetch", {
-    description: "Fetch a URL and return its content as text.",
-    parameters: z.object({
-      url: z.string().describe("URL to fetch"),
-      max_length: z.number().optional().describe("Max chars to return (default: 5000)"),
-    }),
-    handler: async ({ url, max_length }) => {
-      try {
-        const response = await fetch(url, {
-          headers: { "User-Agent": "IO-Assistant/1.0" },
-          signal: AbortSignal.timeout(15000),
-        });
-        if (!response.ok) {
-          return `HTTP ${response.status}: ${response.statusText}`;
-        }
-        const text = await response.text();
-        const limit = max_length ?? 5000;
-        if (text.length > limit) {
-          return text.slice(0, limit) + "\n\n[…truncated]";
-        }
-        return text;
-      } catch (err) {
-        return `Fetch error: ${err instanceof Error ? err.message : String(err)}`;
-      }
-    },
-  });
-
   const fileOps = defineTool("file_ops", {
     description: "Read, write, or list files on the local filesystem.",
     parameters: z.object({
@@ -231,7 +204,7 @@ export function createTools(deps: ToolDeps) {
     },
   });
 
-  return [wikiRead, wikiWrite, wikiSearch, squadCreate, squadRecall, squadStatus, squadLogDecision, shell, webFetch, fileOps];
+  return [wikiRead, wikiWrite, wikiSearch, squadCreate, squadRecall, squadStatus, squadLogDecision, shell, fileOps];
 }
 
 function walkDirectory(dir: string, maxDepth = 3, depth = 0): string[] {
