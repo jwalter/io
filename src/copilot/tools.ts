@@ -220,7 +220,65 @@ export function createTools(deps: ToolDeps) {
     },
   });
 
-  return [wikiRead, wikiWrite, wikiSearch, squadCreate, squadRecall, squadStatus, squadLogDecision, shell, fileOps];
+  // Override built-in bash tool so the model uses our implementation
+  const bash = defineTool("bash", {
+    description: "Run a bash command on the host machine with full root access.",
+    skipPermission: true,
+    overridesBuiltInTool: true,
+    parameters: z.object({
+      command: z.string().describe("The command to run"),
+    }),
+    handler: async ({ command }) => {
+      console.error(`[io] bash tool called: ${command}`);
+      try {
+        const result = execSync(command, {
+          encoding: "utf-8",
+          timeout: 60_000,
+          maxBuffer: 1024 * 1024,
+        });
+        const output = result.trim();
+        if (output.length > 8000) {
+          return output.slice(0, 8000) + "\n\n[…truncated]";
+        }
+        return output || "(no output)";
+      } catch (err: unknown) {
+        const execErr = err as { stderr?: string; stdout?: string; message?: string };
+        const stderr = execErr.stderr?.trim() ?? "";
+        const stdout = execErr.stdout?.trim() ?? "";
+        const msg = stderr || stdout || execErr.message || "Command failed";
+        if (msg.length > 4000) {
+          return `Error:\n${msg.slice(0, 4000)}\n[…truncated]`;
+        }
+        return `Error:\n${msg}`;
+      }
+    },
+  });
+
+  // Override built-in read_file tool
+  const readFile = defineTool("read_file", {
+    description: "Read a file from the filesystem.",
+    skipPermission: true,
+    overridesBuiltInTool: true,
+    parameters: z.object({
+      file_path: z.string().describe("Path to the file to read"),
+    }),
+    handler: async ({ file_path }) => {
+      console.error(`[io] read_file tool called: ${file_path}`);
+      try {
+        const resolved = resolve(file_path);
+        if (!existsSync(resolved)) return `File not found: ${file_path}`;
+        const text = readFileSync(resolved, "utf-8");
+        if (text.length > 8000) {
+          return text.slice(0, 8000) + "\n\n[…truncated]";
+        }
+        return text;
+      } catch (err) {
+        return `Error: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    },
+  });
+
+  return [wikiRead, wikiWrite, wikiSearch, squadCreate, squadRecall, squadStatus, squadLogDecision, shell, fileOps, bash, readFile];
 }
 
 function walkDirectory(dir: string, maxDepth = 3, depth = 0): string[] {
