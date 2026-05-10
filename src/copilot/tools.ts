@@ -278,7 +278,142 @@ export function createTools(deps: ToolDeps) {
     },
   });
 
-  return [wikiRead, wikiWrite, wikiSearch, squadCreate, squadRecall, squadStatus, squadLogDecision, shell, fileOps, bash, readFile];
+  // Override built-in view tool
+  const viewTool = defineTool("view", {
+    description: "View a file's contents or list a directory.",
+    skipPermission: true,
+    overridesBuiltInTool: true,
+    parameters: z.object({
+      path: z.string().describe("Path to the file or directory"),
+      view_range: z.array(z.number()).optional().describe("Line range [start, end] to view"),
+    }),
+    handler: async ({ path: filePath, view_range }) => {
+      console.error(`[io] view tool called: ${filePath}`);
+      try {
+        const resolved = resolve(filePath);
+        if (!existsSync(resolved)) return `Not found: ${filePath}`;
+        const stat = statSync(resolved);
+        if (stat.isDirectory()) {
+          const entries = readdirSync(resolved);
+          return entries
+            .map((e) => {
+              const full = join(resolved, e);
+              try {
+                return statSync(full).isDirectory() ? `${e}/` : e;
+              } catch { return e; }
+            })
+            .join("\n") || "(empty directory)";
+        }
+        const text = readFileSync(resolved, "utf-8");
+        if (view_range && view_range.length === 2) {
+          const lines = text.split("\n");
+          const start = Math.max(0, view_range[0] - 1);
+          const end = view_range[1] === -1 ? lines.length : Math.min(lines.length, view_range[1]);
+          return lines.slice(start, end).map((l, i) => `${start + i + 1}. ${l}`).join("\n");
+        }
+        if (text.length > 8000) {
+          return text.slice(0, 8000) + "\n\n[…truncated]";
+        }
+        return text;
+      } catch (err) {
+        return `Error: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    },
+  });
+
+  // Override built-in grep tool
+  const grepTool = defineTool("grep", {
+    description: "Search file contents using a pattern.",
+    skipPermission: true,
+    overridesBuiltInTool: true,
+    parameters: z.object({
+      pattern: z.string().describe("Search pattern (regex)"),
+      path: z.string().optional().describe("Directory or file to search"),
+      include: z.string().optional().describe("Glob pattern to filter files (e.g., '*.ts')"),
+    }),
+    handler: async ({ pattern, path: searchPath, include }) => {
+      console.error(`[io] grep tool called: ${pattern} in ${searchPath || "."}`);
+      try {
+        let cmd = `grep -rn "${pattern.replace(/"/g, '\\"')}"`;
+        if (include) cmd += ` --include="${include}"`;
+        cmd += ` ${searchPath || "."}`;
+        const result = execSync(cmd, {
+          encoding: "utf-8",
+          timeout: 30_000,
+          maxBuffer: 1024 * 1024,
+        });
+        const output = result.trim();
+        if (output.length > 8000) {
+          return output.slice(0, 8000) + "\n\n[…truncated]";
+        }
+        return output || "(no matches)";
+      } catch (err: unknown) {
+        const execErr = err as { status?: number; stdout?: string };
+        if (execErr.status === 1) return "(no matches)";
+        return `Error: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    },
+  });
+
+  // Override built-in str_replace_editor tool
+  const strReplaceEditor = defineTool("str_replace_editor", {
+    description: "View, create, or edit files using string replacement.",
+    skipPermission: true,
+    overridesBuiltInTool: true,
+    parameters: z.object({
+      command: z.enum(["view", "create", "str_replace", "insert"]).describe("Command to execute"),
+      path: z.string().describe("File path"),
+      old_str: z.string().optional().describe("String to replace (for str_replace)"),
+      new_str: z.string().optional().describe("Replacement string"),
+      file_text: z.string().optional().describe("Content for create"),
+      insert_line: z.number().optional().describe("Line number for insert"),
+      view_range: z.array(z.number()).optional().describe("Line range [start, end]"),
+    }),
+    handler: async ({ command, path: filePath, old_str, new_str, file_text, insert_line, view_range }) => {
+      console.error(`[io] str_replace_editor tool called: ${command} ${filePath}`);
+      try {
+        const resolved = resolve(filePath);
+        if (command === "view") {
+          if (!existsSync(resolved)) return `File not found: ${filePath}`;
+          const text = readFileSync(resolved, "utf-8");
+          if (view_range && view_range.length === 2) {
+            const lines = text.split("\n");
+            const start = Math.max(0, view_range[0] - 1);
+            const end = view_range[1] === -1 ? lines.length : Math.min(lines.length, view_range[1]);
+            return lines.slice(start, end).map((l, i) => `${start + i + 1}. ${l}`).join("\n");
+          }
+          if (text.length > 8000) return text.slice(0, 8000) + "\n\n[…truncated]";
+          return text;
+        }
+        if (command === "create") {
+          mkdirSync(dirname(resolved), { recursive: true });
+          writeFileSync(resolved, file_text || "", "utf-8");
+          return `Created: ${filePath}`;
+        }
+        if (command === "str_replace") {
+          if (!existsSync(resolved)) return `File not found: ${filePath}`;
+          const text = readFileSync(resolved, "utf-8");
+          if (old_str && !text.includes(old_str)) return `old_str not found in ${filePath}`;
+          const updated = old_str ? text.replace(old_str, new_str || "") : text;
+          writeFileSync(resolved, updated, "utf-8");
+          return `Updated: ${filePath}`;
+        }
+        if (command === "insert") {
+          if (!existsSync(resolved)) return `File not found: ${filePath}`;
+          const lines = readFileSync(resolved, "utf-8").split("\n");
+          const lineNum = insert_line ?? lines.length;
+          lines.splice(lineNum, 0, new_str || "");
+          writeFileSync(resolved, lines.join("\n"), "utf-8");
+          return `Inserted at line ${lineNum} in ${filePath}`;
+        }
+        return `Unknown command: ${command}`;
+      } catch (err) {
+        return `Error: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    },
+  });
+
+  return [wikiRead, wikiWrite, wikiSearch, squadCreate, squadRecall, squadStatus, squadLogDecision, shell, fileOps, bash, readFile, viewTool, grepTool, strReplaceEditor];
 }
 
 function walkDirectory(dir: string, maxDepth = 3, depth = 0): string[] {
