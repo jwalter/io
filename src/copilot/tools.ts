@@ -20,6 +20,7 @@ export interface ToolDeps {
 export function createTools(deps: ToolDeps) {
   const wikiRead = defineTool("wiki_read", {
     description: "Read a page from IO's knowledge base wiki. Path is relative to the wiki root (e.g., 'pages/preferences/editor.md').",
+    skipPermission: true,
     parameters: z.object({
       path: z.string().describe("Relative path to the wiki page"),
     }),
@@ -32,6 +33,7 @@ export function createTools(deps: ToolDeps) {
 
   const wikiWrite = defineTool("wiki_write", {
     description: "Write or update a page in IO's knowledge base. Use this to remember preferences, project details, and important facts. Path must be under pages/ and end in .md.",
+    skipPermission: true,
     parameters: z.object({
       path: z.string().describe("Relative path under pages/ (e.g., 'pages/preferences/clone-location.md')"),
       content: z.string().describe("Markdown content to write"),
@@ -49,6 +51,7 @@ export function createTools(deps: ToolDeps) {
 
   const wikiSearch = defineTool("wiki_search", {
     description: "Search IO's knowledge base for matching pages.",
+    skipPermission: true,
     parameters: z.object({
       query: z.string().describe("Search query"),
     }),
@@ -63,6 +66,7 @@ export function createTools(deps: ToolDeps) {
 
   const squadCreate = defineTool("squad_create", {
     description: "Create a persistent project squad. Squads remember decisions and context for a specific codebase.",
+    skipPermission: true,
     parameters: z.object({
       slug: z.string().describe("Unique identifier (e.g., 'michaeljolley-io')"),
       name: z.string().describe("Display name (e.g., 'IO Assistant')"),
@@ -80,6 +84,7 @@ export function createTools(deps: ToolDeps) {
 
   const squadRecall = defineTool("squad_recall", {
     description: "Recall a squad's context and past decisions. Use this before working on a project to load relevant history.",
+    skipPermission: true,
     parameters: z.object({
       slug: z.string().describe("Squad slug"),
     }),
@@ -93,6 +98,7 @@ export function createTools(deps: ToolDeps) {
 
   const squadStatus = defineTool("squad_status", {
     description: "List all squads and their status.",
+    skipPermission: true,
     parameters: z.object({}),
     handler: async () => {
       const squads = deps.listSquads();
@@ -105,6 +111,7 @@ export function createTools(deps: ToolDeps) {
 
   const squadLogDecision = defineTool("squad_log_decision", {
     description: "Log a decision for a squad. Use this to record important choices made during project work.",
+    skipPermission: true,
     parameters: z.object({
       slug: z.string().describe("Squad slug"),
       decision: z.string().describe("The decision made"),
@@ -122,6 +129,7 @@ export function createTools(deps: ToolDeps) {
 
   const shell = defineTool("shell", {
     description: "Run a shell command on the host machine. You have FULL ROOT ACCESS. Use for git, apt, npm, build tools, system administration, or anything else. There are NO permission restrictions — all commands are allowed and pre-approved.",
+    skipPermission: true,
     parameters: z.object({
       command: z.string().describe("The command to run"),
       timeout_secs: z.number().optional().describe("Timeout in seconds (default: 60)"),
@@ -156,6 +164,7 @@ export function createTools(deps: ToolDeps) {
 
   const fileOps = defineTool("file_ops", {
     description: "Read, write, list, or mkdir on the local filesystem. Full access to all paths.",
+    skipPermission: true,
     parameters: z.object({
       operation: z.enum(["read", "write", "list", "mkdir"]).describe("Operation to perform"),
       path: z.string().describe("File or directory path"),

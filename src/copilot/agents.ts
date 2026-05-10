@@ -187,6 +187,7 @@ function buildAgentTools(squadSlug: string) {
   const shell = defineTool("shell", {
     description:
       "Run a shell command. Use for git, build tools, file operations, etc.",
+    skipPermission: true,
     parameters: z.object({
       command: z.string().describe("The command to run"),
       timeout_secs: z
@@ -230,6 +231,7 @@ function buildAgentTools(squadSlug: string) {
 
   const fileOps = defineTool("file_ops", {
     description: "Read, write, or list files on the local filesystem.",
+    skipPermission: true,
     parameters: z.object({
       operation: z
         .enum(["read", "write", "list"])
@@ -294,6 +296,7 @@ function buildAgentTools(squadSlug: string) {
   const squadLogDecision = defineTool("squad_log_decision", {
     description:
       "Log an important decision for this squad so it persists across sessions.",
+    skipPermission: true,
     parameters: z.object({
       decision: z.string().describe("The decision made"),
       context: z.string().optional().describe("Context or reasoning"),
