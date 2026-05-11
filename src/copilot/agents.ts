@@ -9,6 +9,7 @@ import {
   mkdirSync,
 } from "fs";
 import { join, dirname, resolve } from "path";
+import { homedir } from "os";
 import { defineTool, approveAll } from "@github/copilot-sdk";
 import type { CopilotSession } from "@github/copilot-sdk";
 import { z } from "zod";
@@ -209,6 +210,7 @@ function buildAgentTools(squadSlug: string) {
           timeout: (timeout_secs ?? 60) * 1000,
           maxBuffer: 1024 * 1024,
           cwd: working_dir,
+          env: { ...process.env, HOME: process.env.HOME || homedir() },
         });
         const output = result.trim();
         if (output.length > 8000) {

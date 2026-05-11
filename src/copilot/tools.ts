@@ -3,6 +3,14 @@ import { z } from "zod";
 import { execSync } from "child_process";
 import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, mkdirSync } from "fs";
 import { join, dirname, resolve, sep } from "path";
+import { homedir } from "os";
+
+// Ensure child processes have HOME set (systemd services often don't)
+function shellEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  if (!env.HOME) env.HOME = homedir();
+  return env;
+}
 
 export interface ToolDeps {
   wikiRead: (path: string) => string | undefined;
@@ -143,6 +151,7 @@ export function createTools(deps: ToolDeps) {
           timeout: (timeout_secs ?? 60) * 1000,
           maxBuffer: 1024 * 1024,
           cwd: working_dir,
+          env: shellEnv(),
         });
         const output = result.trim();
         if (output.length > 8000) {
@@ -235,6 +244,7 @@ export function createTools(deps: ToolDeps) {
           encoding: "utf-8",
           timeout: 60_000,
           maxBuffer: 1024 * 1024,
+          env: shellEnv(),
         });
         const output = result.trim();
         if (output.length > 8000) {
@@ -341,6 +351,7 @@ export function createTools(deps: ToolDeps) {
           encoding: "utf-8",
           timeout: 30_000,
           maxBuffer: 1024 * 1024,
+          env: shellEnv(),
         });
         const output = result.trim();
         if (output.length > 8000) {
@@ -511,6 +522,7 @@ export function createTools(deps: ToolDeps) {
           encoding: "utf-8",
           timeout: 30_000,
           maxBuffer: 1024 * 1024,
+          env: shellEnv(),
         }).trim();
         if (result.length > 8000) {
           return result.slice(0, 8000) + "\n\n[…truncated]";
