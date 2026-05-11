@@ -4,7 +4,7 @@ A personal AI assistant daemon built on the GitHub Copilot SDK. IO runs 24/7 on 
 
 [![CI](https://github.com/michaeljolley/io/actions/workflows/ci.yml/badge.svg)](https://github.com/michaeljolley/io/actions/workflows/ci.yml)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
+![Node.js](https://img.shields.io/badge/node-%3E%3D22-brightgreen)
 
 ## ✨ Features
 
@@ -15,13 +15,15 @@ A personal AI assistant daemon built on the GitHub Copilot SDK. IO runs 24/7 on 
 - **Skills** — modular skill system; install from git repos or the [skills.sh](https://skills.sh) registry
 - **Adaptive Sessions** — infinite sessions with automatic context compaction
 - **Worker Agents** — delegated task execution through specialized agent sessions
+- **GitHub Integration** — create, list, view, and comment on issues and PRs via the `github` tool
+- **Smart Model Routing** — automatically selects the best model for each task based on complexity
 - **Self-Updating** — checks for updates and can apply them automatically
 
 ## 📋 Prerequisites
 
-- **Node.js** >= 18
+- **Node.js** >= 22
 - **GitHub Copilot subscription** — IO uses the Copilot SDK, which requires an active Copilot license
-- **GitHub CLI** (`gh`) — authenticated via `gh auth login`
+- **GitHub CLI** (`gh`) — required for the `github` tool (issue/PR management). Install from [cli.github.com](https://cli.github.com/) and authenticate with `gh auth login`
 
 ## 🚀 Quick Start
 
@@ -54,6 +56,33 @@ io --daemon
 io --self-edit
 ```
 
+### Headless Server (systemd)
+
+To run IO as a background service on a headless server:
+
+1. Authenticate the Copilot SDK: `copilot login`
+2. Authenticate the GitHub CLI: `gh auth login`
+3. Create a systemd service file at `/etc/systemd/system/io.service`:
+
+```ini
+[Unit]
+Description=IO Personal Assistant
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/env io --daemon
+Restart=always
+RestartSec=10
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
+```
+
+4. Enable and start: `systemctl enable --now io`
+
 ## 💬 CLI Usage
 
 | Command | Description |
@@ -80,7 +109,17 @@ IO stores its configuration at `~/.io/config.json`. The setup wizard (`io setup`
   "telegramUserId": 123456789,
 
   // Enable self-edit mode by default
-  "selfEdit": false
+  "selfEdit": false,
+
+  // Default model for the orchestrator
+  "defaultModel": "claude-sonnet-4.6",
+
+  // Model tiers for squad agents (ranked preference lists)
+  "modelTiers": {
+    "high": ["claude-opus-4.7", "claude-opus-4.6"],
+    "medium": ["claude-sonnet-4.6", "gpt-5.5", "claude-opus-4.5"],
+    "low": ["claude-haiku-4.5", "gpt-5.4-mini"]
+  }
 }
 ```
 
@@ -160,6 +199,7 @@ src/
 │   ├── orchestrator.ts   # Main session management
 │   ├── agents.ts         # Worker agent sessions
 │   ├── tools.ts          # Tool definitions
+│   ├── model-router.ts   # Complexity-based model selection
 │   ├── skills.ts         # Skills loader
 │   └── system-message.ts # System prompt builder
 ├── store/
