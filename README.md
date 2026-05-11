@@ -100,21 +100,33 @@ WantedBy=multi-user.target
 
 IO stores its configuration at `~/.io/config.json`. The setup wizard (`io setup`) handles initial configuration, but you can also edit the file directly.
 
+### Parameters
+
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `telegramBotToken` | `string` | — | Telegram bot token from [@BotFather](https://t.me/BotFather) |
+| `authorizedUserId` | `number` | — | Your Telegram user ID (only this user can interact with the bot) |
+| `telegramEnabled` | `boolean` | `false` | Enable the Telegram bot interface |
+| `selfEditEnabled` | `boolean` | `false` | Allow IO to modify its own source code |
+| `defaultModel` | `string` | `"gpt-4.1"` | LLM model for the main orchestrator session |
+| `modelTiers` | `object` | *(see below)* | Per-complexity model preferences for squad agents |
+| `modelTiers.high` | `string[]` | `["claude-opus-4.7", "claude-opus-4.6"]` | Models for complex tasks (architecture, debugging, design) |
+| `modelTiers.medium` | `string[]` | `["claude-sonnet-4.6", "gpt-5.5", "claude-opus-4.5"]` | Models for standard tasks (features, tests, reviews) |
+| `modelTiers.low` | `string[]` | `["claude-haiku-4.5", "gpt-5.4-mini"]` | Models for simple tasks (reads, formatting, lookups) |
+| `apiPort` | `number` | `3170` | Port for the HTTP API server |
+
+Each `modelTiers` list is a ranked preference — IO picks the first available model at startup.
+
+### Example
+
 ```jsonc
 {
-  // Telegram bot token from @BotFather
   "telegramBotToken": "123456:ABC-DEF...",
-
-  // Your Telegram user ID (for authentication)
-  "telegramUserId": 123456789,
-
-  // Enable self-edit mode by default
-  "selfEdit": false,
-
-  // Default model for the orchestrator
+  "authorizedUserId": 123456789,
+  "telegramEnabled": true,
+  "selfEditEnabled": false,
   "defaultModel": "claude-sonnet-4.6",
-
-  // Model tiers for squad agents (ranked preference lists)
+  "apiPort": 3170,
   "modelTiers": {
     "high": ["claude-opus-4.7", "claude-opus-4.6"],
     "medium": ["claude-sonnet-4.6", "gpt-5.5", "claude-opus-4.5"],
