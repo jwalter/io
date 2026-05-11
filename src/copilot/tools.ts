@@ -413,7 +413,118 @@ export function createTools(deps: ToolDeps) {
     },
   });
 
-  return [wikiRead, wikiWrite, wikiSearch, squadCreate, squadRecall, squadStatus, squadLogDecision, shell, fileOps, bash, readFile, viewTool, grepTool, strReplaceEditor];
+  // GitHub issue/PR management via gh CLI
+  const github = defineTool("github", {
+    description:
+      "Manage GitHub issues and pull requests using the gh CLI. Supports creating, listing, viewing, and commenting on issues and PRs.",
+    skipPermission: true,
+    parameters: z.object({
+      action: z
+        .enum([
+          "create_issue",
+          "list_issues",
+          "view_issue",
+          "comment_issue",
+          "close_issue",
+          "create_pr",
+          "list_prs",
+          "view_pr",
+          "comment_pr",
+        ])
+        .describe("The GitHub action to perform"),
+      repo: z.string().describe("Repository in owner/repo format"),
+      title: z.string().optional().describe("Title (for create_issue, create_pr)"),
+      body: z.string().optional().describe("Body text (for create_issue, create_pr, comment_*)"),
+      labels: z.array(z.string()).optional().describe("Labels (for create_issue)"),
+      assignees: z.array(z.string()).optional().describe("Assignees (for create_issue)"),
+      number: z.number().optional().describe("Issue or PR number (for view, comment, close)"),
+      base: z.string().optional().describe("Base branch (for create_pr)"),
+      head: z.string().optional().describe("Head branch (for create_pr)"),
+      state: z.enum(["open", "closed", "all"]).optional().describe("Filter by state (for list_*)"),
+      limit: z.number().optional().describe("Max results (for list_*, default 10)"),
+    }),
+    handler: async ({ action, repo, title, body, labels, assignees, number, base, head, state, limit }) => {
+      console.error(`[io] github tool called: ${action} on ${repo}`);
+      try {
+        let cmd: string;
+        const r = `--repo ${repo}`;
+
+        switch (action) {
+          case "create_issue": {
+            if (!title) return "Error: title is required for create_issue";
+            cmd = `gh issue create ${r} --title "${title.replace(/"/g, '\\"')}"`;
+            if (body) cmd += ` --body "${body.replace(/"/g, '\\"')}"`;
+            if (labels?.length) cmd += ` --label "${labels.join(",")}"`;
+            if (assignees?.length) cmd += ` --assignee "${assignees.join(",")}"`;
+            break;
+          }
+          case "list_issues": {
+            cmd = `gh issue list ${r} --limit ${limit ?? 10}`;
+            if (state) cmd += ` --state ${state}`;
+            break;
+          }
+          case "view_issue": {
+            if (!number) return "Error: number is required for view_issue";
+            cmd = `gh issue view ${number} ${r}`;
+            break;
+          }
+          case "comment_issue": {
+            if (!number) return "Error: number is required for comment_issue";
+            if (!body) return "Error: body is required for comment_issue";
+            cmd = `gh issue comment ${number} ${r} --body "${body.replace(/"/g, '\\"')}"`;
+            break;
+          }
+          case "close_issue": {
+            if (!number) return "Error: number is required for close_issue";
+            cmd = `gh issue close ${number} ${r}`;
+            break;
+          }
+          case "create_pr": {
+            if (!title) return "Error: title is required for create_pr";
+            cmd = `gh pr create ${r} --title "${title.replace(/"/g, '\\"')}"`;
+            if (body) cmd += ` --body "${body.replace(/"/g, '\\"')}"`;
+            if (base) cmd += ` --base ${base}`;
+            if (head) cmd += ` --head ${head}`;
+            break;
+          }
+          case "list_prs": {
+            cmd = `gh pr list ${r} --limit ${limit ?? 10}`;
+            if (state) cmd += ` --state ${state}`;
+            break;
+          }
+          case "view_pr": {
+            if (!number) return "Error: number is required for view_pr";
+            cmd = `gh pr view ${number} ${r}`;
+            break;
+          }
+          case "comment_pr": {
+            if (!number) return "Error: number is required for comment_pr";
+            if (!body) return "Error: body is required for comment_pr";
+            cmd = `gh pr comment ${number} ${r} --body "${body.replace(/"/g, '\\"')}"`;
+            break;
+          }
+          default:
+            return `Unknown action: ${action}`;
+        }
+
+        const result = execSync(cmd, {
+          encoding: "utf-8",
+          timeout: 30_000,
+          maxBuffer: 1024 * 1024,
+        }).trim();
+        if (result.length > 8000) {
+          return result.slice(0, 8000) + "\n\n[…truncated]";
+        }
+        return result || "(success, no output)";
+      } catch (err: unknown) {
+        const execErr = err as { stderr?: string; stdout?: string; message?: string };
+        const msg = execErr.stderr?.trim() || execErr.stdout?.trim() || execErr.message || "Command failed";
+        return `Error: ${msg.length > 4000 ? msg.slice(0, 4000) + "\n[…truncated]" : msg}`;
+      }
+    },
+  });
+
+  return [wikiRead, wikiWrite, wikiSearch, squadCreate, squadRecall, squadStatus, squadLogDecision, shell, fileOps, bash, readFile, viewTool, grepTool, strReplaceEditor, github];
 }
 
 function walkDirectory(dir: string, maxDepth = 3, depth = 0): string[] {

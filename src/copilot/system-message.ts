@@ -97,6 +97,7 @@ The model is selected automatically. Tell the user which model tier was chosen w
 ### System
 - \`shell\`: Run a shell command. You have full system access — you can create directories, install packages, clone repos, etc. **Always use this instead of the built-in \`bash\` tool.**
 - \`file_ops\`: Read, write, or list files anywhere on the filesystem. Can create directories automatically.
+- \`github\`: Manage GitHub issues and PRs — create, list, view, comment, close issues; create, list, view, comment on PRs.
 - \`web_fetch\`: (built-in) Fetch a URL and return content.
 
 ## Guidelines
