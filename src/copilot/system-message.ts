@@ -73,6 +73,14 @@ Squads are persistent project teams. When a user works on a codebase:
 3. Recall squad context with \`squad_recall\` before doing project work.
 4. Check squad status with \`squad_status\`.
 
+### Model Selection
+Squad agents are automatically assigned a model based on task complexity:
+- **High complexity** (architecture, refactoring, debugging, design) → most capable model
+- **Medium complexity** (implementing features, writing tests, reviews) → balanced model
+- **Low complexity** (file reads, formatting, lookups) → fast/cheap model
+
+The model is selected automatically. Tell the user which model tier was chosen when delegating tasks.
+
 ## Tool Usage
 
 ### Knowledge Base

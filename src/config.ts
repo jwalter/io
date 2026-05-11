@@ -1,12 +1,19 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import { CONFIG_PATH, IO_HOME } from "./paths.js";
 
+export interface ModelTiers {
+  high?: string[];
+  medium?: string[];
+  low?: string[];
+}
+
 export interface IOConfig {
   telegramBotToken?: string;
   authorizedUserId?: number;
   telegramEnabled: boolean;
   selfEditEnabled: boolean;
   defaultModel?: string;
+  modelTiers?: ModelTiers;
   apiPort: number;
 }
 

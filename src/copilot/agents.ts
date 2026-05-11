@@ -14,6 +14,7 @@ import type { CopilotSession } from "@github/copilot-sdk";
 import { z } from "zod";
 
 import { getClient } from "./client.js";
+import { getModelForTask } from "./model-router.js";
 import {
   getSquad,
   updateSquadSession,
@@ -78,7 +79,7 @@ export async function delegateToAgent(
     throw new Error(`Squad not found: ${squadSlug}`);
   }
 
-  const session = await getOrCreateSession(squadSlug);
+  const session = await getOrCreateSession(squadSlug, task);
   const taskId = randomUUID();
 
   createTask(taskId, squadSlug, task);
@@ -133,6 +134,7 @@ export function getActiveAgentTasks(): Array<{
 
 async function getOrCreateSession(
   squadSlug: string,
+  taskDescription?: string,
 ): Promise<CopilotSession> {
   const existing = agentSessions.get(squadSlug);
   if (existing) return existing;
@@ -141,9 +143,10 @@ async function getOrCreateSession(
   const client = await getClient();
   const decisions = getDecisionsSummary(squadSlug);
   const agentTools = buildAgentTools(squadSlug);
+  const model = getModelForTask(taskDescription ?? "", squad.model);
 
   const commonConfig = {
-    model: "gpt-4.1",
+    model,
     configDir: SESSIONS_DIR,
     streaming: false,
     systemMessage: {

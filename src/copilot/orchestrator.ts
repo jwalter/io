@@ -18,6 +18,7 @@ import {
   updateSquadStatus,
 } from "../store/squads.js";
 import { readPage, writePage, assertPagePath } from "../wiki/fs.js";
+import { resolveModelTiers } from "./model-router.js";
 import { searchWiki, getWikiSummary } from "../wiki/search.js";
 import { getOrchestratorSystemMessage } from "./system-message.js";
 import { createTools } from "./tools.js";
@@ -363,7 +364,7 @@ export async function initOrchestrator(copilotClient: CopilotClient): Promise<vo
 
   clearStaleTasks();
 
-  // Validate the configured model
+  // Validate the configured model and resolve model tiers
   try {
     const models = await copilotClient.listModels();
     const defaultModel = config.defaultModel || "gpt-4.1";
@@ -375,6 +376,7 @@ export async function initOrchestrator(copilotClient: CopilotClient): Promise<vo
     } else {
       console.error(`[io] Model validated: ${defaultModel}`);
     }
+    resolveModelTiers(modelIds);
   } catch (err) {
     console.error("[io] Could not validate models:", err instanceof Error ? err.message : err);
   }

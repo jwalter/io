@@ -6,6 +6,7 @@ export interface Squad {
   name: string;
   project_path: string;
   copilot_session_id: string | null;
+  model: string | null;
   status: string;
   created_at: string;
   updated_at: string;
@@ -55,6 +56,14 @@ export function updateSquadStatus(slug: string, status: string): void {
       "UPDATE squads SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE slug = ?",
     )
     .run(status, slug);
+}
+
+export function updateSquadModel(slug: string, model: string | null): void {
+  getDb()
+    .prepare(
+      "UPDATE squads SET model = ?, updated_at = CURRENT_TIMESTAMP WHERE slug = ?",
+    )
+    .run(model, slug);
 }
 
 export function deleteSquad(slug: string): void {

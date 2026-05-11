@@ -26,6 +26,7 @@ export function getDb(): BetterSqlite3.Database {
       name TEXT NOT NULL,
       project_path TEXT NOT NULL,
       copilot_session_id TEXT,
+      model TEXT,
       status TEXT NOT NULL DEFAULT 'idle',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -58,6 +59,13 @@ export function getDb(): BetterSqlite3.Database {
       completed_at DATETIME
     );
   `);
+
+  // Migration: add model column to squads (for existing databases)
+  try {
+    db.exec(`ALTER TABLE squads ADD COLUMN model TEXT`);
+  } catch {
+    // Column already exists — ignore
+  }
 
   return db;
 }
