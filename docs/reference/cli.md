@@ -15,7 +15,7 @@ IO is built with [Commander](https://www.npmjs.com/package/commander) and provid
 | `--daemon`       | Run as a background daemon (no TUI)      |
 | `--self-edit`    | Allow IO to modify its own source code   |
 | `-h`, `--help`   | Print help information                   |
-| `-V`, `--version`| Print version (`1.0.0`)                  |
+| `-V`, `--version`| Print the current package version        |
 
 ## Commands
 

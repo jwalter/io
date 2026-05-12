@@ -10,17 +10,18 @@ IO is a Node.js daemon that routes user messages through an orchestrator powered
 - **Telegram**: grammy
 - **CLI**: Commander.js
 - **TUI**: Node.js readline
+- **Web UI**: Vue 3
 - **Web API**: Express with Server-Sent Events (SSE)
 
 ## High-Level Architecture
 
 ```
-┌─────────────┐  ┌──────────────┐  ┌────────────┐
-│  Telegram    │  │     TUI      │  │  Web API   │
-│  (grammy)   │  │  (readline)  │  │ (Express)  │
-└──────┬──────┘  └──────┬───────┘  └─────┬──────┘
-       │                │                 │
-       └────────────────┼─────────────────┘
+┌─────────────┐  ┌──────────────┐  ┌────────────┐  ┌────────────┐
+│  Telegram    │  │     TUI      │  │  Web UI    │  │  Web API   │
+│  (grammy)   │  │  (readline)  │  │  (Vue 3)   │  │ (Express)  │
+└──────┬──────┘  └──────┬───────┘  └─────┬──────┘  └─────┬──────┘
+       │                │                │                │
+       └────────────────┼────────────────┼────────────────┘
                         │
               ┌─────────▼──────────┐
               │    Orchestrator    │
@@ -79,13 +80,14 @@ SQLite database via `better-sqlite3` (`src/store/db.ts`), stored at `~/.io/io.db
 
 ### Interfaces
 
-IO supports three simultaneous interfaces:
+IO supports four simultaneous interfaces:
 
-| Interface | Module              | Status    |
-| --------- | ------------------- | --------- |
-| TUI       | `src/tui/index.ts`  | Available |
+| Interface | Module                | Status    |
+| --------- | --------------------- | --------- |
+| TUI       | `src/tui/index.ts`    | Available |
 | Telegram  | `src/telegram/bot.ts` | Available |
-| Web API   | `src/api/server.ts` | Available |
+| Web UI    | Vue 3 frontend        | Available |
+| Web API   | `src/api/server.ts`   | Available |
 
 All interfaces feed messages into the same orchestrator queue via `sendToOrchestrator()` with a `MessageSource` tag indicating origin (`telegram`, `tui`, or `background`).
 
@@ -94,7 +96,9 @@ All interfaces feed messages into the same orchestrator queue via `sendToOrchest
 - **`CopilotClient`** singleton manages the SDK lifecycle (`autoStart`, `autoRestart`)
 - Sessions use **`infiniteSessions`** for automatic context compaction (background at 80%, buffer exhaustion at 95%)
 - Tools are registered via **`defineTool()`** with Zod schemas for parameter validation
-- Model selection defaults to `gpt-4.1` and is validated against available models at startup
+- Model selection defaults to `claude-sonnet-4.6` and is validated against available models at startup
+- **Model tiers** (`modelTiers`) enable smart routing — the orchestrator picks a model from `high`, `medium`, or `low` tier based on task complexity
+- **Session fingerprinting** — a SHA-256 hash of the version and tool names is stored in the DB; when IO upgrades or tools change, stale sessions are discarded and fresh sessions are created
 - Streaming is enabled on the orchestrator session; agent sessions run without streaming
 - Permissions are auto-approved via `approveAll` for both orchestrator and agent sessions
 

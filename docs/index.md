@@ -26,9 +26,12 @@ features:
   - icon: 🧠
     title: Knowledge Wiki
     details: Markdown-based wiki for long-term memory and cross-squad knowledge sharing.
+  - icon: 🌐
+    title: Web Dashboard
+    details: Vue 3 dashboard with real-time chat, squad management, and optional Supabase authentication.
   - icon: 📱
     title: Multi-Interface
-    details: Telegram bot (grammy), terminal TUI (readline), and Web API (Express SSE) — use IO from anywhere.
+    details: Web dashboard, Telegram bot (grammy), terminal TUI (readline), and Web API (Express SSE) — use IO from anywhere.
   - icon: 🛠️
     title: Skills System
     details: Load skills from SKILL.md files and a skills.sh registry to extend IO with new capabilities.

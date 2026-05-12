@@ -3,7 +3,8 @@
 ## Prerequisites
 
 - Node.js 22+
-- A GitHub account with Copilot access (the Copilot SDK handles auth via GitHub CLI or token)
+- GitHub CLI (`gh`) — used for authentication with the Copilot SDK
+- A GitHub account with Copilot access
 
 ## Installation
 
@@ -45,13 +46,17 @@ io --daemon
 
 IO stores config at `~/.io/config.json`:
 
-```json
+```jsonc
 {
-  "telegramBotToken": "your-bot-token",
+  "telegramBotToken": "123456:ABC-DEF...",
   "authorizedUserId": 123456789,
-  "telegramEnabled": true
+  "telegramEnabled": true,
+  "defaultModel": "claude-sonnet-4.6",
+  "port": 3170
 }
 ```
+
+The web frontend is available at `http://your-server:PORT/` (default: `http://localhost:3170/`).
 
 ## Running as a systemd Service (Linux)
 
@@ -60,7 +65,8 @@ Create `/etc/systemd/system/io.service`:
 ```ini
 [Unit]
 Description=IO AI Assistant Daemon
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
@@ -83,5 +89,6 @@ sudo systemctl enable --now io
 ## Next Steps
 
 - [Configuration](./configuration.md) — Full config reference
+- [Web Frontend](./web-frontend.md) — Web dashboard guide
 - [Telegram Setup](./telegram.md) — Detailed Telegram integration guide
 - [Skills](./skills.md) — Extend IO with custom skills

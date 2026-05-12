@@ -31,6 +31,10 @@ resumeSession  createSession
 
 The session ID is persisted in the SQLite state KV store under the key `orchestrator_session_id`. On restart, IO calls `client.resumeSession(savedId, config)` to pick up where it left off. If the resume fails (expired, not found), the saved ID is deleted and a fresh session is created.
 
+### Session Fingerprinting
+
+IO computes a SHA-256 hash of the current package version and the sorted list of registered tool names. This fingerprint is stored in the database alongside the session ID. On startup, if the stored fingerprint doesn't match the current one (e.g. after an upgrade or tool list change), the saved session is discarded and a fresh session is created. This ensures the orchestrator never resumes a stale session with outdated tool definitions.
+
 ## Infinite Sessions
 
 The session is configured with `infiniteSessions` to prevent context exhaustion during long-running conversations:
@@ -99,13 +103,24 @@ The orchestrator registers these tools:
 | `wiki_read`         | Read a page from the knowledge base                      |
 | `wiki_write`        | Write or update a knowledge base page                    |
 | `wiki_search`       | Search the knowledge base                                |
-| `squad_create`      | Create a new project squad                               |
+| `wiki_list`         | List all wiki pages                                      |
+| `wiki_delete`       | Delete a wiki page                                       |
+| `squad_create`      | Create a persistent project squad                        |
 | `squad_recall`      | Recall a squad's context and decisions                   |
 | `squad_status`      | List all squads and their status                         |
 | `squad_log_decision`| Log a decision for a squad                               |
+| `squad_delegate`    | Delegate a task to a squad's worker agent                |
+| `squad_delete`      | Delete a squad                                           |
 | `shell`             | Run a shell command on the host machine                  |
 | `web_fetch`         | Fetch a URL and return its content                       |
 | `file_ops`          | Read, write, or list files on the local filesystem       |
+| `github`            | Interact with GitHub (issues, PRs, comments) via `gh` CLI|
+| `skill_list`        | List installed skills                                    |
+| `skill_install`     | Install a skill from a git repo                          |
+| `skill_remove`      | Remove an installed skill                                |
+| `skill_search`      | Search the skills.sh registry                            |
+| `config_update`     | Update an IO configuration value at runtime              |
+| `check_update`      | Check for and apply IO updates                           |
 
 Tool implementations are defined in `src/copilot/tools.ts` and injected via a dependency object so they can be tested in isolation.
 

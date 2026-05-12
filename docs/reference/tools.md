@@ -38,6 +38,8 @@ All tools are created in `src/copilot/tools.ts` via the `createTools(deps)` fact
 | `wiki_read` | Read a page from IO's knowledge base wiki | `path: string` — relative path to the wiki page |
 | `wiki_write` | Write or update a page in the knowledge base | `path: string` — relative path under `pages/` ending in `.md`; `content: string` — Markdown content |
 | `wiki_search` | Search the knowledge base for matching pages | `query: string` — search query |
+| `wiki_list` | List all wiki pages | _(none)_ |
+| `wiki_delete` | Delete a wiki page | `path: string` — relative path to the wiki page |
 
 ### Squad Tools
 
@@ -47,6 +49,8 @@ All tools are created in `src/copilot/tools.ts` via the `createTools(deps)` fact
 | `squad_recall` | Recall a squad's context and past decisions | `slug: string` — squad slug |
 | `squad_status` | List all squads and their status | _(none)_ |
 | `squad_log_decision` | Log an important decision for a squad | `slug: string` — squad slug; `decision: string` — the decision made; `context?: string` — reasoning |
+| `squad_delegate` | Delegate a task to a squad's worker agent | `slug: string` — squad slug; `task: string` — the task to delegate |
+| `squad_delete` | Delete a squad | `slug: string` — squad slug |
 
 ### Shell
 
@@ -69,6 +73,33 @@ Shell commands execute with the IO process's permissions. Output is truncated to
 | Tool | Description | Parameters |
 | --- | --- | --- |
 | `file_ops` | Read, write, or list files on the local filesystem | `operation: "read" \| "write" \| "list"` — operation to perform; `path: string` — file or directory path; `content?: string` — content to write; `recursive?: boolean` — recurse into subdirectories |
+
+### GitHub
+
+| Tool | Description | Parameters |
+| --- | --- | --- |
+| `github` | Interact with GitHub (issues, PRs, comments) via `gh` CLI | `command: string` — the `gh` CLI command to run |
+
+### Skills
+
+| Tool | Description | Parameters |
+| --- | --- | --- |
+| `skill_list` | List installed skills | _(none)_ |
+| `skill_install` | Install a skill from a git repo | `repo_url: string` — git repository URL |
+| `skill_remove` | Remove an installed skill | `slug: string` — skill slug |
+| `skill_search` | Search the skills.sh registry | `query: string` — search query |
+
+### Configuration
+
+| Tool | Description | Parameters |
+| --- | --- | --- |
+| `config_update` | Update an IO configuration value at runtime | `key: string` — config key; `value: string` — new value |
+
+### System
+
+| Tool | Description | Parameters |
+| --- | --- | --- |
+| `check_update` | Check for and apply IO updates | _(none)_ |
 
 ## Adding a New Tool
 

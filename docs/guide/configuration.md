@@ -8,14 +8,22 @@ IO is configured via a JSON file at `~/.io/config.json`. All fields are optional
 
 ## Reference
 
-```json
+```jsonc
 {
-  "telegramBotToken": "bot-token-from-botfather",
+  "telegramBotToken": "123456:ABC-DEF...",
   "authorizedUserId": 123456789,
   "telegramEnabled": true,
   "selfEditEnabled": false,
-  "defaultModel": "openai/gpt-4.1",
-  "apiPort": 3170
+  "defaultModel": "claude-sonnet-4.6",
+  "port": 3170,
+  "supabaseUrl": "https://your-project.supabase.co",
+  "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIs...",
+  "authorizedEmail": "you@example.com",
+  "modelTiers": {
+    "high": ["claude-opus-4.7", "claude-opus-4.6"],
+    "medium": ["claude-sonnet-4.6", "gpt-5.5", "claude-opus-4.5"],
+    "low": ["claude-haiku-4.5", "gpt-5.4-mini"]
+  }
 }
 ```
 
@@ -25,8 +33,12 @@ IO is configured via a JSON file at `~/.io/config.json`. All fields are optional
 | `authorizedUserId` | `number`  | —       | Telegram user ID authorized to interact with the bot               |
 | `telegramEnabled`  | `boolean` | `false` | Enable the Telegram bot interface                                  |
 | `selfEditEnabled`  | `boolean` | `false` | Allow IO to modify its own configuration and skills at runtime     |
-| `defaultModel`     | `string`  | —       | Override the default model (e.g. `"openai/gpt-4.1"`)              |
-| `apiPort`          | `number`  | `3170`  | Port for the local API server                                      |
+| `defaultModel`     | `string`  | —       | Override the default model (e.g. `"claude-sonnet-4.6"`)            |
+| `port`             | `number`  | `3170`  | Port for the web UI and API server                                 |
+| `supabaseUrl`      | `string`  | —       | Supabase project URL for web portal authentication                 |
+| `supabaseAnonKey`  | `string`  | —       | Supabase anonymous/public key                                      |
+| `authorizedEmail`  | `string`  | —       | Email address authorized to access the web portal                  |
+| `modelTiers`       | `object`  | —       | Model routing preferences with `high`, `medium`, `low` arrays      |
 
 ::: warning
 Always keep your bot token secret. Never commit `config.json` to version control.
@@ -35,6 +47,45 @@ Always keep your bot token secret. Never commit `config.json` to version control
 ## Model Selection
 
 The Copilot SDK handles model selection automatically — the orchestrator chooses the best model for each operation. You can override the default with the `defaultModel` field, but in most cases no manual model configuration is needed.
+
+## Model Tiers
+
+IO supports smart model routing through the `modelTiers` configuration. This lets you define preference lists for different quality tiers — `high`, `medium`, and `low`. The orchestrator selects the appropriate tier based on the complexity of the task and uses the first available model from the preference list.
+
+```jsonc
+{
+  "modelTiers": {
+    "high": ["claude-opus-4.7", "claude-opus-4.6"],
+    "medium": ["claude-sonnet-4.6", "gpt-5.5", "claude-opus-4.5"],
+    "low": ["claude-haiku-4.5", "gpt-5.4-mini"]
+  }
+}
+```
+
+Each tier is an array of model names in order of preference. If the first model is unavailable, IO falls back to the next one in the list.
+
+## Authentication
+
+IO's web portal can optionally be secured with [Supabase](https://supabase.com/) authentication. Without auth configured, the portal runs open — accessible to anyone who can reach the server.
+
+To enable authentication:
+
+1. Create a Supabase project at [supabase.com](https://supabase.com/)
+2. Enable the **Email** auth provider in Authentication → Providers
+3. Create a user account in the Supabase dashboard
+4. Add the following to your `config.json`:
+
+```jsonc
+{
+  "supabaseUrl": "https://your-project.supabase.co",
+  "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIs...",
+  "authorizedEmail": "you@example.com"
+}
+```
+
+5. Restart IO
+
+Only the configured `authorizedEmail` can access the web portal when authentication is enabled.
 
 ## Data Directory
 
@@ -45,9 +96,7 @@ IO stores all persistent data in `~/.io/`:
 ├── config.json          # Configuration
 ├── io.db                # SQLite database (squads, decisions, state)
 ├── wiki/                # Knowledge wiki (markdown files)
-├── skills/              # Installed skills (SKILL.md files)
-├── sessions/            # Session data
-└── logs/                # Log files
+└── skills/              # Installed skills (SKILL.md files)
 ```
 
 ## Environment Variables
