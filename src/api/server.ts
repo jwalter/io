@@ -3,6 +3,7 @@ import { config } from "../config.js";
 import { listSkills } from "../copilot/skills.js";
 import { listSquads, createSquad } from "../store/squads.js";
 import { getAgentInfo } from "../copilot/agents.js";
+import { IO_VERSION } from "../paths.js";
 
 export type ApiMessageHandler = (
   text: string,
@@ -42,7 +43,7 @@ export async function startApiServer(): Promise<void> {
   });
 
   app.get("/status", (_req: Request, res: Response) => {
-    res.json({ version: "1.0.0", uptime: process.uptime() });
+    res.json({ version: IO_VERSION, uptime: process.uptime() });
   });
 
   // Skills endpoints
