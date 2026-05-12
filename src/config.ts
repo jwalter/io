@@ -14,13 +14,15 @@ export interface IOConfig {
   selfEditEnabled: boolean;
   defaultModel?: string;
   modelTiers?: ModelTiers;
-  apiPort: number;
+  port: number;
+  /** @deprecated Use `port` instead. Kept for backward compatibility. */
+  apiPort?: number;
 }
 
 const DEFAULT_CONFIG: IOConfig = {
   telegramEnabled: false,
   selfEditEnabled: false,
-  apiPort: 3170,
+  port: 3170,
 };
 
 function loadConfig(): IOConfig {
@@ -33,7 +35,12 @@ function loadConfig(): IOConfig {
 
   try {
     const raw = readFileSync(CONFIG_PATH, "utf-8");
-    const parsed = JSON.parse(raw) as Partial<IOConfig>;
+    const parsed = JSON.parse(raw) as Partial<IOConfig> & { apiPort?: number };
+    // Migrate apiPort → port
+    if (parsed.apiPort != null && parsed.port == null) {
+      parsed.port = parsed.apiPort;
+    }
+    delete parsed.apiPort;
     return { ...DEFAULT_CONFIG, ...parsed };
   } catch {
     return { ...DEFAULT_CONFIG };

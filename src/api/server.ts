@@ -169,8 +169,8 @@ export async function startApiServer(): Promise<void> {
   }
 
   return new Promise<void>((resolve) => {
-    app.listen(config.apiPort, () => {
-      console.log(`[io] API server listening on port ${config.apiPort}`);
+    app.listen(config.port, () => {
+      console.log(`[io] Server listening on port ${config.port}`);
       resolve();
     });
   });

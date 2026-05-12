@@ -320,7 +320,7 @@ export function createTools(deps: ToolDeps) {
     skipPermission: true,
     parameters: z.object({
       key: z
-        .enum(["defaultModel", "telegramEnabled", "selfEditEnabled", "apiPort"])
+        .enum(["defaultModel", "telegramEnabled", "selfEditEnabled", "port"])
         .describe("Config key to update"),
       value: z
         .union([z.string(), z.number(), z.boolean()])

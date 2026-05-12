@@ -1,6 +1,6 @@
 # 🤖 IO
 
-A personal AI assistant daemon built on the GitHub Copilot SDK. IO runs 24/7 on your machine, reachable via Telegram and a terminal TUI.
+A personal AI assistant daemon built on the GitHub Copilot SDK. IO runs 24/7 on your machine, reachable via Telegram, a web UI, and a terminal TUI.
 
 [![CI](https://github.com/michaeljolley/io/actions/workflows/ci.yml/badge.svg)](https://github.com/michaeljolley/io/actions/workflows/ci.yml)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
@@ -9,7 +9,8 @@ A personal AI assistant daemon built on the GitHub Copilot SDK. IO runs 24/7 on 
 ## ✨ Features
 
 - **Copilot SDK Integration** — powered by GitHub's Copilot SDK for LLM conversations with tool calling
-- **Multi-Interface** — Telegram bot + terminal TUI + HTTP API (future web UI)
+- **Multi-Interface** — Web UI + Telegram bot + terminal TUI + HTTP API
+- **Web Frontend** — Vue 3 dashboard with chat, squad management, skills, and agent activity views
 - **Persistent Memory** — wiki-based knowledge base stored at `~/.io/wiki/`
 - **Squad System** — persistent project teams that remember decisions, context, and history
 - **Skills** — modular skill system; install from git repos or the [skills.sh](https://skills.sh) registry
@@ -113,9 +114,11 @@ IO stores its configuration at `~/.io/config.json`. The setup wizard (`io setup`
 | `modelTiers.high` | `string[]` | `["claude-opus-4.7", "claude-opus-4.6"]` | Models for complex tasks (architecture, debugging, design) |
 | `modelTiers.medium` | `string[]` | `["claude-sonnet-4.6", "gpt-5.5", "claude-opus-4.5"]` | Models for standard tasks (features, tests, reviews) |
 | `modelTiers.low` | `string[]` | `["claude-haiku-4.5", "gpt-5.4-mini"]` | Models for simple tasks (reads, formatting, lookups) |
-| `apiPort` | `number` | `3170` | Port for the HTTP API server |
+| `port` | `number` | `3170` | Port for the HTTP server (API + web frontend) |
 
 Each `modelTiers` list is a ranked preference — IO picks the first available model at startup.
+
+> **Migration note:** If your config uses the old `apiPort` field, IO will automatically migrate it to `port`.
 
 ### Example
 
@@ -126,7 +129,7 @@ Each `modelTiers` list is a ranked preference — IO picks the first available m
   "telegramEnabled": true,
   "selfEditEnabled": false,
   "defaultModel": "claude-sonnet-4.6",
-  "apiPort": 3170,
+  "port": 3170,
   "modelTiers": {
     "high": ["claude-opus-4.7", "claude-opus-4.6"],
     "medium": ["claude-sonnet-4.6", "gpt-5.5", "claude-opus-4.5"],
@@ -182,7 +185,7 @@ IO's orchestrator automatically creates and manages squads based on your convers
 ## 🏗️ Architecture
 
 ```
-User → [TUI / Telegram / HTTP API]
+User → [Web UI / TUI / Telegram / HTTP API]
                 ↓
          Orchestrator (Copilot SDK)
           ↕           ↕
@@ -196,6 +199,17 @@ IO is built around the **Copilot SDK** which handles all LLM interactions, inclu
 For complex tasks, the orchestrator delegates work to **Worker Agents** — short-lived agent sessions that execute specific tasks and report back.
 
 The **Squad System** provides persistent project context, while the **Wiki** serves as a long-term knowledge base that spans all conversations.
+
+### Web Frontend
+
+IO includes a Vue 3 web dashboard served directly from the daemon on the same port as the API (default: 3170). The frontend provides:
+
+- **Chat** — real-time conversation with SSE streaming
+- **Squads** — view and manage project squads
+- **Skills** — browse installed skills
+- **Agent Activity** — monitor running worker agents
+
+Access the web UI at `http://your-server:3170/` when running in daemon mode.
 
 ## 🏗️ Project Structure
 
@@ -227,7 +241,15 @@ src/
 ├── tui/
 │   └── index.ts          # Terminal UI
 └── api/
-    └── server.ts         # Express HTTP + SSE
+    └── server.ts         # Express HTTP + SSE + static frontend
+
+web/                        # Vue 3 frontend (built to web-dist/)
+├── src/
+│   ├── views/            # ChatView, SquadsView, SkillsView, AgentActivityView
+│   ├── router/           # Vue Router config
+│   └── main.ts           # App entry
+├── vite.config.ts        # Vite config (builds to ../web-dist/)
+└── package.json
 ```
 
 ## 🛠️ Development
