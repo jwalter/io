@@ -115,6 +115,9 @@ IO stores its configuration at `~/.io/config.json`. The setup wizard (`io setup`
 | `modelTiers.medium` | `string[]` | `["claude-sonnet-4.6", "gpt-5.5", "claude-opus-4.5"]` | Models for standard tasks (features, tests, reviews) |
 | `modelTiers.low` | `string[]` | `["claude-haiku-4.5", "gpt-5.4-mini"]` | Models for simple tasks (reads, formatting, lookups) |
 | `port` | `number` | `3170` | Port for the HTTP server (API + web frontend) |
+| `supabaseUrl` | `string` | — | Supabase project URL (enables web portal authentication) |
+| `supabaseAnonKey` | `string` | — | Supabase anon/public API key |
+| `authorizedEmail` | `string` | — | Email address allowed to access the web portal |
 
 Each `modelTiers` list is a ranked preference — IO picks the first available model at startup.
 
@@ -130,6 +133,9 @@ Each `modelTiers` list is a ranked preference — IO picks the first available m
   "selfEditEnabled": false,
   "defaultModel": "claude-sonnet-4.6",
   "port": 3170,
+  "supabaseUrl": "https://your-project.supabase.co",
+  "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIs...",
+  "authorizedEmail": "you@example.com",
   "modelTiers": {
     "high": ["claude-opus-4.7", "claude-opus-4.6"],
     "medium": ["claude-sonnet-4.6", "gpt-5.5", "claude-opus-4.5"],
@@ -211,6 +217,29 @@ IO includes a Vue 3 web dashboard served directly from the daemon on the same po
 
 Access the web UI at `http://your-server:3170/` when running in daemon mode.
 
+### Authentication
+
+The web portal supports optional Supabase email authentication. When enabled, users must sign in with email and password before accessing the dashboard. Only the configured `authorizedEmail` is allowed access.
+
+**Setup:**
+
+1. Create a [Supabase](https://supabase.com) project (or use an existing one)
+2. Enable the **Email** auth provider in Supabase → Authentication → Providers
+3. Create your user account in Supabase → Authentication → Users
+4. Add the following to `~/.io/config.json`:
+
+```jsonc
+{
+  "supabaseUrl": "https://your-project.supabase.co",
+  "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIs...",
+  "authorizedEmail": "you@example.com"
+}
+```
+
+5. Restart IO — the web portal will now require login
+
+> **Note:** Auth is completely optional. If `supabaseUrl` is not configured, the portal runs without authentication (open access).
+
 ## 🏗️ Project Structure
 
 ```
@@ -241,12 +270,15 @@ src/
 ├── tui/
 │   └── index.ts          # Terminal UI
 └── api/
+    ├── auth.ts           # Supabase JWT auth middleware
     └── server.ts         # Express HTTP + SSE + static frontend
 
 web/                        # Vue 3 frontend (built to web-dist/)
 ├── src/
-│   ├── views/            # ChatView, SquadsView, SkillsView, AgentActivityView
-│   ├── router/           # Vue Router config
+│   ├── lib/              # supabase.ts, api.ts (auth helpers)
+│   ├── stores/           # Pinia stores (chat, auth)
+│   ├── views/            # ChatView, SquadsView, SkillsView, AgentActivityView, LoginView
+│   ├── router/           # Vue Router config + auth guard
 │   └── main.ts           # App entry
 ├── vite.config.ts        # Vite config (builds to ../web-dist/)
 └── package.json

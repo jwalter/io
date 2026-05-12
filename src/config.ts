@@ -15,6 +15,9 @@ export interface IOConfig {
   defaultModel?: string;
   modelTiers?: ModelTiers;
   port: number;
+  supabaseUrl?: string;
+  supabaseAnonKey?: string;
+  authorizedEmail?: string;
   /** @deprecated Use `port` instead. Kept for backward compatibility. */
   apiPort?: number;
 }

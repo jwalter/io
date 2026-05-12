@@ -60,6 +60,7 @@
 <script setup lang="ts">
 import { ref, nextTick, watch, computed } from 'vue'
 import { useChatStore } from '../stores/chat'
+import { apiFetch, authenticatedUrl } from '../lib/api'
 
 const store = useChatStore()
 const input = ref('')
@@ -92,7 +93,7 @@ async function sendMessage() {
   scrollToBottom()
 
   // Open SSE stream for real-time deltas
-  const evtSource = new EventSource('/api/events')
+  const evtSource = new EventSource(authenticatedUrl('/api/events'))
   evtSource.onmessage = (e) => {
     try {
       const data = JSON.parse(e.data) as { type: 'delta' | 'done'; text: string }
@@ -117,7 +118,7 @@ async function sendMessage() {
 
   // Send message — response includes full text but SSE deltas are primary UX
   try {
-    await fetch('/api/message', {
+    await apiFetch('/api/message', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text }),

@@ -37,6 +37,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { apiFetch } from '../lib/api'
 
 interface Skill {
   name: string
@@ -51,7 +52,7 @@ const error = ref<string | null>(null)
 
 onMounted(async () => {
   try {
-    const response = await fetch('/api/skills')
+    const response = await apiFetch('/api/skills')
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
     }

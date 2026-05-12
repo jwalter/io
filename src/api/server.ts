@@ -7,6 +7,7 @@ import { listSkills } from "../copilot/skills.js";
 import { listSquads, createSquad } from "../store/squads.js";
 import { getAgentInfo } from "../copilot/agents.js";
 import { IO_VERSION } from "../paths.js";
+import { requireAuth } from "./auth.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIST = path.resolve(__dirname, "../../web-dist");
@@ -47,9 +48,22 @@ export async function startApiServer(): Promise<void> {
   // Build API router
   const api = express.Router();
 
+  // Public endpoints (no auth required)
   api.get("/health", (_req: Request, res: Response) => {
     res.json({ status: "ok" });
   });
+
+  api.get("/auth/config", (_req: Request, res: Response) => {
+    const authEnabled = !!(config.supabaseUrl && config.supabaseAnonKey);
+    res.json({
+      authEnabled,
+      supabaseUrl: config.supabaseUrl ?? null,
+      supabaseAnonKey: config.supabaseAnonKey ?? null,
+    });
+  });
+
+  // Apply auth middleware to all subsequent routes
+  api.use(requireAuth);
 
   api.get("/status", (_req: Request, res: Response) => {
     res.json({ version: IO_VERSION, uptime: process.uptime() });

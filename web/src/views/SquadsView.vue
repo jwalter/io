@@ -98,6 +98,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { apiFetch } from '../lib/api'
 
 interface Squad {
   id: number
@@ -135,7 +136,7 @@ const formatDate = (dateStr: string) => {
 
 const loadSquads = async () => {
   try {
-    const response = await fetch('/api/squads')
+    const response = await apiFetch('/api/squads')
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
     }
@@ -158,7 +159,7 @@ const createSquad = async () => {
   createError.value = null
 
   try {
-    const response = await fetch('/api/squads', {
+    const response = await apiFetch('/api/squads', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

@@ -64,6 +64,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+import { apiFetch } from '../lib/api'
 
 interface Agent {
   slug: string
@@ -91,7 +92,7 @@ const refreshAgents = async () => {
   error.value = null
 
   try {
-    const response = await fetch('/api/agents')
+    const response = await apiFetch('/api/agents')
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
     }
