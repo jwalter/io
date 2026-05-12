@@ -1,5 +1,8 @@
 import express, { type Request, type Response } from "express";
 import { config } from "../config.js";
+import { listSkills } from "../copilot/skills.js";
+import { listSquads, createSquad } from "../store/squads.js";
+import { getAgentInfo } from "../copilot/agents.js";
 
 export type ApiMessageHandler = (
   text: string,
@@ -42,6 +45,61 @@ export async function startApiServer(): Promise<void> {
     res.json({ version: "1.0.0", uptime: process.uptime() });
   });
 
+  // Skills endpoints
+  app.get("/skills", (_req: Request, res: Response) => {
+    try {
+      const skills = listSkills();
+      res.json({ skills });
+    } catch (e) {
+      console.error("Error listing skills:", e);
+      res.status(500).json({ error: "Failed to list skills" });
+    }
+  });
+
+  // Squads endpoints
+  app.get("/squads", (_req: Request, res: Response) => {
+    try {
+      const squads = listSquads();
+      res.json({ squads });
+    } catch (e) {
+      console.error("Error listing squads:", e);
+      res.status(500).json({ error: "Failed to list squads" });
+    }
+  });
+
+  app.post("/squads", (req: Request, res: Response) => {
+    try {
+      const { slug, name, projectPath } = req.body as {
+        slug?: string;
+        name?: string;
+        projectPath?: string;
+      };
+
+      if (!slug || !name || !projectPath) {
+        res.status(400).json({ error: "Missing required fields: slug, name, projectPath" });
+        return;
+      }
+
+      const squad = createSquad(slug, name, projectPath);
+      res.json({ squad });
+    } catch (e) {
+      console.error("Error creating squad:", e);
+      res.status(500).json({ error: "Failed to create squad" });
+    }
+  });
+
+  // Agents endpoints
+  app.get("/agents", (_req: Request, res: Response) => {
+    try {
+      const agents = getAgentInfo();
+      res.json({ agents });
+    } catch (e) {
+      console.error("Error listing agents:", e);
+      res.status(500).json({ error: "Failed to list agents" });
+    }
+  });
+
+  // Chat endpoints
   app.post("/message", async (req: Request, res: Response) => {
     const { text } = req.body as { text?: string };
 
