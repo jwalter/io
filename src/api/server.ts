@@ -162,7 +162,7 @@ export async function startApiServer(): Promise<void> {
   if (existsSync(WEB_DIST)) {
     app.use(express.static(WEB_DIST));
     // SPA fallback — serve index.html for any non-API route
-    app.get("*", (_req: Request, res: Response) => {
+    app.get("/{*splat}", (_req: Request, res: Response) => {
       res.sendFile(path.join(WEB_DIST, "index.html"));
     });
     console.log("[io] Web frontend enabled");
