@@ -168,18 +168,23 @@ export async function startApiServer(): Promise<void> {
     });
   });
 
-  // Mount API at /api (for frontend) and / (backward compat)
+  // Mount API at /api (for frontend)
   app.use("/api", api);
-  app.use("/", api);
 
-  // Serve Vue frontend if built assets exist
+  // Serve Vue frontend if built assets exist (before backward-compat API mount)
   if (existsSync(WEB_DIST)) {
     app.use(express.static(WEB_DIST));
-    // SPA fallback — serve index.html for any non-API route
+    console.log("[io] Web frontend enabled");
+  }
+
+  // Backward-compat: mount API at / (after static files so HTML/CSS/JS are served first)
+  app.use("/", api);
+
+  // SPA fallback — serve index.html for any unmatched route
+  if (existsSync(WEB_DIST)) {
     app.get("/{*splat}", (_req: Request, res: Response) => {
       res.sendFile(path.join(WEB_DIST, "index.html"));
     });
-    console.log("[io] Web frontend enabled");
   }
 
   return new Promise<void>((resolve) => {
