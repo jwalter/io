@@ -1,9 +1,9 @@
+import crypto from "node:crypto";
 import {
   approveAll,
   type CopilotClient,
   type CopilotSession,
   type SessionConfig,
-  type ResumeSessionConfig,
 } from "@github/copilot-sdk";
 import { config } from "../config.js";
 import { SESSIONS_DIR } from "../paths.js";
@@ -56,6 +56,7 @@ const HEALTH_CHECK_INTERVAL_MS = 30_000;
 const SEND_TIMEOUT_MS = 600_000;
 const MAX_RETRIES = 3;
 const SESSION_ID_KEY = "orchestrator_session_id";
+const SESSION_TOOLS_KEY = "orchestrator_session_tools";
 
 // ---------------------------------------------------------------------------
 // Module state
@@ -118,6 +119,12 @@ function getSessionConfig(): Pick<SessionConfig, "tools" | "skillDirectories"> {
   return { tools, skillDirectories: getSkillDirectories() };
 }
 
+/** Hash of tool names — used to detect when tools change across updates. */
+function toolFingerprint(tools: SessionConfig["tools"]): string {
+  const names = (tools ?? []).map((t) => t.name).sort().join(",");
+  return crypto.createHash("sha256").update(names).digest("hex").slice(0, 16);
+}
+
 function buildFullSessionConfig(): SessionConfig {
   const { tools, skillDirectories } = getSessionConfig();
   return {
@@ -130,22 +137,6 @@ function buildFullSessionConfig(): SessionConfig {
         memorySummary: getWikiSummary() || undefined,
       }),
     },
-    tools,
-    skillDirectories,
-    onPermissionRequest: approveAll,
-    infiniteSessions: {
-      enabled: true,
-      backgroundCompactionThreshold: 0.80,
-      bufferExhaustionThreshold: 0.95,
-    },
-  };
-}
-
-function buildResumeConfig(): ResumeSessionConfig {
-  const { tools, skillDirectories } = getSessionConfig();
-  return {
-    configDir: SESSIONS_DIR,
-    streaming: true,
     tools,
     skillDirectories,
     onPermissionRequest: approveAll,
@@ -227,22 +218,45 @@ async function ensureOrchestratorSession(): Promise<CopilotSession> {
     try {
       const c = await ensureClient();
       const savedSessionId = getState(SESSION_ID_KEY);
+      const savedToolsHash = getState(SESSION_TOOLS_KEY);
+      const { tools, skillDirectories } = getSessionConfig();
+      const currentToolsHash = toolFingerprint(tools);
 
       if (savedSessionId) {
-        try {
-          console.error("[io] Resuming session:", savedSessionId);
-          const session = await c.resumeSession(savedSessionId, buildResumeConfig());
-          orchestratorSession = session;
-          return session;
-        } catch (err) {
-          console.error("[io] Failed to resume session, creating new one:", err instanceof Error ? err.message : err);
+        if (savedToolsHash && savedToolsHash !== currentToolsHash) {
+          console.error("[io] Tool set changed since last session — starting fresh");
           deleteState(SESSION_ID_KEY);
+          deleteState(SESSION_TOOLS_KEY);
+        } else {
+          try {
+            console.error("[io] Resuming session:", savedSessionId);
+            const session = await c.resumeSession(savedSessionId, {
+              configDir: SESSIONS_DIR,
+              streaming: true,
+              tools,
+              skillDirectories,
+              onPermissionRequest: approveAll,
+              infiniteSessions: {
+                enabled: true,
+                backgroundCompactionThreshold: 0.80,
+                bufferExhaustionThreshold: 0.95,
+              },
+            });
+            orchestratorSession = session;
+            setState(SESSION_TOOLS_KEY, currentToolsHash);
+            return session;
+          } catch (err) {
+            console.error("[io] Failed to resume session, creating new one:", err instanceof Error ? err.message : err);
+            deleteState(SESSION_ID_KEY);
+            deleteState(SESSION_TOOLS_KEY);
+          }
         }
       }
 
       console.error("[io] Creating new orchestrator session");
       const session = await c.createSession(buildFullSessionConfig());
       setState(SESSION_ID_KEY, session.sessionId);
+      setState(SESSION_TOOLS_KEY, currentToolsHash);
       orchestratorSession = session;
       return session;
     } finally {
