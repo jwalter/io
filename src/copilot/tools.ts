@@ -23,6 +23,9 @@ export interface ToolDeps {
   logDecision: (squadSlug: string, decision: string, context?: string) => void;
   getDecisionsSummary: (squadSlug: string) => string;
   updateSquadStatus: (slug: string, status: string) => void;
+  delegateToAgent: (squadSlug: string, task: string, onComplete: (taskId: string, result: string) => void) => Promise<string>;
+  getTask: (taskId: string) => { task_id: string; agent_slug: string; description: string; status: string; result: string | null } | undefined;
+  getActiveAgentTasks: () => Array<{ taskId: string; agentSlug: string; description: string; status: string }>;
 }
 
 export function createTools(deps: ToolDeps) {
@@ -132,6 +135,60 @@ export function createTools(deps: ToolDeps) {
       } catch (err) {
         return `Error: ${err instanceof Error ? err.message : String(err)}`;
       }
+    },
+  });
+
+  const squadDelegate = defineTool("squad_delegate", {
+    description:
+      "Delegate a task to a squad agent for autonomous execution. The agent runs in the background and you get a task ID immediately. Use squad_task_status to check progress. Use this after planning work with the user to send each task to the squad for implementation.",
+    skipPermission: true,
+    parameters: z.object({
+      slug: z.string().describe("Squad slug to delegate to"),
+      task: z
+        .string()
+        .describe(
+          "Detailed task description. Be specific — include file paths, expected behavior, acceptance criteria. The agent works autonomously with this as its only instruction.",
+        ),
+    }),
+    handler: async ({ slug, task }) => {
+      console.error(`[io] squad_delegate called: ${slug} — ${task.slice(0, 100)}…`);
+      try {
+        const taskId = await deps.delegateToAgent(slug, task, (id, result) => {
+          console.error(`[io] Agent task ${id} completed for squad ${slug}`);
+        });
+        return `Task delegated to squad "${slug}". Task ID: ${taskId}\n\nThe agent is working on this in the background. Use squad_task_status to check progress.`;
+      } catch (err) {
+        return `Error delegating task: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    },
+  });
+
+  const squadTaskStatus = defineTool("squad_task_status", {
+    description:
+      "Check the status of a delegated squad task, or list all active tasks. Returns status (running/done/failed) and result when complete.",
+    skipPermission: true,
+    parameters: z.object({
+      task_id: z
+        .string()
+        .optional()
+        .describe("Specific task ID to check. If omitted, lists all active tasks."),
+    }),
+    handler: async ({ task_id }) => {
+      if (task_id) {
+        const task = deps.getTask(task_id);
+        if (!task) return `Task not found: ${task_id}`;
+        let response = `**Task ${task.task_id}**\nSquad: ${task.agent_slug}\nStatus: ${task.status}\nDescription: ${task.description}`;
+        if (task.result) {
+          const result = task.result.length > 4000 ? task.result.slice(0, 4000) + "\n[…truncated]" : task.result;
+          response += `\n\nResult:\n${result}`;
+        }
+        return response;
+      }
+      const tasks = deps.getActiveAgentTasks();
+      if (tasks.length === 0) return "No active tasks.";
+      return tasks
+        .map((t) => `- **${t.taskId}** (${t.agentSlug}) — ${t.status} — ${t.description}`)
+        .join("\n");
     },
   });
 
@@ -536,7 +593,7 @@ export function createTools(deps: ToolDeps) {
     },
   });
 
-  return [wikiRead, wikiWrite, wikiSearch, squadCreate, squadRecall, squadStatus, squadLogDecision, shell, fileOps, bash, readFile, viewTool, grepTool, strReplaceEditor, github];
+  return [wikiRead, wikiWrite, wikiSearch, squadCreate, squadRecall, squadStatus, squadLogDecision, squadDelegate, squadTaskStatus, shell, fileOps, bash, readFile, viewTool, grepTool, strReplaceEditor, github];
 }
 
 function walkDirectory(dir: string, maxDepth = 3, depth = 0): string[] {

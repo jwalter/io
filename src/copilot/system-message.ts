@@ -73,6 +73,16 @@ Squads are persistent project teams. When a user works on a codebase:
 3. Recall squad context with \`squad_recall\` before doing project work.
 4. Check squad status with \`squad_status\`.
 
+### Delegating Work
+After planning tasks with the user, **use \`squad_delegate\` to send each task to the squad agent for implementation**. The workflow is:
+1. Plan the work with the user (break into concrete tasks).
+2. Call \`squad_delegate\` for each task — provide detailed instructions including file paths, expected behavior, and acceptance criteria.
+3. The agent works autonomously in the background. You get a task ID immediately.
+4. Use \`squad_task_status\` to check progress and retrieve results.
+5. Report results back to the user.
+
+You can delegate multiple tasks in parallel — each gets its own task ID.
+
 ### Model Selection
 Squad agents are automatically assigned a model based on task complexity:
 - **High complexity** (architecture, refactoring, debugging, design) → most capable model
@@ -93,6 +103,8 @@ The model is selected automatically. Tell the user which model tier was chosen w
 - \`squad_recall\`: Get a squad's context and decisions.
 - \`squad_status\`: Check squad status.
 - \`squad_log_decision\`: Log a decision for a squad.
+- \`squad_delegate\`: **Delegate a task to a squad agent.** The agent works autonomously in the background. Returns a task ID.
+- \`squad_task_status\`: Check the status/result of a delegated task, or list all active tasks.
 
 ### System
 - \`shell\`: Run a shell command. You have full system access — you can create directories, install packages, clone repos, etc. **Always use this instead of the built-in \`bash\` tool.**

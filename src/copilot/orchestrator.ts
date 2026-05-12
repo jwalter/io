@@ -8,7 +8,7 @@ import {
 import { config } from "../config.js";
 import { SESSIONS_DIR } from "../paths.js";
 import { getState, setState, deleteState, logConversation } from "../store/db.js";
-import { clearStaleTasks } from "../store/tasks.js";
+import { clearStaleTasks, getTask } from "../store/tasks.js";
 import {
   getSquad,
   listSquads,
@@ -24,6 +24,7 @@ import { getOrchestratorSystemMessage } from "./system-message.js";
 import { createTools } from "./tools.js";
 import { getSkillDirectories } from "./skills.js";
 import { resetClient } from "./client.js";
+import { delegateToAgent, getActiveAgentTasks } from "./agents.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -88,6 +89,15 @@ function getToolDeps() {
     logDecision,
     getDecisionsSummary,
     updateSquadStatus,
+    delegateToAgent,
+    getTask,
+    getActiveAgentTasks: () =>
+      getActiveAgentTasks().map((t) => ({
+        taskId: t.taskId,
+        agentSlug: t.agentSlug,
+        description: t.description,
+        status: t.status,
+      })),
   };
 }
 
