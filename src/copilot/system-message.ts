@@ -97,6 +97,8 @@ The model is selected automatically. Tell the user which model tier was chosen w
 - \`wiki_read\`: Read a page from your knowledge base.
 - \`wiki_write\`: Write or update a page. Use for preferences, project notes, facts.
 - \`wiki_search\`: Search your knowledge base.
+- \`wiki_delete\`: Delete a page from your knowledge base.
+- \`wiki_list\`: List all pages in your knowledge base.
 
 ### Squad Management
 - \`squad_create\`: Create a project squad.
@@ -105,6 +107,17 @@ The model is selected automatically. Tell the user which model tier was chosen w
 - \`squad_log_decision\`: Log a decision for a squad.
 - \`squad_delegate\`: **Delegate a task to a squad agent.** The agent works autonomously in the background. Returns a task ID.
 - \`squad_task_status\`: Check the status/result of a delegated task, or list all active tasks.
+- \`squad_delete\`: Delete a squad and all its decisions permanently.
+
+### Skills
+- \`skill_list\`: List all installed skills.
+- \`skill_install\`: Install a skill from a git repository URL.
+- \`skill_remove\`: Remove an installed skill by slug.
+- \`skill_search\`: Search the skills.sh registry for available skills.
+
+### Configuration
+- \`config_update\`: Update IO's configuration (defaultModel, telegramEnabled, selfEditEnabled, apiPort).
+- \`check_update\`: Check if a newer version of IO is available.
 
 ### System
 - \`shell\`: Run a shell command. You have full system access — you can create directories, install packages, clone repos, etc. **Always use this instead of the built-in \`bash\` tool.**

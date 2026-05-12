@@ -13,18 +13,21 @@ import {
   getSquad,
   listSquads,
   createSquad,
+  deleteSquad,
   logDecision,
   getDecisionsSummary,
   updateSquadStatus,
 } from "../store/squads.js";
-import { readPage, writePage, assertPagePath } from "../wiki/fs.js";
+import { readPage, writePage, assertPagePath, deletePage, listPages } from "../wiki/fs.js";
 import { resolveModelTiers } from "./model-router.js";
 import { searchWiki, getWikiSummary } from "../wiki/search.js";
 import { getOrchestratorSystemMessage } from "./system-message.js";
 import { createTools } from "./tools.js";
-import { getSkillDirectories } from "./skills.js";
+import { getSkillDirectories, listSkills, installSkill, removeSkill, searchSkillsRegistry } from "./skills.js";
 import { resetClient } from "./client.js";
 import { delegateToAgent, getActiveAgentTasks } from "./agents.js";
+import { saveConfig } from "../config.js";
+import { checkForUpdate } from "../update.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -80,12 +83,15 @@ function getToolDeps() {
     wikiWrite: writePage,
     wikiSearch: searchWiki,
     wikiAssertPagePath: assertPagePath,
+    wikiDelete: deletePage,
+    wikiList: listPages,
     getSquad: (slug: string) => {
       const s = getSquad(slug);
       return s ? mapSquad(s) : undefined;
     },
     listSquads: () => listSquads().map(mapSquad),
     createSquad,
+    deleteSquad,
     logDecision,
     getDecisionsSummary,
     updateSquadStatus,
@@ -98,6 +104,12 @@ function getToolDeps() {
         description: t.description,
         status: t.status,
       })),
+    listSkills,
+    installSkill,
+    removeSkill,
+    searchSkillsRegistry,
+    saveConfig,
+    checkForUpdate,
   };
 }
 

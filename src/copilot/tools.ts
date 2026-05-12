@@ -17,15 +17,24 @@ export interface ToolDeps {
   wikiWrite: (path: string, content: string) => void;
   wikiSearch: (query: string) => Array<{ path: string; title: string; snippet: string }>;
   wikiAssertPagePath: (path: string) => void;
+  wikiDelete: (path: string) => boolean;
+  wikiList: () => string[];
   getSquad: (slug: string) => { slug: string; name: string; projectPath: string; status: string } | undefined;
   listSquads: () => Array<{ slug: string; name: string; projectPath: string; status: string }>;
   createSquad: (slug: string, name: string, projectPath: string) => void;
+  deleteSquad: (slug: string) => void;
   logDecision: (squadSlug: string, decision: string, context?: string) => void;
   getDecisionsSummary: (squadSlug: string) => string;
   updateSquadStatus: (slug: string, status: string) => void;
   delegateToAgent: (squadSlug: string, task: string, onComplete: (taskId: string, result: string) => void) => Promise<string>;
   getTask: (taskId: string) => { task_id: string; agent_slug: string; description: string; status: string; result: string | null } | undefined;
   getActiveAgentTasks: () => Array<{ taskId: string; agentSlug: string; description: string; status: string }>;
+  listSkills: () => Array<{ name: string; slug: string; description: string; path: string }>;
+  installSkill: (repoUrl: string) => Promise<{ name: string; slug: string; description: string; path: string }>;
+  removeSkill: (slug: string) => boolean;
+  searchSkillsRegistry: (query: string) => Promise<Array<{ name: string; description: string; repoUrl: string }>>;
+  saveConfig: (updates: Record<string, unknown>) => void;
+  checkForUpdate: () => Promise<{ updateAvailable: boolean; current: string; latest: string }>;
 }
 
 export function createTools(deps: ToolDeps) {
@@ -189,6 +198,160 @@ export function createTools(deps: ToolDeps) {
       return tasks
         .map((t) => `- **${t.taskId}** (${t.agentSlug}) — ${t.status} — ${t.description}`)
         .join("\n");
+    },
+  });
+
+  // --- Squad delete ---
+  const squadDelete = defineTool("squad_delete", {
+    description: "Delete a squad and all its decisions. This is permanent.",
+    skipPermission: true,
+    parameters: z.object({
+      slug: z.string().describe("Squad slug to delete"),
+    }),
+    handler: async ({ slug }) => {
+      console.error(`[io] squad_delete called: ${slug}`);
+      try {
+        const squad = deps.getSquad(slug);
+        if (!squad) return `Squad not found: ${slug}`;
+        deps.deleteSquad(slug);
+        return `Squad "${squad.name}" (${slug}) has been deleted.`;
+      } catch (err) {
+        return `Error: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    },
+  });
+
+  // --- Skill management ---
+  const skillList = defineTool("skill_list", {
+    description: "List all installed skills with their names, slugs, and descriptions.",
+    skipPermission: true,
+    parameters: z.object({}),
+    handler: async () => {
+      const skills = deps.listSkills();
+      if (skills.length === 0) return "No skills installed.";
+      return skills
+        .map((s) => `- **${s.name}** (\`${s.slug}\`): ${s.description || "(no description)"}`)
+        .join("\n");
+    },
+  });
+
+  const skillInstall = defineTool("skill_install", {
+    description: "Install a skill from a git repository URL. The repo must contain a SKILL.md file.",
+    skipPermission: true,
+    parameters: z.object({
+      repo_url: z.string().describe("Git repository URL (e.g., https://github.com/user/my-skill.git)"),
+    }),
+    handler: async ({ repo_url }) => {
+      console.error(`[io] skill_install called: ${repo_url}`);
+      try {
+        const skill = await deps.installSkill(repo_url);
+        return `Skill "${skill.name}" installed successfully.\nSlug: ${skill.slug}\nDescription: ${skill.description || "(none)"}`;
+      } catch (err) {
+        return `Error installing skill: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    },
+  });
+
+  const skillRemove = defineTool("skill_remove", {
+    description: "Remove an installed skill by its slug.",
+    skipPermission: true,
+    parameters: z.object({
+      slug: z.string().describe("Skill slug to remove"),
+    }),
+    handler: async ({ slug }) => {
+      console.error(`[io] skill_remove called: ${slug}`);
+      const removed = deps.removeSkill(slug);
+      return removed ? `Skill "${slug}" removed.` : `Skill not found: ${slug}`;
+    },
+  });
+
+  const skillSearch = defineTool("skill_search", {
+    description: "Search the skills.sh registry for skills matching a query.",
+    skipPermission: true,
+    parameters: z.object({
+      query: z.string().describe("Search query"),
+    }),
+    handler: async ({ query }) => {
+      console.error(`[io] skill_search called: ${query}`);
+      try {
+        const results = await deps.searchSkillsRegistry(query);
+        if (results.length === 0) return `No skills found for "${query}".`;
+        return results
+          .map((r) => `- **${r.name}**: ${r.description}\n  ${r.repoUrl}`)
+          .join("\n");
+      } catch (err) {
+        return `Error searching registry: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    },
+  });
+
+  // --- Wiki extras ---
+  const wikiDelete = defineTool("wiki_delete", {
+    description: "Delete a page from IO's knowledge base wiki.",
+    skipPermission: true,
+    parameters: z.object({
+      path: z.string().describe("Relative path to the wiki page (e.g., 'pages/preferences/editor.md')"),
+    }),
+    handler: async ({ path: pagePath }) => {
+      console.error(`[io] wiki_delete called: ${pagePath}`);
+      try {
+        const deleted = deps.wikiDelete(pagePath);
+        return deleted ? `Deleted: ${pagePath}` : `Page not found: ${pagePath}`;
+      } catch (err) {
+        return `Error: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    },
+  });
+
+  const wikiList = defineTool("wiki_list", {
+    description: "List all pages in IO's knowledge base wiki.",
+    skipPermission: true,
+    parameters: z.object({}),
+    handler: async () => {
+      const pages = deps.wikiList();
+      if (pages.length === 0) return "Wiki is empty — no pages yet.";
+      return pages.map((p) => `- ${p}`).join("\n");
+    },
+  });
+
+  // --- Config update ---
+  const configUpdate = defineTool("config_update", {
+    description: "Update IO's configuration. Changes are saved to ~/.io/config.json and take effect on restart.",
+    skipPermission: true,
+    parameters: z.object({
+      key: z
+        .enum(["defaultModel", "telegramEnabled", "selfEditEnabled", "apiPort"])
+        .describe("Config key to update"),
+      value: z
+        .union([z.string(), z.number(), z.boolean()])
+        .describe("New value for the config key"),
+    }),
+    handler: async ({ key, value }) => {
+      console.error(`[io] config_update called: ${key} = ${JSON.stringify(value)}`);
+      try {
+        deps.saveConfig({ [key]: value });
+        return `Config updated: ${key} = ${JSON.stringify(value)}\nNote: Some changes require a restart to take effect.`;
+      } catch (err) {
+        return `Error: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    },
+  });
+
+  // --- Update checker ---
+  const checkUpdate = defineTool("check_update", {
+    description: "Check if a newer version of IO is available.",
+    skipPermission: true,
+    parameters: z.object({}),
+    handler: async () => {
+      try {
+        const info = await deps.checkForUpdate();
+        if (info.updateAvailable) {
+          return `Update available! Current: v${info.current} → Latest: v${info.latest}\nRun: npm update -g heyio`;
+        }
+        return `IO is up to date (v${info.current}).`;
+      } catch (err) {
+        return `Error checking for updates: ${err instanceof Error ? err.message : String(err)}`;
+      }
     },
   });
 
@@ -593,7 +756,7 @@ export function createTools(deps: ToolDeps) {
     },
   });
 
-  return [wikiRead, wikiWrite, wikiSearch, squadCreate, squadRecall, squadStatus, squadLogDecision, squadDelegate, squadTaskStatus, shell, fileOps, bash, readFile, viewTool, grepTool, strReplaceEditor, github];
+  return [wikiRead, wikiWrite, wikiSearch, wikiDelete, wikiList, squadCreate, squadRecall, squadStatus, squadLogDecision, squadDelegate, squadTaskStatus, squadDelete, skillList, skillInstall, skillRemove, skillSearch, configUpdate, checkUpdate, shell, fileOps, bash, readFile, viewTool, grepTool, strReplaceEditor, github];
 }
 
 function walkDirectory(dir: string, maxDepth = 3, depth = 0): string[] {
