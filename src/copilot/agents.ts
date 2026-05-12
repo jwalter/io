@@ -15,14 +15,20 @@ import type { CopilotSession } from "@github/copilot-sdk";
 import { z } from "zod";
 
 import { getClient } from "./client.js";
-import { getModelForTask } from "./model-router.js";
+import { getModelForTask, getModelForTier } from "./model-router.js";
+import type { Tier } from "./model-router.js";
 import {
   getSquad,
   updateSquadSession,
   updateSquadStatus,
   getDecisionsSummary,
   logDecision,
+  listSquadAgents,
+  getSquadAgent,
+  updateAgentSession,
+  updateAgentStatus,
 } from "../store/squads.js";
+import type { SquadAgent } from "../store/squads.js";
 import {
   createTask,
   completeTask,
@@ -31,15 +37,24 @@ import {
   getTask,
 } from "../store/tasks.js";
 import { SESSIONS_DIR } from "../paths.js";
+import { getUniverse } from "./universes.js";
 
 export interface AgentInfo {
   slug: string;
   name: string;
+  characterName?: string;
+  roleTitle?: string;
+  universe?: string;
   status: "idle" | "working" | "error";
   currentTask?: string;
 }
 
+// Key format: "squadSlug:characterName" for per-agent sessions, "squadSlug" for legacy
 const agentSessions = new Map<string, CopilotSession>();
+
+function agentSessionKey(squadSlug: string, characterName?: string): string {
+  return characterName ? `${squadSlug}:${characterName}` : squadSlug;
+}
 
 export function getAgentInfo(): AgentInfo[] {
   const activeTasks = getActiveTasks();
@@ -49,22 +64,39 @@ export function getAgentInfo(): AgentInfo[] {
   }
 
   const agents: AgentInfo[] = [];
-  for (const [slug, _session] of agentSessions) {
-    const squad = getSquad(slug);
-    const currentTask = tasksByAgent.get(slug);
-    let status: AgentInfo["status"] = "idle";
-    if (currentTask) {
-      status = "working";
+  const seenSquads = new Set<string>();
+
+  // Collect info from squad agents (named agents)
+  for (const [key, _session] of agentSessions) {
+    const parts = key.split(":");
+    const squadSlug = parts[0];
+    const characterName = parts[1];
+    seenSquads.add(squadSlug);
+
+    const squad = getSquad(squadSlug);
+
+    if (characterName) {
+      const agent = getSquadAgent(squadSlug, characterName);
+      const currentTask = tasksByAgent.get(key) ?? tasksByAgent.get(squadSlug);
+      agents.push({
+        slug: squadSlug,
+        name: agent ? `${agent.character_name} (${agent.role_title})` : characterName,
+        characterName,
+        roleTitle: agent?.role_title,
+        universe: squad?.universe ?? undefined,
+        status: agent?.status === "working" ? "working" : currentTask ? "working" : "idle",
+        currentTask,
+      });
+    } else {
+      // Legacy generic agent
+      const currentTask = tasksByAgent.get(squadSlug);
+      agents.push({
+        slug: squadSlug,
+        name: squad?.name ?? squadSlug,
+        status: currentTask ? "working" : squad?.status === "error" ? "error" : "idle",
+        currentTask,
+      });
     }
-    if (squad?.status === "error") {
-      status = "error";
-    }
-    agents.push({
-      slug,
-      name: squad?.name ?? slug,
-      status,
-      currentTask,
-    });
   }
 
   return agents;
@@ -74,17 +106,42 @@ export async function delegateToAgent(
   squadSlug: string,
   task: string,
   onComplete: (taskId: string, result: string) => void,
+  targetAgent?: string,
 ): Promise<string> {
   const squad = getSquad(squadSlug);
   if (!squad) {
     throw new Error(`Squad not found: ${squadSlug}`);
   }
 
-  const session = await getOrCreateSession(squadSlug, task);
-  const taskId = randomUUID();
+  // Determine which agent session to use
+  let agent: SquadAgent | undefined;
+  if (targetAgent) {
+    agent = getSquadAgent(squadSlug, targetAgent);
+    if (!agent) {
+      throw new Error(
+        `Agent "${targetAgent}" not found in squad "${squadSlug}". Use squad_agents to list the roster.`,
+      );
+    }
+  } else {
+    // If squad has named agents, pick the best match (first idle, or first one)
+    const agents = listSquadAgents(squadSlug);
+    if (agents.length > 0) {
+      agent = agents.find((a) => a.status === "idle") ?? agents[0];
+    }
+  }
 
-  createTask(taskId, squadSlug, task);
+  const session = agent
+    ? await getOrCreateAgentSession(squadSlug, agent, task)
+    : await getOrCreateSession(squadSlug, task);
+
+  const taskId = randomUUID();
+  const agentKey = agent
+    ? agentSessionKey(squadSlug, agent.character_name)
+    : squadSlug;
+
+  createTask(taskId, agentKey, task);
   updateSquadStatus(squadSlug, "working");
+  if (agent) updateAgentStatus(squadSlug, agent.character_name, "working");
 
   // Run the task in the background — return taskId immediately
   void (async () => {
@@ -93,25 +150,30 @@ export async function delegateToAgent(
       const result = response?.data?.content ?? "Task completed (no output)";
       completeTask(taskId, result);
       updateSquadStatus(squadSlug, "idle");
+      if (agent) updateAgentStatus(squadSlug, agent.character_name, "idle");
       onComplete(taskId, result);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       failTask(taskId, message);
       updateSquadStatus(squadSlug, "error");
+      if (agent) updateAgentStatus(squadSlug, agent.character_name, "error");
     }
   })();
 
+  const agentLabel = agent
+    ? `${agent.character_name} (${agent.role_title})`
+    : `squad "${squadSlug}"`;
   return taskId;
 }
 
 export async function shutdownAgents(): Promise<void> {
-  for (const [slug, session] of agentSessions) {
+  for (const [key, session] of agentSessions) {
     try {
       await session.destroy();
     } catch {
       // best-effort cleanup
     }
-    agentSessions.delete(slug);
+    agentSessions.delete(key);
   }
 }
 
@@ -132,6 +194,89 @@ export function getActiveAgentTasks(): Array<{
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Create or resume a Copilot session for a specific named agent.
+ * The system message includes the agent's character personality, role, and charter.
+ */
+async function getOrCreateAgentSession(
+  squadSlug: string,
+  agent: SquadAgent,
+  taskDescription?: string,
+): Promise<CopilotSession> {
+  const key = agentSessionKey(squadSlug, agent.character_name);
+  const existing = agentSessions.get(key);
+  if (existing) return existing;
+
+  const squad = getSquad(squadSlug)!;
+  const client = await getClient();
+  const decisions = getDecisionsSummary(squadSlug);
+
+  // Resolve model from agent's tier preference
+  const model = getModelForTier(agent.model_tier as Tier);
+
+  const universeName = squad.universe
+    ? getUniverse(squad.universe)?.name ?? squad.universe
+    : "Unknown";
+
+  const agentTools = buildAgentTools(squadSlug);
+
+  const systemMessage = `You are ${agent.character_name}, a specialist agent on the "${squad.name}" project team (${universeName} universe).
+
+## Your Identity
+- **Name**: ${agent.character_name}
+- **Role**: ${agent.role_title}
+- **Personality**: ${agent.personality ?? "Professional and focused."}
+
+## Your Charter
+${agent.charter ?? "General-purpose agent. Handle tasks as they come."}
+
+## Project
+- **Path**: ${squad.project_path}
+
+## Past Decisions
+${decisions}
+
+## Instructions
+You are a coding agent. Use the shell tool to run commands and file_ops to read/write files.
+Log important decisions with squad_log_decision so they persist.
+Stay in character — let your personality color your work style and communication, but always deliver quality results.`;
+
+  const commonConfig = {
+    model,
+    configDir: SESSIONS_DIR,
+    streaming: false,
+    systemMessage: { content: systemMessage },
+    tools: agentTools,
+    onPermissionRequest: approveAll,
+    infiniteSessions: {
+      enabled: true,
+      backgroundCompactionThreshold: 0.8,
+      bufferExhaustionThreshold: 0.95,
+    },
+  } as const;
+
+  let session: CopilotSession;
+
+  if (agent.copilot_session_id) {
+    try {
+      session = await client.resumeSession(agent.copilot_session_id, commonConfig);
+    } catch {
+      session = await client.createSession(commonConfig);
+    }
+  } else {
+    session = await client.createSession(commonConfig);
+  }
+
+  updateAgentSession(squadSlug, agent.character_name, session.sessionId);
+  agentSessions.set(key, session);
+
+  return session;
+}
+
+/**
+ * Legacy: create a generic squad session (for squads without named agents).
+ */
 
 async function getOrCreateSession(
   squadSlug: string,

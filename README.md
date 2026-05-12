@@ -12,10 +12,10 @@ A personal AI assistant daemon built on the GitHub Copilot SDK. IO runs 24/7 on 
 - **Multi-Interface** — Web UI + Telegram bot + terminal TUI + HTTP API
 - **Web Frontend** — Vue 3 dashboard with chat, squad management, skills, and agent activity views
 - **Persistent Memory** — wiki-based knowledge base stored at `~/.io/wiki/`
-- **Squad System** — persistent project teams that remember decisions, context, and history
+- **Squad System** — persistent project teams with **named specialist agents** themed from 80s pop culture (A-Team, Transformers, ThunderCats, GI Joe, Aliens, Ghostbusters)
 - **Skills** — modular skill system; install from git repos or the [skills.sh](https://skills.sh) registry
 - **Adaptive Sessions** — infinite sessions with automatic context compaction
-- **Worker Agents** — delegated task execution through specialized agent sessions
+- **Named Agent Personas** — each squad agent gets a character persona with personality, dynamic role title, and specialized charter
 - **GitHub Integration** — create, list, view, and comment on issues and PRs via the `github` tool
 - **Smart Model Routing** — automatically selects the best model for each task based on complexity
 - **Self-Updating** — checks for updates and can apply them automatically
@@ -179,14 +179,21 @@ A skill is a directory with a `SKILL.md` file that describes the skill and its t
 
 ## 👥 Squad System
 
-Squads are persistent project teams that IO manages. Each squad:
+Squads are persistent project teams with **named specialist agents**. Each squad:
 
-- Is associated with a specific project or domain
-- Remembers decisions, context, and conversation history
-- Can have multiple specialized agents working together
+- Has an 80s pop culture **universe theme** (A-Team, Transformers, ThunderCats, GI Joe, Aliens, Ghostbusters)
+- Contains dynamically-created **specialist agents** with roles tailored to the project (e.g., "Express API Engineer", "Vue.js Frontend Dev")
+- Each agent is assigned a **character persona** with personality traits that color their work style
+- Remembers decisions, context, and conversation history across sessions
 - Persists across sessions in the SQLite database
 
-IO's orchestrator automatically creates and manages squads based on your conversations.
+### How Squads Work
+
+1. **Create** — `squad_create` assigns a random 80s universe (or user picks one)
+2. **Analyze** — `squad_analyze` scans the project to determine languages, frameworks, and tools
+3. **Build the team** — `squad_add_agent` for each specialist the project needs; characters are drawn from the universe pool
+4. **Delegate** — `squad_delegate` sends tasks to specific agents by character name
+5. **Track** — `squad_task_status` monitors progress and retrieves results
 
 ## 🏗️ Architecture
 
@@ -197,12 +204,12 @@ User → [Web UI / TUI / Telegram / HTTP API]
           ↕           ↕
      Squad Manager   Wiki/Memory
           ↓
-     Worker Agents
+     Named Agents (80s Characters)
 ```
 
 IO is built around the **Copilot SDK** which handles all LLM interactions, including tool calling and context management. The **Orchestrator** manages the primary conversation session with automatic context compaction for infinite-length sessions.
 
-For complex tasks, the orchestrator delegates work to **Worker Agents** — short-lived agent sessions that execute specific tasks and report back.
+For complex tasks, the orchestrator delegates work to **Named Agents** — persistent agent sessions with character personas, specialized roles, and per-agent system prompts. Each agent works autonomously within their squad's project context.
 
 The **Squad System** provides persistent project context, while the **Wiki** serves as a long-term knowledge base that spans all conversations.
 
@@ -252,14 +259,15 @@ src/
 ├── copilot/
 │   ├── client.ts         # CopilotClient singleton
 │   ├── orchestrator.ts   # Main session management
-│   ├── agents.ts         # Worker agent sessions
+│   ├── agents.ts         # Named agent sessions & personas
+│   ├── universes.ts      # 80s universe character data
 │   ├── tools.ts          # Tool definitions
 │   ├── model-router.ts   # Complexity-based model selection
 │   ├── skills.ts         # Skills loader
 │   └── system-message.ts # System prompt builder
 ├── store/
 │   ├── db.ts             # SQLite database
-│   ├── squads.ts         # Squad CRUD
+│   ├── squads.ts         # Squad & agent CRUD
 │   └── tasks.ts          # Agent task tracking
 ├── wiki/
 │   ├── fs.ts             # Wiki filesystem

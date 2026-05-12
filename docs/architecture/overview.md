@@ -56,7 +56,16 @@ See [Orchestrator](/architecture/orchestrator) for details.
 
 ### Squad Agents
 
-Worker sessions managed by `src/copilot/agents.ts`. Each squad maps to a project directory and gets its own `CopilotSession` with project-specific context (past decisions, file system access). Agents are created or resumed on demand via `delegateToAgent()`, which runs tasks in the background and reports results through a callback. Each agent session has `shell`, `file_ops`, and `squad_log_decision` tools.
+Worker sessions managed by `src/copilot/agents.ts`. Each squad maps to a project directory and is themed with an **80s pop culture universe** (A-Team, Transformers, ThunderCats, GI Joe, Aliens, or Ghostbusters). Squads contain **named specialist agents** — each agent is assigned a character from the squad's universe and given a dynamic role based on the project's needs.
+
+**Key concepts:**
+
+- **Universes** (`src/copilot/universes.ts`) — Six universes with 6–8 characters each, including personality descriptions that flavor the agent's communication style.
+- **Dynamic roles** — Roles are not fixed templates. IO analyzes the project (via `squad_analyze`) and creates specialists tailored to the tech stack (e.g., "Frontend Architect", "CI/CD Engineer", "Test Lead").
+- **Per-agent sessions** — Each named agent gets its own `CopilotSession` with a personalized system prompt incorporating their character personality, role title, and charter.
+- **Character assignment** — Characters are drawn from the universe pool in order (e.g., Hannibal → Face → B.A. → Murdock for A-Team squads).
+
+Agents are created or resumed on demand via `delegateToAgent()`, which runs tasks in the background and reports results through a callback. Each agent session has `shell`, `file_ops`, and `squad_log_decision` tools. The `squad_delegate` tool can target a specific agent by character name.
 
 See [Squads](/architecture/squads) for details.
 
@@ -73,7 +82,8 @@ Markdown-based knowledge store in `src/wiki/`. `fs.ts` handles reading, writing,
 SQLite database via `better-sqlite3` (`src/store/db.ts`), stored at `~/.io/io.db` with WAL mode. Tables:
 
 - **`io_state`** — key-value store for session IDs and config state
-- **`squads`** — squad metadata (slug, name, project path, Copilot session ID, status)
+- **`squads`** — squad metadata (slug, name, project path, Copilot session ID, status, universe)
+- **`squad_agents`** — named specialist agents per squad (character name, role title, charter, model tier, status)
 - **`squad_decisions`** — persistent decision log per squad
 - **`conversation_log`** — rolling log of user/assistant messages (capped at 1000 rows)
 - **`agent_tasks`** — background task tracking for squad agents

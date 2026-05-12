@@ -27,13 +27,21 @@
       <div v-else class="grid gap-4">
         <div
           v-for="agent in agents"
-          :key="agent.slug"
+          :key="agent.slug + (agent.characterName || '')"
           class="bg-gray-800 border border-gray-700 rounded-lg p-4 hover:border-blue-500 transition-colors"
         >
           <div class="flex justify-between items-start mb-3">
             <div class="flex-1">
               <h3 class="font-bold text-gray-100">{{ agent.name }}</h3>
-              <p class="text-sm text-gray-500">{{ agent.slug }}</p>
+              <div class="flex items-center gap-2 mt-1">
+                <p class="text-sm text-gray-500">{{ agent.slug }}</p>
+                <span v-if="agent.roleTitle" class="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded">
+                  {{ agent.roleTitle }}
+                </span>
+                <span v-if="agent.universe" class="text-xs bg-purple-900 text-purple-200 px-2 py-0.5 rounded">
+                  🎬 {{ agent.universe }}
+                </span>
+              </div>
             </div>
             <span :class="[
               'px-3 py-1 rounded text-xs font-medium',
@@ -69,6 +77,9 @@ import { apiFetch } from '../lib/api'
 interface Agent {
   slug: string
   name: string
+  characterName?: string
+  roleTitle?: string
+  universe?: string
   status: 'idle' | 'working' | 'error'
   currentTask?: string
 }
@@ -107,7 +118,6 @@ const refreshAgents = async () => {
 
 onMounted(() => {
   refreshAgents()
-  // Refresh agents every 5 seconds for real-time updates
   refreshInterval = setInterval(refreshAgents, 5000)
 })
 

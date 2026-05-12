@@ -87,6 +87,12 @@ To enable authentication:
 
 Only the configured `authorizedEmail` can access the web portal when authentication is enabled.
 
+## Database Schema Notes
+
+The SQLite database (`~/.io/io.db`) includes a `squads` table with a `universe` column. When a squad is created, it is automatically assigned one of six 80s pop culture universes (A-Team, Transformers, ThunderCats, GI Joe, Aliens, Ghostbusters) unless one is explicitly chosen. No additional configuration fields are required — universe assignment is handled automatically by the `squad_create` tool.
+
+A separate `squad_agents` table tracks the named specialist agents within each squad, including their character name, role title, charter, and model tier.
+
 ## Data Directory
 
 IO stores all persistent data in `~/.io/`:
@@ -94,7 +100,7 @@ IO stores all persistent data in `~/.io/`:
 ```
 ~/.io/
 ├── config.json          # Configuration
-├── io.db                # SQLite database (squads, decisions, state)
+├── io.db                # SQLite database (squads, decisions, agents, state)
 ├── wiki/                # Knowledge wiki (markdown files)
 └── skills/              # Installed skills (SKILL.md files)
 ```

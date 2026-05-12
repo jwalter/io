@@ -74,19 +74,54 @@
               <h3 class="font-bold text-gray-100">{{ squad.name }}</h3>
               <p class="text-sm text-gray-500">{{ squad.slug }}</p>
             </div>
-            <span :class="[
-              'px-2 py-1 rounded text-xs font-medium',
-              squad.status === 'active'
-                ? 'bg-green-900 text-green-100'
-                : squad.status === 'error'
-                  ? 'bg-red-900 text-red-100'
-                  : 'bg-gray-700 text-gray-200'
-            ]">
-              {{ squad.status }}
-            </span>
+            <div class="flex items-center gap-2">
+              <span v-if="squad.universe" class="px-2 py-1 rounded text-xs font-medium bg-purple-900 text-purple-100">
+                🎬 {{ universeLabel(squad.universe) }}
+              </span>
+              <span :class="[
+                'px-2 py-1 rounded text-xs font-medium',
+                squad.status === 'working'
+                  ? 'bg-blue-900 text-blue-100'
+                  : squad.status === 'error'
+                    ? 'bg-red-900 text-red-100'
+                    : 'bg-gray-700 text-gray-200'
+              ]">
+                {{ squad.status }}
+              </span>
+            </div>
           </div>
           <p class="text-sm text-gray-400 mb-2">📁 {{ squad.project_path }}</p>
-          <div class="flex justify-between items-center text-xs text-gray-500">
+
+          <!-- Agent Roster -->
+          <div v-if="squadAgents[squad.slug] && squadAgents[squad.slug].length > 0" class="mt-3 border-t border-gray-700 pt-3">
+            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Team Roster</p>
+            <div class="grid gap-2">
+              <div
+                v-for="agent in squadAgents[squad.slug]"
+                :key="agent.character_name"
+                class="flex items-center gap-3 bg-gray-750 rounded px-3 py-2"
+                :class="agent.status === 'working' ? 'bg-blue-950 border border-blue-800' : 'bg-gray-900'"
+              >
+                <div class="flex-1 min-w-0">
+                  <span class="text-sm font-medium text-gray-100">{{ agent.character_name }}</span>
+                  <span class="text-xs text-gray-500 ml-2">{{ agent.role_title }}</span>
+                </div>
+                <span :class="[
+                  'px-2 py-0.5 rounded text-xs',
+                  agent.status === 'working' ? 'bg-blue-800 text-blue-200' :
+                  agent.status === 'error' ? 'bg-red-800 text-red-200' :
+                  'bg-gray-700 text-gray-400'
+                ]">
+                  {{ agent.status }}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div v-else class="mt-3 border-t border-gray-700 pt-3">
+            <p class="text-xs text-gray-500 italic">No agents assigned yet</p>
+          </div>
+
+          <div class="flex justify-between items-center text-xs text-gray-500 mt-3">
             <span v-if="squad.model">Model: {{ squad.model }}</span>
             <span>{{ formatDate(squad.created_at) }}</span>
           </div>
@@ -100,6 +135,15 @@
 import { ref, onMounted } from 'vue'
 import { apiFetch } from '../lib/api'
 
+interface SquadAgent {
+  character_name: string
+  role_title: string
+  charter: string | null
+  model_tier: string
+  personality: string | null
+  status: string
+}
+
 interface Squad {
   id: number
   slug: string
@@ -107,12 +151,23 @@ interface Squad {
   project_path: string
   copilot_session_id: string | null
   model: string | null
+  universe: string | null
   status: string
   created_at: string
   updated_at: string
 }
 
+const UNIVERSE_NAMES: Record<string, string> = {
+  'a-team': 'The A-Team',
+  'transformers': 'Transformers',
+  'thundercats': 'ThunderCats',
+  'gi-joe': 'G.I. Joe',
+  'aliens': 'Aliens',
+  'ghostbusters': 'Ghostbusters',
+}
+
 const squads = ref<Squad[]>([])
+const squadAgents = ref<Record<string, SquadAgent[]>>({})
 const loading = ref(true)
 const error = ref<string | null>(null)
 const showCreateForm = ref(false)
@@ -124,6 +179,11 @@ const form = ref({
   name: '',
   projectPath: '',
 })
+
+const universeLabel = (id: string | null) => {
+  if (!id) return ''
+  return UNIVERSE_NAMES[id] ?? id
+}
 
 const formatDate = (dateStr: string) => {
   const date = new Date(dateStr)
@@ -142,6 +202,19 @@ const loadSquads = async () => {
     }
     const data = (await response.json()) as { squads: Squad[] }
     squads.value = data.squads
+
+    // Load agents for each squad
+    for (const squad of data.squads) {
+      try {
+        const agentResp = await apiFetch(`/api/squads/${squad.slug}/agents`)
+        if (agentResp.ok) {
+          const agentData = (await agentResp.json()) as { agents: SquadAgent[] }
+          squadAgents.value[squad.slug] = agentData.agents
+        }
+      } catch {
+        // Non-critical — just skip
+      }
+    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load squads'
   } finally {

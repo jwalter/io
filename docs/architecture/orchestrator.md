@@ -105,11 +105,15 @@ The orchestrator registers these tools:
 | `wiki_search`       | Search the knowledge base                                |
 | `wiki_list`         | List all wiki pages                                      |
 | `wiki_delete`       | Delete a wiki page                                       |
-| `squad_create`      | Create a persistent project squad                        |
+| `squad_create`      | Create a persistent project squad (optionally with a specific 80s universe) |
 | `squad_recall`      | Recall a squad's context and decisions                   |
 | `squad_status`      | List all squads and their status                         |
 | `squad_log_decision`| Log a decision for a squad                               |
-| `squad_delegate`    | Delegate a task to a squad's worker agent                |
+| `squad_delegate`    | Delegate a task to a squad's worker agent (optionally targeting a specific named agent) |
+| `squad_analyze`     | Analyze a project directory for languages, frameworks, test tools, and CI/CD |
+| `squad_add_agent`   | Add a named specialist agent to a squad with a dynamic role |
+| `squad_agents`      | List the agent roster for a squad                        |
+| `squad_remove_agent`| Remove a named agent from a squad                        |
 | `squad_delete`      | Delete a squad                                           |
 | `shell`             | Run a shell command on the host machine                  |
 | `web_fetch`         | Fetch a URL and return its content                       |
@@ -123,6 +127,34 @@ The orchestrator registers these tools:
 | `check_update`      | Check for and apply IO updates                           |
 
 Tool implementations are defined in `src/copilot/tools.ts` and injected via a dependency object so they can be tested in isolation.
+
+## Dynamic Role Creation Workflow
+
+When the orchestrator sets up a new squad, it follows a multi-step workflow to create named specialist agents with dynamic roles:
+
+```
+1. squad_create (with optional universe)
+       │
+       ▼
+2. squad_analyze (scan project directory)
+       │
+       ▼
+3. Orchestrator determines needed specialists
+   based on detected tech stack
+       │
+       ▼
+4. squad_add_agent × N (one per specialist)
+   Each agent gets:
+   - Next character from the universe pool
+   - A free-form role_title (e.g., "Frontend Architect")
+   - A charter describing their responsibilities
+   - A model_tier (high/medium/low)
+       │
+       ▼
+5. squad_delegate (target specific agents by character name)
+```
+
+Roles are **not** fixed templates — they are dynamically determined by the orchestrator based on the project's languages, frameworks, test tools, and CI/CD configuration. This means a React project might get a "Component Architect" and "State Management Lead", while a Go microservice project might get a "API Designer" and "Concurrency Specialist".
 
 ## Health Check
 

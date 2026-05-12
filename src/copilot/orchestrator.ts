@@ -17,6 +17,9 @@ import {
   logDecision,
   getDecisionsSummary,
   updateSquadStatus,
+  addSquadAgent,
+  listSquadAgents,
+  removeSquadAgent,
 } from "../store/squads.js";
 import { readPage, writePage, assertPagePath, deletePage, listPages } from "../wiki/fs.js";
 import { resolveModelTiers } from "./model-router.js";
@@ -74,8 +77,8 @@ let processing = false;
 // Session config helpers
 // ---------------------------------------------------------------------------
 
-function mapSquad(s: { slug: string; name: string; project_path: string; status: string }) {
-  return { slug: s.slug, name: s.name, projectPath: s.project_path, status: s.status };
+function mapSquad(s: { slug: string; name: string; project_path: string; status: string; universe?: string | null }) {
+  return { slug: s.slug, name: s.name, projectPath: s.project_path, status: s.status, universe: s.universe };
 }
 
 function getToolDeps() {
@@ -105,6 +108,17 @@ function getToolDeps() {
         description: t.description,
         status: t.status,
       })),
+    addSquadAgent,
+    listSquadAgents: (slug: string) =>
+      listSquadAgents(slug).map((a) => ({
+        character_name: a.character_name,
+        role_title: a.role_title,
+        charter: a.charter,
+        model_tier: a.model_tier,
+        personality: a.personality,
+        status: a.status,
+      })),
+    removeSquadAgent,
     listSkills,
     installSkill,
     removeSkill,

@@ -4,6 +4,7 @@ import { execSync } from "child_process";
 import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, mkdirSync } from "fs";
 import { join, dirname, resolve, sep } from "path";
 import { homedir } from "os";
+import { UNIVERSES } from "./universes.js";
 
 // Ensure child processes have HOME set (systemd services often don't)
 function shellEnv(): NodeJS.ProcessEnv {
@@ -19,16 +20,19 @@ export interface ToolDeps {
   wikiAssertPagePath: (path: string) => void;
   wikiDelete: (path: string) => boolean;
   wikiList: () => string[];
-  getSquad: (slug: string) => { slug: string; name: string; projectPath: string; status: string } | undefined;
-  listSquads: () => Array<{ slug: string; name: string; projectPath: string; status: string }>;
-  createSquad: (slug: string, name: string, projectPath: string) => void;
+  getSquad: (slug: string) => { slug: string; name: string; projectPath: string; status: string; universe?: string | null } | undefined;
+  listSquads: () => Array<{ slug: string; name: string; projectPath: string; status: string; universe?: string | null }>;
+  createSquad: (slug: string, name: string, projectPath: string, universeId?: string) => void;
   deleteSquad: (slug: string) => void;
   logDecision: (squadSlug: string, decision: string, context?: string) => void;
   getDecisionsSummary: (squadSlug: string) => string;
   updateSquadStatus: (slug: string, status: string) => void;
-  delegateToAgent: (squadSlug: string, task: string, onComplete: (taskId: string, result: string) => void) => Promise<string>;
+  delegateToAgent: (squadSlug: string, task: string, onComplete: (taskId: string, result: string) => void, targetAgent?: string) => Promise<string>;
   getTask: (taskId: string) => { task_id: string; agent_slug: string; description: string; status: string; result: string | null } | undefined;
   getActiveAgentTasks: () => Array<{ taskId: string; agentSlug: string; description: string; status: string }>;
+  addSquadAgent: (squadSlug: string, roleTitle: string, charter: string, modelTier?: string) => { character_name: string; role_title: string; personality: string | null; model_tier: string };
+  listSquadAgents: (squadSlug: string) => Array<{ character_name: string; role_title: string; charter: string | null; model_tier: string; personality: string | null; status: string }>;
+  removeSquadAgent: (squadSlug: string, characterName: string) => boolean;
   listSkills: () => Array<{ name: string; slug: string; description: string; path: string }>;
   installSkill: (repoUrl: string) => Promise<{ name: string; slug: string; description: string; path: string }>;
   removeSkill: (slug: string) => boolean;
@@ -85,17 +89,23 @@ export function createTools(deps: ToolDeps) {
   });
 
   const squadCreate = defineTool("squad_create", {
-    description: "Create a persistent project squad. Squads remember decisions and context for a specific codebase.",
+    description: "Create a persistent project squad with an 80s-themed team. A random universe (A-Team, Transformers, etc.) is assigned unless you specify one. After creating, use squad_analyze to examine the project, then squad_add_agent for each specialist needed.",
     skipPermission: true,
     parameters: z.object({
       slug: z.string().describe("Unique identifier (e.g., 'michaeljolley-io')"),
       name: z.string().describe("Display name (e.g., 'IO Assistant')"),
       project_path: z.string().describe("Path to the project directory"),
+      universe: z
+        .enum(UNIVERSES.map((u) => u.id) as [string, ...string[]])
+        .optional()
+        .describe("80s universe theme. Options: a-team, transformers, thundercats, gi-joe, aliens, ghostbusters. Random if omitted."),
     }),
-    handler: async ({ slug, name, project_path }) => {
+    handler: async ({ slug, name, project_path, universe }) => {
       try {
-        deps.createSquad(slug, name, project_path);
-        return `Squad "${name}" created for ${project_path}`;
+        deps.createSquad(slug, name, project_path, universe);
+        const squad = deps.getSquad(slug);
+        const universeName = UNIVERSES.find((u) => u.id === squad?.universe)?.name ?? squad?.universe;
+        return `Squad "${name}" created for ${project_path}\nUniverse: ${universeName}\n\nNext steps:\n1. Use \`squad_analyze\` to examine the project\n2. Use \`squad_add_agent\` to add specialists based on the analysis`;
       } catch (err) {
         return `Error creating squad: ${err instanceof Error ? err.message : String(err)}`;
       }
@@ -117,14 +127,23 @@ export function createTools(deps: ToolDeps) {
   });
 
   const squadStatus = defineTool("squad_status", {
-    description: "List all squads and their status.",
+    description: "List all squads with their universe theme and agent roster.",
     skipPermission: true,
     parameters: z.object({}),
     handler: async () => {
       const squads = deps.listSquads();
       if (squads.length === 0) return "No squads created yet.";
       return squads
-        .map((s) => `- **${s.name}** (\`${s.slug}\`) — ${s.status} — ${s.projectPath}`)
+        .map((s) => {
+          const universeName = s.universe
+            ? UNIVERSES.find((u) => u.id === s.universe)?.name ?? s.universe
+            : "none";
+          const agents = deps.listSquadAgents(s.slug);
+          const agentList = agents.length > 0
+            ? "\n  Agents: " + agents.map((a) => `${a.character_name} (${a.role_title})`).join(", ")
+            : "\n  Agents: none — use squad_add_agent to build the team";
+          return `- **${s.name}** (\`${s.slug}\`) — ${s.status} — 🎬 ${universeName}${agentList}\n  📁 ${s.projectPath}`;
+        })
         .join("\n");
     },
   });
@@ -149,7 +168,7 @@ export function createTools(deps: ToolDeps) {
 
   const squadDelegate = defineTool("squad_delegate", {
     description:
-      "Delegate a task to a squad agent for autonomous execution. The agent runs in the background and you get a task ID immediately. Use squad_task_status to check progress. Use this after planning work with the user to send each task to the squad for implementation.",
+      "Delegate a task to a squad agent for autonomous execution. If the squad has named agents, you can target a specific one by character name, or let the system pick the best available agent. Returns a task ID immediately.",
     skipPermission: true,
     parameters: z.object({
       slug: z.string().describe("Squad slug to delegate to"),
@@ -158,14 +177,19 @@ export function createTools(deps: ToolDeps) {
         .describe(
           "Detailed task description. Be specific — include file paths, expected behavior, acceptance criteria. The agent works autonomously with this as its only instruction.",
         ),
+      agent: z
+        .string()
+        .optional()
+        .describe("Character name of a specific agent to target (e.g., 'Hannibal', 'Optimus Prime'). If omitted, the system picks the best available agent."),
     }),
-    handler: async ({ slug, task }) => {
-      console.error(`[io] squad_delegate called: ${slug} — ${task.slice(0, 100)}…`);
+    handler: async ({ slug, task, agent }) => {
+      console.error(`[io] squad_delegate called: ${slug}${agent ? ` → ${agent}` : ""} — ${task.slice(0, 100)}…`);
       try {
         const taskId = await deps.delegateToAgent(slug, task, (id, result) => {
           console.error(`[io] Agent task ${id} completed for squad ${slug}`);
-        });
-        return `Task delegated to squad "${slug}". Task ID: ${taskId}\n\nThe agent is working on this in the background. Use squad_task_status to check progress.`;
+        }, agent);
+        const agentLabel = agent ? `agent "${agent}" in squad "${slug}"` : `squad "${slug}"`;
+        return `Task delegated to ${agentLabel}. Task ID: ${taskId}\n\nThe agent is working on this in the background. Use squad_task_status to check progress.`;
       } catch (err) {
         return `Error delegating task: ${err instanceof Error ? err.message : String(err)}`;
       }
@@ -201,9 +225,225 @@ export function createTools(deps: ToolDeps) {
     },
   });
 
+  // --- Squad analyze ---
+  const squadAnalyze = defineTool("squad_analyze", {
+    description:
+      "Analyze a project directory to determine what specialist agents the squad needs. Scans for languages, frameworks, test tools, CI/CD config, and project structure. Use the output to decide which agents to add with squad_add_agent.",
+    skipPermission: true,
+    parameters: z.object({
+      project_path: z.string().describe("Path to the project directory to analyze"),
+    }),
+    handler: async ({ project_path }) => {
+      console.error(`[io] squad_analyze called: ${project_path}`);
+      try {
+        const resolved = resolve(project_path);
+        if (!existsSync(resolved)) return `Directory not found: ${project_path}`;
+
+        const analysis: string[] = [];
+        analysis.push(`## Project Analysis: ${project_path}\n`);
+
+        // Detect languages & frameworks by scanning for key files
+        const indicators: Array<{ file: string; label: string }> = [
+          { file: "package.json", label: "Node.js/JavaScript/TypeScript" },
+          { file: "tsconfig.json", label: "TypeScript" },
+          { file: "Cargo.toml", label: "Rust" },
+          { file: "go.mod", label: "Go" },
+          { file: "requirements.txt", label: "Python" },
+          { file: "pyproject.toml", label: "Python" },
+          { file: "Gemfile", label: "Ruby" },
+          { file: "pom.xml", label: "Java (Maven)" },
+          { file: "build.gradle", label: "Java/Kotlin (Gradle)" },
+          { file: "*.csproj", label: ".NET/C#" },
+          { file: "*.fsproj", label: ".NET/F#" },
+          { file: "*.sln", label: ".NET Solution" },
+          { file: "Dockerfile", label: "Docker" },
+          { file: "docker-compose.yml", label: "Docker Compose" },
+          { file: "docker-compose.yaml", label: "Docker Compose" },
+          { file: ".github/workflows", label: "GitHub Actions CI/CD" },
+          { file: ".gitlab-ci.yml", label: "GitLab CI" },
+          { file: "Jenkinsfile", label: "Jenkins CI" },
+          { file: "azure-pipelines.yml", label: "Azure Pipelines" },
+          { file: "vite.config.ts", label: "Vite" },
+          { file: "vite.config.js", label: "Vite" },
+          { file: "next.config.js", label: "Next.js" },
+          { file: "next.config.mjs", label: "Next.js" },
+          { file: "nuxt.config.ts", label: "Nuxt" },
+          { file: "angular.json", label: "Angular" },
+          { file: "tailwind.config.js", label: "Tailwind CSS" },
+          { file: "tailwind.config.ts", label: "Tailwind CSS" },
+          { file: "jest.config.js", label: "Jest testing" },
+          { file: "jest.config.ts", label: "Jest testing" },
+          { file: "vitest.config.ts", label: "Vitest testing" },
+          { file: ".eslintrc.js", label: "ESLint" },
+          { file: "eslint.config.js", label: "ESLint" },
+          { file: "terraform", label: "Terraform" },
+          { file: "serverless.yml", label: "Serverless Framework" },
+        ];
+
+        const detected: string[] = [];
+        for (const { file, label } of indicators) {
+          if (file.includes("*")) {
+            // Glob-like check — just look for files ending with the pattern
+            const ext = file.replace("*", "");
+            try {
+              const entries = readdirSync(resolved);
+              if (entries.some((e) => e.endsWith(ext))) {
+                detected.push(label);
+              }
+            } catch { /* skip */ }
+          } else {
+            if (existsSync(join(resolved, file))) {
+              detected.push(label);
+            }
+          }
+        }
+
+        if (detected.length > 0) {
+          analysis.push(`**Detected Technologies**: ${[...new Set(detected)].join(", ")}`);
+        }
+
+        // Read package.json for more detail
+        const pkgPath = join(resolved, "package.json");
+        if (existsSync(pkgPath)) {
+          try {
+            const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+            const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+            const frameworks: string[] = [];
+            const depNames = Object.keys(allDeps);
+
+            const frameworkMap: Record<string, string> = {
+              react: "React", vue: "Vue.js", angular: "Angular", svelte: "Svelte",
+              express: "Express.js", fastify: "Fastify", koa: "Koa", hono: "Hono",
+              "next": "Next.js", "nuxt": "Nuxt", "@nestjs/core": "NestJS",
+              prisma: "Prisma ORM", drizzle: "Drizzle ORM", sequelize: "Sequelize",
+              mongoose: "Mongoose", typeorm: "TypeORM",
+              jest: "Jest", vitest: "Vitest", mocha: "Mocha", playwright: "Playwright",
+              cypress: "Cypress", "@testing-library/react": "React Testing Library",
+              tailwindcss: "Tailwind CSS", "@mui/material": "MUI",
+              electron: "Electron", tauri: "Tauri",
+              "@github/copilot-sdk": "GitHub Copilot SDK",
+            };
+
+            for (const [dep, label] of Object.entries(frameworkMap)) {
+              if (depNames.includes(dep)) frameworks.push(label);
+            }
+
+            if (frameworks.length > 0) {
+              analysis.push(`**Frameworks/Libraries**: ${frameworks.join(", ")}`);
+            }
+            if (pkg.scripts) {
+              analysis.push(`**Scripts**: ${Object.keys(pkg.scripts).join(", ")}`);
+            }
+          } catch { /* skip */ }
+        }
+
+        // Detect directory structure (top-level)
+        try {
+          const entries = readdirSync(resolved);
+          const dirs = entries.filter((e) => {
+            try { return statSync(join(resolved, e)).isDirectory() && !e.startsWith("."); }
+            catch { return false; }
+          });
+          if (dirs.length > 0) {
+            analysis.push(`**Top-level directories**: ${dirs.join(", ")}`);
+          }
+        } catch { /* skip */ }
+
+        analysis.push(
+          "\n**Recommendation**: Based on this analysis, use `squad_add_agent` to create specialists. " +
+          "Choose role titles that match the project's technology stack (e.g., 'Express API Engineer', " +
+          "'Vue.js Frontend Developer', 'Vitest Test Engineer'). Write a charter for each agent describing " +
+          "their specific responsibilities within this project.",
+        );
+
+        return analysis.join("\n");
+      } catch (err) {
+        return `Error analyzing project: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    },
+  });
+
+  // --- Squad add agent ---
+  const squadAddAgent = defineTool("squad_add_agent", {
+    description:
+      "Add a named specialist agent to a squad. The next character from the squad's 80s universe is automatically assigned. Use after squad_analyze to build the team.",
+    skipPermission: true,
+    parameters: z.object({
+      slug: z.string().describe("Squad slug"),
+      role_title: z
+        .string()
+        .describe(
+          "Free-form role title based on project needs (e.g., 'Express API Engineer', 'Vue.js Frontend Dev', 'Vitest Test Engineer', 'GitHub Actions CI/CD Specialist')",
+        ),
+      charter: z
+        .string()
+        .describe(
+          "Detailed description of this agent's responsibilities, technologies they own, and quality standards. This becomes their persistent mission.",
+        ),
+      model_tier: z
+        .enum(["high", "medium", "low"])
+        .optional()
+        .describe("Model tier for this agent. Defaults to 'medium'. Use 'high' for architecture/complex work, 'low' for simple tasks."),
+    }),
+    handler: async ({ slug, role_title, charter, model_tier }) => {
+      console.error(`[io] squad_add_agent called: ${slug} — ${role_title}`);
+      try {
+        const agent = deps.addSquadAgent(slug, role_title, charter, model_tier);
+        return `Agent added to squad "${slug}":\n- **${agent.character_name}** — ${agent.role_title}\n- Personality: ${agent.personality}\n- Model tier: ${agent.model_tier}`;
+      } catch (err) {
+        return `Error adding agent: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    },
+  });
+
+  // --- Squad agents (list roster) ---
+  const squadAgents = defineTool("squad_agents", {
+    description: "List all named agents in a squad's roster with their character names, roles, and status.",
+    skipPermission: true,
+    parameters: z.object({
+      slug: z.string().describe("Squad slug"),
+    }),
+    handler: async ({ slug }) => {
+      const squad = deps.getSquad(slug);
+      if (!squad) return `Squad not found: ${slug}`;
+
+      const agents = deps.listSquadAgents(slug);
+      if (agents.length === 0) {
+        return `Squad "${squad.name}" has no agents yet. Use squad_add_agent to build the team.`;
+      }
+
+      const universeName = squad.universe
+        ? UNIVERSES.find((u) => u.id === squad.universe)?.name ?? squad.universe
+        : "none";
+
+      const lines = agents.map((a) =>
+        `- **${a.character_name}** — ${a.role_title} (${a.model_tier}) — ${a.status}${a.personality ? `\n  _${a.personality}_` : ""}`,
+      );
+
+      return `**${squad.name}** — 🎬 ${universeName}\n\n${lines.join("\n")}`;
+    },
+  });
+
+  // --- Squad remove agent ---
+  const squadRemoveAgent = defineTool("squad_remove_agent", {
+    description: "Remove a named agent from a squad's roster.",
+    skipPermission: true,
+    parameters: z.object({
+      slug: z.string().describe("Squad slug"),
+      character_name: z.string().describe("Character name of the agent to remove"),
+    }),
+    handler: async ({ slug, character_name }) => {
+      console.error(`[io] squad_remove_agent called: ${slug} — ${character_name}`);
+      const removed = deps.removeSquadAgent(slug, character_name);
+      return removed
+        ? `Agent "${character_name}" removed from squad "${slug}".`
+        : `Agent "${character_name}" not found in squad "${slug}".`;
+    },
+  });
+
   // --- Squad delete ---
   const squadDelete = defineTool("squad_delete", {
-    description: "Delete a squad and all its decisions. This is permanent.",
+    description: "Delete a squad and all its agents and decisions. This is permanent.",
     skipPermission: true,
     parameters: z.object({
       slug: z.string().describe("Squad slug to delete"),
@@ -756,7 +996,7 @@ export function createTools(deps: ToolDeps) {
     },
   });
 
-  return [wikiRead, wikiWrite, wikiSearch, wikiDelete, wikiList, squadCreate, squadRecall, squadStatus, squadLogDecision, squadDelegate, squadTaskStatus, squadDelete, skillList, skillInstall, skillRemove, skillSearch, configUpdate, checkUpdate, shell, fileOps, bash, readFile, viewTool, grepTool, strReplaceEditor, github];
+  return [wikiRead, wikiWrite, wikiSearch, wikiDelete, wikiList, squadCreate, squadRecall, squadStatus, squadLogDecision, squadDelegate, squadTaskStatus, squadDelete, squadAnalyze, squadAddAgent, squadAgents, squadRemoveAgent, skillList, skillInstall, skillRemove, skillSearch, configUpdate, checkUpdate, shell, fileOps, bash, readFile, viewTool, grepTool, strReplaceEditor, github];
 }
 
 function walkDirectory(dir: string, maxDepth = 3, depth = 0): string[] {

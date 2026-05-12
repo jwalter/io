@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import express, { type Request, type Response } from "express";
 import { config } from "../config.js";
 import { listSkills } from "../copilot/skills.js";
-import { listSquads, createSquad } from "../store/squads.js";
+import { listSquads, createSquad, listSquadAgents } from "../store/squads.js";
 import { getAgentInfo } from "../copilot/agents.js";
 import { IO_VERSION } from "../paths.js";
 import { requireAuth } from "./auth.js";
@@ -109,6 +109,17 @@ export async function startApiServer(): Promise<void> {
     } catch (e) {
       console.error("Error creating squad:", e);
       res.status(500).json({ error: "Failed to create squad" });
+    }
+  });
+
+  api.get("/squads/:slug/agents", (req: Request, res: Response) => {
+    try {
+      const slug = Array.isArray(req.params.slug) ? req.params.slug[0] : req.params.slug;
+      const agents = listSquadAgents(slug);
+      res.json({ agents });
+    } catch (e) {
+      console.error("Error listing squad agents:", e);
+      res.status(500).json({ error: "Failed to list squad agents" });
     }
   });
 

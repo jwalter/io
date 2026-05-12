@@ -17,9 +17,9 @@ By default, IO runs on port `3170`, so the dashboard is at `http://localhost:317
 The dashboard includes the following views:
 
 - **Chat** — Real-time conversation with IO via Server-Sent Events (SSE) streaming
-- **Squads** — View and manage project squads
+- **Squads** — View and manage project squads. Each squad displays its 80s universe badge and a full **agent roster** showing character names, role titles, and status.
 - **Skills** — Browse and manage installed skills
-- **Agent Activity** — Monitor background agent tasks and their status
+- **Agent Activity** — Monitor background agent tasks and their status. Shows the **character name** and role for each active agent.
 
 ## Port Configuration
 

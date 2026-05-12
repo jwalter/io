@@ -45,12 +45,31 @@ All tools are created in `src/copilot/tools.ts` via the `createTools(deps)` fact
 
 | Tool | Description | Parameters |
 | --- | --- | --- |
-| `squad_create` | Create a persistent project squad that remembers decisions and context | `slug: string` — unique identifier; `name: string` — display name; `project_path: string` — path to project directory |
+| `squad_create` | Create a persistent project squad that remembers decisions and context | `slug: string` — unique identifier; `name: string` — display name; `project_path: string` — path to project directory; `universe?: string` — 80s universe theme (`a-team`, `transformers`, `thundercats`, `gi-joe`, `aliens`, `ghostbusters`). Auto-assigned if omitted. |
+| `squad_analyze` | Scan a project directory and return analysis of languages, frameworks, test tools, and CI/CD configuration | `project_path: string` — path to the project directory to analyze |
+| `squad_add_agent` | Add a named specialist agent to a squad. Auto-assigns the next available character from the squad's universe. | `slug: string` — squad slug; `role_title: string` — free-form role (e.g., "Frontend Architect"); `charter: string` — description of the agent's responsibilities; `model_tier?: string` — `high`, `medium`, or `low` (default: `medium`) |
+| `squad_agents` | List the agent roster for a squad with character names, roles, and status | `slug: string` — squad slug |
+| `squad_remove_agent` | Remove a named agent from a squad | `slug: string` — squad slug; `character_name: string` — the character name of the agent to remove |
 | `squad_recall` | Recall a squad's context and past decisions | `slug: string` — squad slug |
 | `squad_status` | List all squads and their status | _(none)_ |
 | `squad_log_decision` | Log an important decision for a squad | `slug: string` — squad slug; `decision: string` — the decision made; `context?: string` — reasoning |
-| `squad_delegate` | Delegate a task to a squad's worker agent | `slug: string` — squad slug; `task: string` — the task to delegate |
+| `squad_delegate` | Delegate a task to a squad's worker agent | `slug: string` — squad slug; `task: string` — the task to delegate; `agent?: string` — character name of a specific agent to target (e.g., `"Hannibal"`, `"Optimus Prime"`) |
 | `squad_delete` | Delete a squad | `slug: string` — squad slug |
+
+#### Available Universes
+
+When creating a squad, you can optionally specify one of six 80s pop culture universes. Each universe provides a pool of characters that are assigned to agents in order:
+
+| Universe | Characters |
+| --- | --- |
+| `a-team` | Hannibal, Face, B.A. Baracus, Murdock, Amy Allen, Frankie Santana |
+| `transformers` | Optimus Prime, Bumblebee, Ratchet, Prowl, Wheeljack, Jazz, Ironhide, Grimlock |
+| `thundercats` | Lion-O, Tygra, Panthro, Cheetara, WilyKit, WilyKat, Snarf |
+| `gi-joe` | Duke, Scarlett, Snake Eyes, Flint, Lady Jaye, Breaker, Doc, Roadblock |
+| `aliens` | Ripley, Hicks, Bishop, Vasquez, Hudson, Newt, Apone, Drake |
+| `ghostbusters` | Venkman, Egon, Ray, Winston, Janine, Louis, Dana, Gozer |
+
+Each character comes with a personality description that influences the agent's communication style in its responses.
 
 ### Shell
 

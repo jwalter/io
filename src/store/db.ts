@@ -60,11 +60,31 @@ export function getDb(): BetterSqlite3.Database {
     );
   `);
 
-  // Migration: add model column to squads (for existing databases)
-  try {
-    db.exec(`ALTER TABLE squads ADD COLUMN model TEXT`);
-  } catch {
-    // Column already exists — ignore
+  // Migrations for existing databases
+  const migrations: string[] = [
+    `ALTER TABLE squads ADD COLUMN model TEXT`,
+    `ALTER TABLE squads ADD COLUMN universe TEXT`,
+    `CREATE TABLE IF NOT EXISTS squad_agents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      squad_slug TEXT NOT NULL,
+      character_name TEXT NOT NULL,
+      role_title TEXT NOT NULL,
+      charter TEXT,
+      model_tier TEXT NOT NULL DEFAULT 'medium',
+      personality TEXT,
+      copilot_session_id TEXT,
+      status TEXT NOT NULL DEFAULT 'idle',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(squad_slug, character_name)
+    )`,
+  ];
+
+  for (const migration of migrations) {
+    try {
+      db.exec(migration);
+    } catch {
+      // Already applied — ignore
+    }
   }
 
   return db;
