@@ -223,7 +223,7 @@ async function ensureOrchestratorSession(): Promise<CopilotSession> {
       const currentToolsHash = toolFingerprint(tools);
 
       if (savedSessionId) {
-        if (savedToolsHash && savedToolsHash !== currentToolsHash) {
+        if (!savedToolsHash || savedToolsHash !== currentToolsHash) {
           console.error("[io] Tool set changed since last session — starting fresh");
           deleteState(SESSION_ID_KEY);
           deleteState(SESSION_TOOLS_KEY);
