@@ -89,7 +89,7 @@ export async function delegateToAgent(
   // Run the task in the background — return taskId immediately
   void (async () => {
     try {
-      const response = await session.sendAndWait({ prompt: task });
+      const response = await session.sendAndWait({ prompt: task }, 600_000);
       const result = response?.data?.content ?? "Task completed (no output)";
       completeTask(taskId, result);
       updateSquadStatus(squadSlug, "idle");
