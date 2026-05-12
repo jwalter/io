@@ -6,7 +6,7 @@ import {
   type SessionConfig,
 } from "@github/copilot-sdk";
 import { config } from "../config.js";
-import { SESSIONS_DIR } from "../paths.js";
+import { SESSIONS_DIR, IO_VERSION } from "../paths.js";
 import { getState, setState, deleteState, logConversation } from "../store/db.js";
 import { clearStaleTasks, getTask } from "../store/tasks.js";
 import {
@@ -119,10 +119,10 @@ function getSessionConfig(): Pick<SessionConfig, "tools" | "skillDirectories"> {
   return { tools, skillDirectories: getSkillDirectories() };
 }
 
-/** Hash of tool names — used to detect when tools change across updates. */
+/** Hash of tool names + version — used to detect when tools change across updates. */
 function toolFingerprint(tools: SessionConfig["tools"]): string {
   const names = (tools ?? []).map((t) => t.name).sort().join(",");
-  return crypto.createHash("sha256").update(names).digest("hex").slice(0, 16);
+  return crypto.createHash("sha256").update(`${IO_VERSION}:${names}`).digest("hex").slice(0, 16);
 }
 
 function buildFullSessionConfig(): SessionConfig {

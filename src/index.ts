@@ -19,13 +19,14 @@ import { startApiServer, setMessageHandler as setApiHandler } from "./api/server
 import { listSkills, installSkill, removeSkill, searchSkillsRegistry } from "./copilot/skills.js";
 import { config, saveConfig } from "./config.js";
 import { createInterface } from "readline";
+import { IO_VERSION } from "./paths.js";
 
 const program = new Command();
 
 program
   .name("io")
   .description("IO — personal AI assistant daemon")
-  .version("1.0.0");
+  .version(IO_VERSION);
 
 program
   .option("--daemon", "Run as a background daemon")

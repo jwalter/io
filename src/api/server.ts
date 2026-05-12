@@ -1,5 +1,6 @@
 import express, { type Request, type Response } from "express";
 import { config } from "../config.js";
+import { IO_VERSION } from "../paths.js";
 
 export type ApiMessageHandler = (
   text: string,
@@ -39,7 +40,7 @@ export async function startApiServer(): Promise<void> {
   });
 
   app.get("/status", (_req: Request, res: Response) => {
-    res.json({ version: "1.0.0", uptime: process.uptime() });
+    res.json({ version: IO_VERSION, uptime: process.uptime() });
   });
 
   app.post("/message", async (req: Request, res: Response) => {
