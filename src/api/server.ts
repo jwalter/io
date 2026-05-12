@@ -1,9 +1,15 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { existsSync } from "node:fs";
 import express, { type Request, type Response } from "express";
 import { config } from "../config.js";
 import { listSkills } from "../copilot/skills.js";
 import { listSquads, createSquad } from "../store/squads.js";
 import { getAgentInfo } from "../copilot/agents.js";
 import { IO_VERSION } from "../paths.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const WEB_DIST = path.resolve(__dirname, "../../web-dist");
 
 export type ApiMessageHandler = (
   text: string,
@@ -38,16 +44,19 @@ export async function startApiServer(): Promise<void> {
     next();
   });
 
-  app.get("/health", (_req: Request, res: Response) => {
+  // Build API router
+  const api = express.Router();
+
+  api.get("/health", (_req: Request, res: Response) => {
     res.json({ status: "ok" });
   });
 
-  app.get("/status", (_req: Request, res: Response) => {
+  api.get("/status", (_req: Request, res: Response) => {
     res.json({ version: IO_VERSION, uptime: process.uptime() });
   });
 
   // Skills endpoints
-  app.get("/skills", (_req: Request, res: Response) => {
+  api.get("/skills", (_req: Request, res: Response) => {
     try {
       const skills = listSkills();
       res.json({ skills });
@@ -58,7 +67,7 @@ export async function startApiServer(): Promise<void> {
   });
 
   // Squads endpoints
-  app.get("/squads", (_req: Request, res: Response) => {
+  api.get("/squads", (_req: Request, res: Response) => {
     try {
       const squads = listSquads();
       res.json({ squads });
@@ -68,7 +77,7 @@ export async function startApiServer(): Promise<void> {
     }
   });
 
-  app.post("/squads", (req: Request, res: Response) => {
+  api.post("/squads", (req: Request, res: Response) => {
     try {
       const { slug, name, projectPath } = req.body as {
         slug?: string;
@@ -90,7 +99,7 @@ export async function startApiServer(): Promise<void> {
   });
 
   // Agents endpoints
-  app.get("/agents", (_req: Request, res: Response) => {
+  api.get("/agents", (_req: Request, res: Response) => {
     try {
       const agents = getAgentInfo();
       res.json({ agents });
@@ -101,7 +110,7 @@ export async function startApiServer(): Promise<void> {
   });
 
   // Chat endpoints
-  app.post("/message", async (req: Request, res: Response) => {
+  api.post("/message", async (req: Request, res: Response) => {
     const { text } = req.body as { text?: string };
 
     if (!text) {
@@ -132,7 +141,7 @@ export async function startApiServer(): Promise<void> {
     res.json({ response: fullResponse });
   });
 
-  app.get("/events", (req: Request, res: Response) => {
+  api.get("/events", (req: Request, res: Response) => {
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
@@ -144,6 +153,20 @@ export async function startApiServer(): Promise<void> {
       sseConnections.delete(res);
     });
   });
+
+  // Mount API at /api (for frontend) and / (backward compat)
+  app.use("/api", api);
+  app.use("/", api);
+
+  // Serve Vue frontend if built assets exist
+  if (existsSync(WEB_DIST)) {
+    app.use(express.static(WEB_DIST));
+    // SPA fallback — serve index.html for any non-API route
+    app.get("*", (_req: Request, res: Response) => {
+      res.sendFile(path.join(WEB_DIST, "index.html"));
+    });
+    console.log("[io] Web frontend enabled");
+  }
 
   return new Promise<void>((resolve) => {
     app.listen(config.apiPort, () => {
