@@ -1,43 +1,34 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-export interface Message {
+export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
-  timestamp: Date
+  streaming?: boolean
 }
 
 export const useChatStore = defineStore('chat', () => {
-  const messages = ref<Message[]>([])
+  const messages = ref<ChatMessage[]>([])
   const isLoading = ref(false)
 
-  function addMessage(role: 'user' | 'assistant', content: string) {
-    const message: Message = {
-      id: Math.random().toString(36).substring(7),
-      role,
-      content,
-      timestamp: new Date(),
-    }
-    messages.value.push(message)
-    return message
+  function addMessage(msg: ChatMessage) {
+    messages.value.push(msg)
   }
 
-  function updateLastMessage(content: string) {
-    if (messages.value.length > 0) {
-      messages.value[messages.value.length - 1].content = content
+  function appendToLast(text: string) {
+    const last = messages.value[messages.value.length - 1]
+    if (last && last.role === 'assistant') {
+      last.content += text
     }
   }
 
-  function clearMessages() {
-    messages.value = []
+  function setLastStreaming(streaming: boolean) {
+    const last = messages.value[messages.value.length - 1]
+    if (last && last.role === 'assistant') {
+      last.streaming = streaming
+    }
   }
 
-  return {
-    messages,
-    isLoading,
-    addMessage,
-    updateLastMessage,
-    clearMessages,
-  }
+  return { messages, isLoading, addMessage, appendToLast, setLastStreaming }
 })
