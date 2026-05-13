@@ -25,11 +25,15 @@ import {
 import { runScheduleNow } from "./scheduler.js";
 
 // ---------------------------------------------------------------------------
-// QA / test coverage heuristics
+// Squad coverage heuristics
 //
 // Every squad must have:
-//   1. At least one agent designated as QA (is_qa === 1) - see squad_set_qa.
-//   2. At least one agent whose role title implies a testing/quality focus.
+//   1. A dedicated team lead — a PM / Senior Engineer with no domain
+//      responsibility — designated via squad_set_lead. The lead's job is
+//      coordination, delegation, and review only. Lead veto power on PR
+//      promotion is automatic (see runPeerReview in agents.ts).
+//   2. At least one agent designated as QA (is_qa === 1) — see squad_set_qa.
+//   3. At least one agent whose role title implies a testing/quality focus.
 //
 // These are surfaced as warnings on squad_status, squad_agents, and
 // squad_delegate so users can fix coverage gaps before promoting work.
@@ -37,16 +41,96 @@ import { runScheduleNow } from "./scheduler.js";
 
 const TEST_ROLE_KEYWORDS = ["test", "qa", "quality", "tester", "sdet", "qe"];
 
+// Words in a role title that imply the agent owns a hands-on engineering
+// domain (and therefore should NOT be the team lead).
+const DOMAIN_ROLE_KEYWORDS = [
+  "frontend",
+  "backend",
+  "fullstack",
+  "full-stack",
+  "api",
+  "ui",
+  "ux",
+  "test",
+  "tester",
+  "qa",
+  "quality",
+  "sdet",
+  "qe",
+  "devops",
+  "sre",
+  "ops",
+  "infrastructure",
+  "platform",
+  "data",
+  "database",
+  "db",
+  "ml",
+  "ai",
+  "sdk",
+  "mobile",
+  "ios",
+  "android",
+  "web",
+  "security",
+  "embedded",
+  "integration",
+  "telegram",
+  "tui",
+  "vue",
+  "react",
+  "angular",
+  "express",
+  "sqlite",
+  "wiki",
+];
+
+// Words that mark a role as coordination/leadership-focused.
+const LEAD_ROLE_KEYWORDS = [
+  "lead",
+  "manager",
+  "pm",
+  "principal",
+  "coordinator",
+  "director",
+];
+
+function containsWord(haystack: string, word: string): boolean {
+  const re = new RegExp(`(^|[^a-z])${word}([^a-z]|$)`);
+  return re.test(haystack);
+}
+
 export function roleLooksLikeTesting(roleTitle: string | null | undefined): boolean {
   if (!roleTitle) return false;
   const lower = roleTitle.toLowerCase();
-  return TEST_ROLE_KEYWORDS.some((kw) => {
-    const re = new RegExp(`(^|[^a-z])${kw}([^a-z]|$)`);
-    return re.test(lower);
-  });
+  return TEST_ROLE_KEYWORDS.some((kw) => containsWord(lower, kw));
+}
+
+/**
+ * A dedicated team lead has a role title that emphasises coordination/seniority
+ * and does NOT also claim a hands-on engineering domain. Examples:
+ *   ✅ "Engineering Lead", "Project Manager", "Senior Engineering Lead",
+ *      "Principal Engineer", "Tech Lead", "Senior Engineer"
+ *   ❌ "Frontend Lead", "Test Manager", "QA Lead", "Backend Engineer",
+ *      "Express API Engineer"
+ */
+export function roleLooksLikeDedicatedLead(
+  roleTitle: string | null | undefined,
+): boolean {
+  if (!roleTitle) return false;
+  const lower = roleTitle.toLowerCase();
+  const hasDomainKw = DOMAIN_ROLE_KEYWORDS.some((kw) => containsWord(lower, kw));
+  if (hasDomainKw) return false;
+  const hasLeadKw = LEAD_ROLE_KEYWORDS.some((kw) => containsWord(lower, kw));
+  if (hasLeadKw) return true;
+  // "Senior Engineer" / "Sr. Engineer" with no domain qualifier also counts.
+  if (/(^|[^a-z])(senior|sr\.?)\s+engineer($|[^a-z])/.test(lower)) return true;
+  return false;
 }
 
 export interface SquadCoverage {
+  hasLead: boolean;
+  hasDedicatedLead: boolean;
   hasQa: boolean;
   hasTestRole: boolean;
   missing: string[];
@@ -54,21 +138,35 @@ export interface SquadCoverage {
 }
 
 export function assessSquadCoverage(
-  agents: Array<{ role_title: string; is_qa?: number }>,
+  agents: Array<{ role_title: string; is_qa?: number; is_lead?: number }>,
 ): SquadCoverage {
+  const leadAgent = agents.find((a) => a.is_lead === 1);
+  const hasLead = !!leadAgent;
+  const hasDedicatedLead =
+    !!leadAgent && roleLooksLikeDedicatedLead(leadAgent.role_title);
   const hasQa = agents.some((a) => a.is_qa === 1);
   const hasTestRole = agents.some((a) => roleLooksLikeTesting(a.role_title));
   const missing: string[] = [];
+  if (!hasLead) {
+    missing.push(
+      "dedicated team lead (use squad_set_lead with a PM/Senior Engineer who owns no domain)",
+    );
+  } else if (!hasDedicatedLead) {
+    missing.push(
+      `dedicated lead role (current lead "${leadAgent!.role_title}" looks like a domain specialist — team leads must be PM/Senior Engineer with no domain ownership)`,
+    );
+  }
   if (!hasQa) missing.push("QA reviewer (use squad_set_qa)");
   if (!hasTestRole) {
     missing.push(
       "test/quality engineer (add an agent whose role_title contains 'test', 'qa', or 'quality')",
     );
   }
-  const warning = missing.length > 0
-    ? `⚠️ Squad coverage gap: missing ${missing.join(" and ")}.`
-    : null;
-  return { hasQa, hasTestRole, missing, warning };
+  const warning =
+    missing.length > 0
+      ? `⚠️ Squad coverage gap: missing ${missing.join("; ")}.`
+      : null;
+  return { hasLead, hasDedicatedLead, hasQa, hasTestRole, missing, warning };
 }
 
 // Ensure child processes have HOME set (systemd services often don't)
@@ -267,7 +365,7 @@ export function createTools(deps: ToolDeps) {
         }, agent);
         const agentLabel = agent ? `agent "${agent}" in squad "${slug}"` : `squad "${slug}"`;
         const warningPrefix = coverage.warning
-          ? `${coverage.warning} Reviews from this squad will not be vetoed by a designated QA agent until this is fixed.\n\n`
+          ? `${coverage.warning} A dedicated lead and a QA reviewer should both hold veto power on PR promotion — fix gaps before promoting work.\n\n`
           : "";
         return `${warningPrefix}Task delegated to ${agentLabel}. Task ID: ${taskId}\n\nThe agent is working on this in the background. Use squad_task_status to check progress.`;
       } catch (err) {
@@ -1167,13 +1265,15 @@ export function createTools(deps: ToolDeps) {
 
   const squadSetLead = defineTool("squad_set_lead", {
     description:
-      "Designate an agent as the team lead for their squad. The lead receives delegated tasks (when no specific agent is targeted) and orchestrates the team by divvying subtasks to teammates.",
+      "Designate an agent as the team lead for their squad. The lead MUST be a dedicated PM / Senior Engineer with NO domain responsibility — their sole job is coordinating, delegating, and reviewing the team's work. Do not pick an agent who also owns the backend, frontend, tests, or any other implementation domain. The lead receives delegated tasks (when no specific agent is targeted), orchestrates the team via delegate_to_teammate, and holds automatic veto power on PR promotion.",
     skipPermission: true,
     parameters: z.object({
       slug: z.string().describe("Squad slug"),
       character_name: z
         .string()
-        .describe("Character name of the agent to make team lead"),
+        .describe(
+          "Character name of the agent to make team lead. Choose a PM / Senior Engineer with no domain ownership.",
+        ),
     }),
     handler: async ({ slug, character_name }) => {
       try {
@@ -1185,7 +1285,12 @@ export function createTools(deps: ToolDeps) {
           return `Agent "${character_name}" not found in squad "${slug}". Use squad_agents to list the roster.`;
         }
         deps.setSquadLead(slug, character_name);
-        return `⭐ ${character_name} (${target.role_title}) is now the team lead for squad "${squad.name}".`;
+        const dedicated = roleLooksLikeDedicatedLead(target.role_title);
+        const base = `⭐ ${character_name} (${target.role_title}) is now the team lead for squad "${squad.name}". They have automatic veto power on PR promotion.`;
+        if (!dedicated) {
+          return `${base}\n\n⚠️ "${target.role_title}" looks like a domain specialist. Team leads should be a dedicated PM / Senior Engineer with no other domain responsibility — consider adding a dedicated lead agent (e.g. role "Senior Engineering Lead" or "Project Manager") and reassigning.`;
+        }
+        return base;
       } catch (err) {
         return `Error: ${err instanceof Error ? err.message : String(err)}`;
       }
