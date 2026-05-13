@@ -158,6 +158,30 @@ function toolFingerprint(tools: SessionConfig["tools"]): string {
   return crypto.createHash("sha256").update(`${IO_VERSION}:${names}`).digest("hex").slice(0, 16);
 }
 
+function buildSquadRoster(): string {
+  const squads = listSquads();
+  if (squads.length === 0) return "";
+  return squads
+    .map((s) => {
+      const agents = listSquadAgents(s.slug);
+      const lead = agents.find((a) => a.is_lead === 1);
+      const agentList = agents
+        .map((a) => {
+          const badges = [
+            a.is_lead === 1 ? "⭐ LEAD" : "",
+            a.is_qa === 1 ? "🛡️ QA" : "",
+          ]
+            .filter(Boolean)
+            .join(", ");
+          return `  - ${a.character_name} (${a.role_title})${badges ? ` [${badges}]` : ""}`;
+        })
+        .join("\n");
+      const leadLine = lead ? `\nTeam Lead: ${lead.character_name}` : "";
+      return `**${s.name}** (\`${s.slug}\`) — ${s.status}\n📁 ${s.project_path}${leadLine}\n${agentList || "  _(no agents yet)_"}`;
+    })
+    .join("\n\n");
+}
+
 function buildFullSessionConfig(): SessionConfig {
   const { tools, skillDirectories } = getSessionConfig();
   return {
@@ -168,6 +192,7 @@ function buildFullSessionConfig(): SessionConfig {
       content: getOrchestratorSystemMessage({
         selfEditEnabled: config.selfEditEnabled,
         memorySummary: getWikiSummary() || undefined,
+        squadRoster: buildSquadRoster() || undefined,
       }),
     },
     tools,
