@@ -20,6 +20,8 @@ import {
   addSquadAgent,
   listSquadAgents,
   removeSquadAgent,
+  setSquadLead,
+  getSquadLead,
 } from "../store/squads.js";
 import { readPage, writePage, assertPagePath, deletePage, listPages } from "../wiki/fs.js";
 import { resolveModelTiers } from "./model-router.js";
@@ -117,8 +119,16 @@ function getToolDeps() {
         model_tier: a.model_tier,
         personality: a.personality,
         status: a.status,
+        is_lead: a.is_lead,
       })),
     removeSquadAgent,
+    setSquadLead,
+    getSquadLead: (slug: string) => {
+      const lead = getSquadLead(slug);
+      return lead
+        ? { character_name: lead.character_name, role_title: lead.role_title }
+        : undefined;
+    },
     listSkills,
     installSkill,
     removeSkill,

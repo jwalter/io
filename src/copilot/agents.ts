@@ -26,6 +26,7 @@ import {
   logDecision,
   listSquadAgents,
   getSquadAgent,
+  getSquadLead,
   updateAgentSession,
   updateAgentStatus,
 } from "../store/squads.js";
@@ -190,10 +191,16 @@ export async function delegateToAgent(
       );
     }
   } else {
-    // If squad has named agents, pick the best match (first idle, or first one)
-    const agents = listSquadAgents(squadSlug);
-    if (agents.length > 0) {
-      agent = agents.find((a) => a.status === "idle") ?? agents[0];
+    // Prefer the designated team lead if one exists; otherwise fall back to
+    // the first idle agent (or just the first agent on the roster).
+    const lead = getSquadLead(squadSlug);
+    if (lead) {
+      agent = lead;
+    } else {
+      const agents = listSquadAgents(squadSlug);
+      if (agents.length > 0) {
+        agent = agents.find((a) => a.status === "idle") ?? agents[0];
+      }
     }
   }
 
@@ -327,7 +334,38 @@ async function getOrCreateAgentSession(
     ? getUniverse(squad.universe)?.name ?? squad.universe
     : "Unknown";
 
-  const agentTools = buildAgentTools(squadSlug);
+  const isLead = agent.is_lead === 1;
+  const agentTools = buildAgentTools(squadSlug, isLead);
+
+  let leadSection = "";
+  if (isLead) {
+    const teammates = listSquadAgents(squadSlug).filter(
+      (a) => a.character_name !== agent.character_name,
+    );
+    const roster = teammates.length > 0
+      ? teammates
+          .map((t) => {
+            const charter = t.charter
+              ? t.charter.length > 200
+                ? t.charter.slice(0, 200) + "…"
+                : t.charter
+              : "(no charter)";
+            return `- **${t.character_name}** — ${t.role_title}: ${charter}`;
+          })
+          .join("\n")
+      : "_(no other agents on this squad yet — ask IO to add some)_";
+
+    leadSection = `
+
+## Team Lead Role
+You are the team lead for this squad. When you receive a task, your job is to:
+1. Break it down into concrete subtasks
+2. Assign each subtask to the most appropriate teammate using the \`delegate_to_teammate\` tool
+3. Collect results and synthesize a final summary
+
+## Your Team
+${roster}`;
+  }
 
   const systemMessage = `You are ${agent.character_name}, a specialist agent on the "${squad.name}" project team (${universeName} universe).
 
@@ -343,7 +381,7 @@ ${agent.charter ?? "General-purpose agent. Handle tasks as they come."}
 - **Path**: ${squad.project_path}
 
 ## Past Decisions
-${decisions}
+${decisions}${leadSection}
 
 ## Instructions
 You are a coding agent. Use the shell tool to run commands and file_ops to read/write files.
@@ -441,7 +479,7 @@ Log important decisions with squad_log_decision so they persist.`,
   return session;
 }
 
-function buildAgentTools(squadSlug: string) {
+function buildAgentTools(squadSlug: string, isLead = false) {
   const shell = defineTool("shell", {
     description:
       "Run a shell command. Use for git, build tools, file operations, etc.",
@@ -570,7 +608,57 @@ function buildAgentTools(squadSlug: string) {
     },
   });
 
-  return [shell, fileOps, squadLogDecision];
+  const tools: any[] = [shell, fileOps, squadLogDecision];
+
+  if (isLead) {
+    const delegateToTeammate = defineTool("delegate_to_teammate", {
+      description:
+        "Delegate a subtask to a teammate on this squad. The teammate runs the task synchronously and returns its result. Use this to divvy work as the team lead.",
+      skipPermission: true,
+      parameters: z.object({
+        teammate: z
+          .string()
+          .describe("The teammate's character_name (e.g., 'Optimus Prime')"),
+        task: z
+          .string()
+          .describe("The concrete task or subtask the teammate should perform"),
+      }),
+      handler: async ({ teammate, task }) => {
+        try {
+          const teammateAgent = getSquadAgent(squadSlug, teammate);
+          if (!teammateAgent) {
+            return `Error: teammate "${teammate}" not found in squad "${squadSlug}". Use squad_agents to list the roster.`;
+          }
+          if (teammateAgent.is_lead === 1) {
+            return `Error: "${teammate}" is the team lead. Delegate to a non-lead teammate.`;
+          }
+
+          updateAgentStatus(squadSlug, teammateAgent.character_name, "working");
+          try {
+            const session = await getOrCreateAgentSession(
+              squadSlug,
+              teammateAgent,
+              task,
+            );
+            const response = await session.sendAndWait({ prompt: task }, 300_000);
+            const result =
+              response?.data?.content ?? "(teammate returned no output)";
+            updateAgentStatus(squadSlug, teammateAgent.character_name, "idle");
+            return result;
+          } catch (err) {
+            updateAgentStatus(squadSlug, teammateAgent.character_name, "error");
+            const message = err instanceof Error ? err.message : String(err);
+            return `Error from teammate "${teammate}": ${message}`;
+          }
+        } catch (err) {
+          return `Error: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      },
+    });
+    tools.push(delegateToTeammate);
+  }
+
+  return tools;
 }
 
 function walkDirectory(dir: string, maxDepth = 3, depth = 0): string[] {

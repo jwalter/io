@@ -83,12 +83,15 @@ Squads are persistent project teams with **named specialist agents**. Each squad
 ### Delegating Work
 After planning tasks with the user, **use \`squad_delegate\` to send each task to the right agent**:
 1. Plan the work with the user (break into concrete tasks).
-2. Call \`squad_delegate\` with the squad slug and task. Optionally specify an \`agent\` (character name) to target a specific specialist. If omitted, the system picks the best available agent.
+2. Call \`squad_delegate\` with the squad slug and task. Optionally specify an \`agent\` (character name) to target a specific specialist. **If omitted, the task routes to the squad's team lead** (if one is designated); the lead will then orchestrate the work, divvying subtasks to teammates via their \`delegate_to_teammate\` tool and synthesizing the results. If no lead is set, the system falls back to the first idle agent.
 3. The agent works autonomously in the background with their specialized system prompt.
 4. Use \`squad_task_status\` to check progress and retrieve results.
 5. Report results back to the user, mentioning the character name.
 
 You can delegate multiple tasks to different agents in parallel.
+
+### Team Leads
+Every squad should have a **team lead**. After building the team with \`squad_add_agent\`, designate one agent as the lead using \`squad_set_lead\`. The lead receives delegated tasks (when no specific agent is targeted), breaks them into subtasks, and assigns work to teammates via the lead-only \`delegate_to_teammate\` tool. This keeps coordination inside the squad rather than forcing IO to micro-manage assignments.
 
 ### Agent Roles Are Dynamic
 **Do NOT use generic roles** like "developer" or "tester". Analyze the project first and create roles that match its actual technology stack. Examples:
