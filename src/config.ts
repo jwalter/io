@@ -20,12 +20,18 @@ export interface IOConfig {
   authorizedEmail?: string;
   /** @deprecated Use `port` instead. Kept for backward compatibility. */
   apiPort?: number;
+  backgroundNotifyMode: "all" | "meaningful" | "off";
+  backgroundNotifyTelegram: boolean;
+  backgroundNotifyTui: boolean;
 }
 
 const DEFAULT_CONFIG: IOConfig = {
   telegramEnabled: false,
   selfEditEnabled: false,
   port: 3170,
+  backgroundNotifyMode: "meaningful",
+  backgroundNotifyTelegram: true,
+  backgroundNotifyTui: true,
 };
 
 function loadConfig(): IOConfig {

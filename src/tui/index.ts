@@ -27,6 +27,86 @@ Type a message to chat. Commands:
 
 let verbose = false;
 
+// Held so printBackgroundNotification can redraw the prompt around notifications.
+// Assigned inside startTui(); undefined when running headless (no TUI).
+let activeInterface: Interface | undefined;
+
+const NOTIFICATION_MAX_LINES = 6;
+const NOTIFICATION_WRAP_WIDTH = 78;
+
+/** Hard-wrap a single line to at most `width` visible chars, returning segments. */
+function wrapLine(line: string, width: number): string[] {
+  const segments: string[] = [];
+  while (line.length > width) {
+    segments.push(line.slice(0, width));
+    line = line.slice(width);
+  }
+  segments.push(line);
+  return segments;
+}
+
+/**
+ * Print a background notification in a bordered block above the prompt,
+ * preserving any in-progress readline input the user has typed.
+ *
+ * Format:
+ *   ╭─🔔 Background update: <title>
+ *   │ <line1>
+ *   │ […N more lines — see /notifications]   (if truncated)
+ *   ╰─
+ *
+ * Safe to call at any time, even before startTui(). Never throws.
+ */
+export function printBackgroundNotification(opts: {
+  title: string;
+  text: string;
+}): void {
+  try {
+    // Build display lines from text, hard-wrapping long lines.
+    const rawLines = opts.text.split(/\r?\n/);
+    const displayLines: string[] = [];
+    for (const raw of rawLines) {
+      for (const seg of wrapLine(raw, NOTIFICATION_WRAP_WIDTH)) {
+        displayLines.push(seg);
+      }
+    }
+
+    const truncated = displayLines.length > NOTIFICATION_MAX_LINES;
+    const visible = truncated ? displayLines.slice(0, NOTIFICATION_MAX_LINES) : displayLines;
+    const extra = displayLines.length - NOTIFICATION_MAX_LINES;
+
+    const top = "\u256d\u2500\ud83d\udd14 Background update: " + opts.title + "\n";
+    const body = visible.map((l) => "\u2502 " + l).join("\n");
+    const overflow = truncated
+      ? "\n\u2502 [\u2026" + extra + " more line" + (extra === 1 ? "" : "s") + " \u2014 see /notifications]"
+      : "";
+    const bottom = "\n\u2570\u2500\n";
+    const block = top + body + overflow + bottom;
+
+    if (!activeInterface) {
+      // Headless daemon — no readline interface live; plain log is fine.
+      process.stdout.write(block);
+      return;
+    }
+
+    // Capture whatever the user has typed so far.
+    // readline stores the pending input in `rl.line` (stable internal property).
+    const currentLine = (activeInterface as unknown as { line: string }).line ?? "";
+
+    // Clear the current prompt+input line, print the notification, then
+    // redraw the prompt with the user's buffer.
+    process.stdout.write("\r\x1b[K");
+    process.stdout.write(block);
+    if (currentLine === "") {
+      activeInterface.prompt(true);
+    } else {
+      process.stdout.write("io> " + currentLine);
+    }
+  } catch (err) {
+    console.error("[io] printBackgroundNotification failed:", err instanceof Error ? err.message : String(err));
+  }
+}
+
 function renderActivity(taskIdArg: string | undefined): void {
   const recent = listRecentTasks(20);
   let task = undefined;
@@ -70,6 +150,10 @@ export async function startTui(): Promise<void> {
     input: process.stdin,
     output: process.stdout,
   });
+
+  // Keep a module-level reference so printBackgroundNotification can redraw
+  // the prompt without disturbing the user's in-progress input.
+  activeInterface = rl;
 
   console.log(WELCOME_BANNER);
   rl.setPrompt("io> ");
