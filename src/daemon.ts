@@ -4,6 +4,8 @@ import { startApiServer, setMessageHandler as setApiHandler, broadcastToSSE } fr
 import { createBot, startBot, stopBot, sendProactiveMessage, setMessageHandler as setTelegramHandler } from "./telegram/bot.js";
 import { getDb, closeDb } from "./store/db.js";
 import { clearStaleTasks } from "./store/tasks.js";
+import { reconcileAgentStatuses, reconcileSquadStatuses } from "./store/squads.js";
+import { backfillReviewVerdicts } from "./copilot/review-backfill.js";
 import { startScheduler, stopScheduler } from "./copilot/scheduler.js";
 import { config } from "./config.js";
 import { ensureWikiStructure } from "./wiki/fs.js";
@@ -70,8 +72,35 @@ export async function startDaemon(): Promise<void> {
     console.log("[io] Created wiki at ~/.io/wiki/");
   }
 
-  // Clear stale tasks from previous run
+  // Clear stale tasks from previous run, and reset any agent/squad rows left
+  // in 'working' or 'error' state — the in-memory Copilot sessions backing
+  // those rows did not survive the restart, so the persisted status is lying.
   clearStaleTasks();
+  const resetAgents = reconcileAgentStatuses();
+  const resetSquads = reconcileSquadStatuses();
+  if (resetAgents > 0 || resetSquads > 0) {
+    console.log(
+      `[io] Reconciled stale statuses on startup: ${resetAgents} agent(s), ${resetSquads} squad(s) → idle`,
+    );
+  }
+
+  // Backfill any historical peer-review rows whose recorded verdict (approved
+  // 0/1) does not match what the current parser would extract from the prose.
+  // Earlier daemon builds had a brittle first-line-only parser that flipped
+  // many APPROVED reviews into REJECTED (issue #50).
+  try {
+    const fixed = backfillReviewVerdicts();
+    if (fixed > 0) {
+      console.log(
+        `[io] Backfilled ${fixed} peer-review verdict(s) using current parser`,
+      );
+    }
+  } catch (err) {
+    console.error(
+      "[io] Review-verdict backfill failed:",
+      err instanceof Error ? err.message : err,
+    );
+  }
 
   // Prune old sessions
   pruneOldSessions();

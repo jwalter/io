@@ -336,18 +336,31 @@ async function getOrCreateAgentSession(
   const effectiveTier = tierRank[taskTier] >= tierRank[agentTier] ? taskTier : agentTier;
   const model = getModelForTier(effectiveTier);
 
-  // If we have a cached session, check if the model matches; if not, destroy and recreate
+  // If we have a cached session, check if the model matches AND the agent
+  // hasn't been left in an error state by a previous task. If either is off,
+  // destroy and recreate. Reusing a session whose underlying SDK process has
+  // been throwing is how Panthro got "stuck" in error after the issue #42
+  // delegation timeout (issue #55).
   const existing = agentSessions.get(key);
   if (existing) {
-    // Sessions don't expose their model, so track it separately
-    const cachedModel = agentSessionModels.get(key);
-    if (cachedModel === model) return existing;
+    const fresh = getSquadAgent(squadSlug, agent.character_name);
+    const persistedStatus = fresh?.status ?? agent.status;
+    if (persistedStatus === "error") {
+      console.error(`[io] Agent ${agent.character_name}: previous session ended in error — discarding cached session and recreating`);
+      try { await existing.destroy(); } catch { /* best-effort */ }
+      agentSessions.delete(key);
+      agentSessionModels.delete(key);
+    } else {
+      // Sessions don't expose their model, so track it separately
+      const cachedModel = agentSessionModels.get(key);
+      if (cachedModel === model) return existing;
 
-    // Model changed — destroy old session for the upgraded model
-    console.error(`[io] Agent ${agent.character_name}: upgrading model ${cachedModel} → ${model} for task complexity`);
-    try { await existing.destroy(); } catch { /* best-effort */ }
-    agentSessions.delete(key);
-    agentSessionModels.delete(key);
+      // Model changed — destroy old session for the upgraded model
+      console.error(`[io] Agent ${agent.character_name}: upgrading model ${cachedModel} → ${model} for task complexity`);
+      try { await existing.destroy(); } catch { /* best-effort */ }
+      agentSessions.delete(key);
+      agentSessionModels.delete(key);
+    }
   }
 
   const squad = getSquad(squadSlug)!;
