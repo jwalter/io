@@ -16,6 +16,7 @@ import type { CopilotSession, SessionEvent } from "@github/copilot-sdk";
 import { z } from "zod";
 
 import { getClient } from "./client.js";
+import { sendWithIdleTimeout } from "./session-timeout.js";
 import { getModelForTask, getModelForTier, classifyComplexity } from "./model-router.js";
 import type { Tier } from "./model-router.js";
 import {
@@ -208,14 +209,33 @@ export async function delegateToAgent(
     }
   }
 
+  const agentKey = agent
+    ? agentSessionKey(squadSlug, agent.character_name)
+    : squadSlug;
+
+  // Idempotency: if an identical task is already running on this agent_slug,
+  // join the existing task instead of racing a second instance. (Issue #53)
+  const normalizedTask = task.trim();
+  const duplicate = getActiveTasks().find(
+    (t) => t.agent_slug === agentKey && t.description.trim() === normalizedTask,
+  );
+  if (duplicate) {
+    console.error(
+      `[io] Dedup: task with identical description already running on ${agentKey} (taskId=${duplicate.task_id}); returning existing taskId.`,
+    );
+    recordTaskEvent(duplicate.task_id, {
+      ts: Date.now(),
+      type: "task.dedup_joined",
+      data: { agentKey, description: normalizedTask },
+    });
+    return duplicate.task_id;
+  }
+
   const session = agent
     ? await getOrCreateAgentSession(squadSlug, agent, task)
     : await getOrCreateSession(squadSlug, task);
 
   const taskId = randomUUID();
-  const agentKey = agent
-    ? agentSessionKey(squadSlug, agent.character_name)
-    : squadSlug;
 
   createTask(taskId, agentKey, task);
   updateSquadStatus(squadSlug, "working");
@@ -240,8 +260,40 @@ export async function delegateToAgent(
   // Run the task in the background — return taskId immediately
   void (async () => {
     try {
-      const response = await session.sendAndWait({ prompt: task }, 600_000);
-      const result = response?.data?.content ?? "Task completed (no output)";
+      const sendResult = await sendWithIdleTimeout(session, task, {
+        // Reset on every progress event; only abort if the agent goes
+        // genuinely silent for this long. 10 minutes covers the longest
+        // realistic tool call (npm install, full build, large file edits)
+        // while still catching truly stuck sessions. (Issue #53)
+        idleMs: 10 * 60_000,
+        // Absolute upper bound — 60 minutes. Anything longer is almost
+        // certainly a runaway loop; cap it.
+        hardCapMs: 60 * 60_000,
+        onIdleTimeout: ({ lastEventType, idleMs }) => {
+          console.error(
+            `[io] Agent task ${taskId} idle for ${Math.round(idleMs / 1000)}s (last event: ${lastEventType ?? "none"}) — aborting session.`,
+          );
+        },
+      });
+      if (sendResult.timedOut) {
+        const partial = sendResult.content;
+        recordTaskEvent(taskId, {
+          ts: Date.now(),
+          type: "task.timeout",
+          data: {
+            reason: sendResult.timeoutReason,
+            lastEventType: sendResult.lastEventType,
+            partial,
+          },
+        });
+        const stamped = `[task timed out — ${sendResult.timeoutReason === "idle" ? "idle reset" : "hard cap"}; last event: ${sendResult.lastEventType ?? "none"}]\n\n${partial}`;
+        failTask(taskId, stamped);
+        updateSquadStatus(squadSlug, "idle");
+        if (agent) updateAgentStatus(squadSlug, agent.character_name, "idle");
+        onComplete(taskId, stamped);
+        return;
+      }
+      const result = sendResult.content || "Task completed (no output)";
       completeTask(taskId, result);
       updateSquadStatus(squadSlug, "idle");
       if (agent) updateAgentStatus(squadSlug, agent.character_name, "idle");
@@ -701,10 +753,25 @@ function buildAgentTools(squadSlug: string, isLead = false) {
               teammateAgent,
               task,
             );
-            const response = await session.sendAndWait({ prompt: task }, 300_000);
+            // Idle-reset timeout: 10min between progress events, 30min
+            // hard cap. (Issue #53 — 5min wall-clock was killing
+            // specialists mid-tool-call and forcing the lead to
+            // self-implement.)
+            const sendResult = await sendWithIdleTimeout(session, task, {
+              idleMs: 10 * 60_000,
+              hardCapMs: 30 * 60_000,
+              onIdleTimeout: ({ lastEventType }) => {
+                console.error(
+                  `[io] Teammate ${teammateAgent.character_name} idle (last event: ${lastEventType ?? "none"}) — aborting.`,
+                );
+              },
+            });
             const result =
-              response?.data?.content ?? "(teammate returned no output)";
+              sendResult.content || "(teammate returned no output)";
             updateAgentStatus(squadSlug, teammateAgent.character_name, "idle");
+            if (sendResult.timedOut) {
+              return `[teammate timed out — ${sendResult.timeoutReason === "idle" ? "idle reset" : "hard cap"}; last event: ${sendResult.lastEventType ?? "none"}]\n\n${result}`;
+            }
             return result;
           } catch (err) {
             updateAgentStatus(squadSlug, teammateAgent.character_name, "error");

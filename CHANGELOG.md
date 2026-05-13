@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **Idle-reset timeout for agent tasks** (#53) — replaced the wall-clock \`sendAndWait(prompt, 600_000)\` calls in agent execution with a new \`sendWithIdleTimeout\` helper (\`src/copilot/session-timeout.ts\`). The timer resets on every progress event (tool execution, assistant message, turn boundary) and only fires when the agent goes genuinely silent. Main delegation: 10-minute idle window, 60-minute hard cap. Sub-delegation (\`delegate_to_teammate\`): 10-minute idle, 30-minute hard cap. The previous fixed 600s cap was killing two of three failed tasks in squad history mid-progress.
+- **Graceful task timeout** (#53) — when the idle or hard-cap timer fires, the SDK session is aborted, the accumulated streaming content is captured, a new \`task.timeout\` event is emitted with \`{reason, lastEventType, partial}\`, and the task result is stored with a \`[task timed out — ...]\` prefix instead of dropping the work entirely. \`delegate_to_teammate\` returns the same stamped partial to the lead so it can decide whether to retry or accept.
+- **Task idempotency / dedup** (#53) — \`delegateToAgent\` now detects when an identical task description is already running on the same \`agent_slug\` and returns the existing task ID instead of racing a second agent (recorded via a \`task.dedup_joined\` event on the original task).
+
 ## [0.4.0] - 2026-05-13
 
 ### Added
