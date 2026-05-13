@@ -1,17 +1,34 @@
 import Database from "better-sqlite3";
 import type BetterSqlite3 from "better-sqlite3";
 import { mkdirSync } from "fs";
+import { dirname } from "path";
 import { DB_PATH, IO_HOME } from "../paths.js";
 
 let db: BetterSqlite3.Database | null = null;
 let insertCount = 0;
+let dbPathOverride: string | null = null;
+
+/**
+ * Override the DB path for tests. Closes the existing connection (if any)
+ * so the next getDb() call opens a fresh DB at the given path.
+ * Never call this in production code.
+ */
+export function setDbPathForTests(path: string): void {
+  if (db) {
+    db.close();
+    db = null;
+  }
+  dbPathOverride = path;
+}
 
 export function getDb(): BetterSqlite3.Database {
   if (db) return db;
 
-  mkdirSync(IO_HOME, { recursive: true });
+  const resolvedPath = dbPathOverride ?? DB_PATH;
+  const resolvedHome = dbPathOverride ? dirname(resolvedPath) : IO_HOME;
+  mkdirSync(resolvedHome, { recursive: true });
 
-  db = new Database(DB_PATH);
+  db = new Database(resolvedPath);
   db.pragma("journal_mode = WAL");
 
   db.exec(`
@@ -121,6 +138,16 @@ SELECT agent_slug,
        MAX(started_at) AS last_delegated_at
 FROM agent_tasks
 GROUP BY agent_slug`,
+    `CREATE TABLE IF NOT EXISTS background_notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      source_type TEXT NOT NULL,
+      source_ref TEXT,
+      title TEXT NOT NULL,
+      text TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      read_at DATETIME
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_bg_notifications_unread ON background_notifications(read_at, created_at)`,
   ];
 
   for (const migration of migrations) {

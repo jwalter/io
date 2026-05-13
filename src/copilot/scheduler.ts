@@ -15,6 +15,7 @@ import { listSchedules, listDueSchedules, recordScheduleRun, setScheduleTimestam
 import { getSquad } from "../store/squads.js";
 import { delegateToAgent } from "./agents.js";
 import { nextRun } from "./cron.js";
+import { notifyBackground } from "../notify.js";
 
 const TICK_MS = 30_000;
 
@@ -79,8 +80,17 @@ async function fireSchedule(schedule: SquadSchedule): Promise<void> {
   );
   console.log(`[io] scheduler: firing schedule "${schedule.name}" for squad "${squad.slug}" (next run: ${nextIso ?? "never"})`);
   try {
-    await delegateToAgent(squad.slug, prompt, () => {
-      // No-op: result is recorded on the agent task; the standup is fire-and-forget.
+    await delegateToAgent(squad.slug, prompt, (_taskId, result) => {
+      void notifyBackground({
+        source: {
+          type: "squad-schedule",
+          scheduleId: schedule.id,
+          squadSlug: squad.slug,
+          scheduleName: schedule.name,
+        },
+        title: `${squad.name}: ${schedule.name}`,
+        text: result,
+      });
     });
   } catch (err) {
     console.error(`[io] scheduler: failed to delegate stand-up for schedule ${schedule.id}:`, err instanceof Error ? err.message : err);

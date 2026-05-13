@@ -14,6 +14,7 @@ import {
 } from "../store/io-schedules.js";
 import { sendToOrchestrator } from "./orchestrator.js";
 import { nextRun } from "./cron.js";
+import { notifyBackground } from "../notify.js";
 
 const TICK_MS = 30_000;
 
@@ -47,12 +48,23 @@ async function fireSchedule(schedule: IoSchedule): Promise<void> {
     `[io] io-scheduler: firing schedule "${schedule.name}" (next run: ${nextIso ?? "never"})`,
   );
   try {
+    let buffer = "";
     await sendToOrchestrator(
       buildPrompt(schedule),
       { type: "background" },
-      () => {
-        // No-op: scheduled work is fire-and-forget; output is captured in
-        // the orchestrator's conversation log.
+      (text, done) => {
+        buffer += text;
+        if (done) {
+          void notifyBackground({
+            source: {
+              type: "io-schedule",
+              scheduleId: schedule.id,
+              scheduleName: schedule.name,
+            },
+            title: `IO schedule: ${schedule.name}`,
+            text: buffer.trim(),
+          });
+        }
       },
     );
   } catch (err) {

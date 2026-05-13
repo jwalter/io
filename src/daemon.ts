@@ -1,7 +1,9 @@
 import { getClient, stopClient } from "./copilot/client.js";
 import { initOrchestrator, sendToOrchestrator, shutdownOrchestrator } from "./copilot/orchestrator.js";
-import { startApiServer, setMessageHandler as setApiHandler, broadcastToSSE } from "./api/server.js";
-import { createBot, startBot, stopBot, sendProactiveMessage, setMessageHandler as setTelegramHandler } from "./telegram/bot.js";
+import { startApiServer, setMessageHandler as setApiHandler, broadcastToSSE, broadcastNotificationToSSE } from "./api/server.js";
+import { createBot, startBot, stopBot, sendProactiveMessage, sendBackgroundNotification, setMessageHandler as setTelegramHandler } from "./telegram/bot.js";
+import { setTelegramSender, setTuiSender, setSseBroadcaster } from "./notify.js";
+import { printBackgroundNotification } from "./tui/index.js";
 import { getDb, closeDb } from "./store/db.js";
 import { clearStaleTasks } from "./store/tasks.js";
 import { reconcileAgentStatuses, reconcileSquadStatuses } from "./store/squads.js";
@@ -148,6 +150,11 @@ export async function startDaemon(): Promise<void> {
 
   // Start the IO-level scheduler (squad-independent recurring tasks).
   startIoScheduler();
+
+  // Background-notification dispatch surfaces (issue #78)
+  setSseBroadcaster((p) => broadcastNotificationToSSE(p));
+  setTuiSender((opts) => printBackgroundNotification(opts));
+  setTelegramSender((opts) => sendBackgroundNotification(opts));
 
   console.log("[io] IO is fully operational.");
 

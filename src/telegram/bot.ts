@@ -174,3 +174,21 @@ export async function sendProactiveMessage(text: string): Promise<void> {
     }
   }
 }
+
+/**
+ * Send a background schedule result as a Telegram notification.
+ * Delegates to sendProactiveMessage for chunking, bot-not-configured guards,
+ * and authorized-user checks — no extra logic needed here.
+ *
+ * Format (plain text, no parse_mode):
+ *   🔔 Background update — <title>
+ *
+ *   <text>
+ */
+export async function sendBackgroundNotification(opts: {
+  title: string;
+  text: string;
+}): Promise<void> {
+  const formatted = `\ud83d\udd14 Background update \u2014 ${opts.title}\n\n${opts.text}`;
+  await sendProactiveMessage(formatted);
+}

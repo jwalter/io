@@ -15,6 +15,13 @@ import { listSchedules, getSchedule, deleteSchedule, setScheduleEnabled } from "
 import { listIoSchedules, getIoSchedule, deleteIoSchedule, setIoScheduleEnabled } from "../store/io-schedules.js";
 import { runScheduleNow } from "../copilot/scheduler.js";
 import { runIoScheduleNow } from "../copilot/io-scheduler.js";
+import {
+  listRecentNotifications,
+  listUnreadNotifications,
+  countUnreadNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+} from "../store/notifications.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIST = path.resolve(__dirname, "../../web-dist");
@@ -37,6 +44,21 @@ export function broadcastToSSE(text: string): void {
   const payload = JSON.stringify({ type: "delta", text });
   for (const res of sseConnections) {
     res.write(`data: ${payload}\n\n`);
+  }
+}
+
+export interface BroadcastNotificationPayload {
+  id: number;
+  source: { type: string; [key: string]: unknown };
+  title: string;
+  text: string;
+  createdAt: string;
+}
+
+export function broadcastNotificationToSSE(payload: BroadcastNotificationPayload): void {
+  const data = JSON.stringify({ type: "notification", ...payload });
+  for (const res of sseConnections) {
+    res.write(`data: ${data}\n\n`);
   }
 }
 
@@ -407,6 +429,68 @@ export async function startApiServer(): Promise<void> {
     } catch (e) {
       console.error("Error deleting IO schedule:", e);
       res.status(500).json({ error: (e instanceof Error ? e.message : String(e)) });
+    }
+  });
+
+  // Notifications endpoints
+  api.get("/notifications", (_req: Request, res: Response) => {
+    try {
+      const unreadOnly = _req.query.unread === "true";
+      const rows = unreadOnly
+        ? listUnreadNotifications()
+        : (() => {
+            const rawLimit = _req.query.limit;
+            const parsed = typeof rawLimit === "string" ? Number.parseInt(rawLimit, 10) : NaN;
+            const limit = Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, 200) : 50;
+            return listRecentNotifications(limit);
+          })();
+      const unreadCount = countUnreadNotifications();
+      const notifications = rows.map(({ id, title, text, created_at, read_at, source_type, source_ref }) => {
+        let source: { type: string; [key: string]: unknown } = { type: source_type };
+        if (source_ref) {
+          try {
+            const parsed = JSON.parse(source_ref) as Record<string, unknown>;
+            source = { type: source_type, ...parsed };
+          } catch {
+            // source_ref is not valid JSON — fall back to type-only
+          }
+        }
+        return { id, title, text, created_at, read_at, source };
+      });
+      res.json({ notifications, unreadCount });
+    } catch (e) {
+      console.error("Error listing notifications:", e);
+      res.status(500).json({ error: "Failed to list notifications" });
+    }
+  });
+
+  api.post("/notifications/read-all", (_req: Request, res: Response) => {
+    try {
+      const marked = markAllNotificationsRead();
+      res.json({ marked });
+    } catch (e) {
+      console.error("Error marking all notifications read:", e);
+      res.status(500).json({ error: "Failed to mark notifications read" });
+    }
+  });
+
+  api.post("/notifications/:id/read", (req: Request, res: Response) => {
+    try {
+      const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+      const id = Number.parseInt(rawId, 10);
+      if (Number.isNaN(id)) {
+        res.status(400).json({ error: "invalid id" });
+        return;
+      }
+      const found = markNotificationRead(id);
+      if (!found) {
+        res.status(404).json({ error: "notification not found" });
+        return;
+      }
+      res.json({ ok: true });
+    } catch (e) {
+      console.error("Error marking notification read:", e);
+      res.status(500).json({ error: "Failed to mark notification read" });
     }
   });
 
