@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
+- **Per-agent delegation stats in `squad_agents` + stalest-specialist hint** (#61) — new `agent_stats` SQL view (`COUNT(*) / MAX(started_at)` over `agent_tasks` grouped by `agent_slug`) gives drift-free per-character delegation history with no schema migration on `squad_agents`. `squad_agents` rows now show `📊 N tasks · last <relative-time>` (or `📊 never delegated`), and append a ⚠️ `<Character> has not been delegated to in <N>d/h` (or `never been delegated to`) hint when the squad is unbalanced. `squad_task_status` adds the same hint inline on a single-task lookup and a `**Distribution hints:**` block on the active-task list (one line per affected squad). The hint is suppressed when every specialist has been delegated to within the last 48 hours, and the lead is always excluded from the staleness check. Storage helpers: new `getAgentTaskStats(squadSlug, characterNames)` and `getStalestSpecialist(squadSlug, characterNames, options?)` in `src/store/tasks.ts`. Plus a small `formatRelativeTime` helper in `src/copilot/tools.ts`.
+
+
 - **Install skills from the web UI** (#21) — the Skills tab now has an "Add Skill" form. Enter a git repository URL and click **Install** to install a skill without leaving the browser (mirrors the existing `skill_install` tool / TUI / Telegram path). The skills list refreshes after a successful install; validation and install errors are surfaced inline. Backed by a new `POST /api/skills` endpoint (auth-protected) that reuses `installSkill(repoUrl)` from `src/copilot/skills.ts`.
 
 

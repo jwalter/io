@@ -115,6 +115,12 @@ export function getDb(): BetterSqlite3.Database {
     )`,
     `CREATE INDEX IF NOT EXISTS idx_io_schedules_due
        ON io_schedules (enabled, next_run_at)`,
+    `CREATE VIEW IF NOT EXISTS agent_stats AS
+SELECT agent_slug,
+       COUNT(*)        AS task_count,
+       MAX(started_at) AS last_delegated_at
+FROM agent_tasks
+GROUP BY agent_slug`,
   ];
 
   for (const migration of migrations) {

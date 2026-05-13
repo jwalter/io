@@ -234,6 +234,65 @@ function formatWorkDistribution(
   return lines.join("");
 }
 
+// ---------------------------------------------------------------------------
+// Per-agent delegation-stat formatters (issue #61)
+// ---------------------------------------------------------------------------
+
+/**
+ * Format an ISO timestamp as a short relative time string. SQLite emits
+ * naive UTC strings, so we suffix "Z" before parsing if it isn't already
+ * timezone-qualified.
+ */
+function formatRelativeTime(iso: string | null): string {
+  if (!iso) return "never";
+  const tzQualified = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(iso);
+  const ts = new Date(tzQualified ? iso : iso + "Z").getTime();
+  if (Number.isNaN(ts)) return "never";
+  const deltaMs = Date.now() - ts;
+  if (deltaMs < 60_000) return "just now";
+  if (deltaMs < 3_600_000) {
+    const m = Math.round(deltaMs / 60_000);
+    return `${m}m ago`;
+  }
+  if (deltaMs < 86_400_000) {
+    const h = Math.round(deltaMs / 3_600_000);
+    return `${h}h ago`;
+  }
+  const d = Math.round(deltaMs / 86_400_000);
+  return `${d}d ago`;
+}
+
+/**
+ * Format a stale-hours number as a short duration. >=24h rounds to days,
+ * smaller values stay in hours. Floors to keep behaviour consistent across
+ * the squad_agents and squad_task_status renderers.
+ */
+function formatStaleDuration(staleHours: number): string {
+  if (staleHours >= 24) {
+    const d = Math.floor(staleHours / 24);
+    return `${d}d`;
+  }
+  return `${Math.floor(staleHours)}h`;
+}
+
+/**
+ * Build the ⚠️ stalest-specialist hint string from a getStalestSpecialist
+ * result. Returns "" if the input is null (squad is healthy).
+ */
+function formatStalestHint(
+  stalest: {
+    character_name: string;
+    last_delegated_at: string | null;
+    staleHours: number | null;
+  } | null,
+): string {
+  if (!stalest) return "";
+  if (stalest.staleHours == null) {
+    return `⚠️ ${stalest.character_name} has never been delegated to`;
+  }
+  return `⚠️ ${stalest.character_name} has not been delegated to in ${formatStaleDuration(stalest.staleHours)}`;
+}
+
 // Ensure child processes have HOME set (systemd services often don't)
 function shellEnv(): NodeJS.ProcessEnv {
   const env = { ...process.env };
@@ -264,6 +323,17 @@ export interface ToolDeps {
   getActiveAgentTasks: () => Array<{ taskId: string; agentSlug: string; description: string; status: string }>;
   addSquadAgent: (squadSlug: string, roleTitle: string, charter: string, modelTier?: string) => { character_name: string; role_title: string; personality: string | null; model_tier: string };
   listSquadAgents: (squadSlug: string) => Array<{ character_name: string; role_title: string; charter: string | null; model_tier: string; personality: string | null; status: string; is_lead?: number; is_qa?: number }>;
+  getAgentTaskStats: (squadSlug: string, characterNames: string[]) => Array<{
+    character_name: string;
+    agent_slug: string;
+    task_count: number;
+    last_delegated_at: string | null;
+  }>;
+  getStalestSpecialist: (
+    squadSlug: string,
+    characterNames: string[],
+    options?: { excludeCharacters?: string[]; freshIfWithinHours?: number },
+  ) => { character_name: string; last_delegated_at: string | null; staleHours: number | null } | null;
   removeSquadAgent: (squadSlug: string, characterName: string) => boolean;
   resetSquadAgent: (squadSlug: string, characterName: string) => { found: boolean; previousStatus: string; agent: { character_name: string; role_title: string } | null };
   setSquadLead: (squadSlug: string, characterName: string) => void;
@@ -475,13 +545,56 @@ export function createTools(deps: ToolDeps) {
           const result = task.result.length > 4000 ? task.result.slice(0, 4000) + "\n[…truncated]" : task.result;
           response += `\n\nResult:\n${result}`;
         }
+        // Stalest-specialist hint for the squad this task belongs to (#61).
+        try {
+          const squadSlug = task.agent_slug.split(":")[0];
+          if (squadSlug) {
+            const roster = deps.listSquadAgents(squadSlug);
+            const characterNames = roster.map((a) => a.character_name);
+            const lead = roster.find((a) => a.is_lead === 1);
+            const stalest = deps.getStalestSpecialist(squadSlug, characterNames, {
+              excludeCharacters: lead ? [lead.character_name] : [],
+            });
+            const hint = formatStalestHint(stalest);
+            if (hint) response += `\n\n${hint}`;
+          }
+        } catch (err) {
+          console.error("[io] squad_task_status: stalest-specialist hint failed:", err);
+        }
         return response;
       }
       const tasks = deps.getActiveAgentTasks();
       if (tasks.length === 0) return "No active tasks.";
-      return tasks
+      const taskLines = tasks
         .map((t) => `- **${t.taskId}** (${t.agentSlug}) — ${t.status} — ${t.description}`)
         .join("\n");
+
+      // Per-squad stalest-specialist hint block (#61).
+      let hintsBlock = "";
+      try {
+        const uniqueSquadSlugs = Array.from(
+          new Set(tasks.map((t) => t.agentSlug.split(":")[0]).filter((x): x is string => !!x)),
+        );
+        const hintLines: string[] = [];
+        for (const squadSlug of uniqueSquadSlugs) {
+          const roster = deps.listSquadAgents(squadSlug);
+          if (roster.length === 0) continue;
+          const characterNames = roster.map((a) => a.character_name);
+          const lead = roster.find((a) => a.is_lead === 1);
+          const stalest = deps.getStalestSpecialist(squadSlug, characterNames, {
+            excludeCharacters: lead ? [lead.character_name] : [],
+          });
+          const hint = formatStalestHint(stalest);
+          if (hint) hintLines.push(`- ${squadSlug}: ${hint}`);
+        }
+        if (hintLines.length > 0) {
+          hintsBlock = `\n\n**Distribution hints:**\n${hintLines.join("\n")}`;
+        }
+      } catch (err) {
+        console.error("[io] squad_task_status: distribution hints failed:", err);
+      }
+
+      return `${taskLines}${hintsBlock}`;
     },
   });
 
@@ -676,15 +789,50 @@ export function createTools(deps: ToolDeps) {
         ? UNIVERSES.find((u) => u.id === squad.universe)?.name ?? squad.universe
         : "none";
 
+      // Pull per-agent task stats once and key by character_name (issue #61).
+      // If the helper throws (e.g. brand-new DB before view migration), fall
+      // back to an empty map so rendering is unchanged rather than 500-ing.
+      const characterNames = agents.map((a) => a.character_name);
+      const statsByName = new Map<string, { task_count: number; last_delegated_at: string | null }>();
+      try {
+        for (const st of deps.getAgentTaskStats(slug, characterNames)) {
+          statsByName.set(st.character_name, {
+            task_count: st.task_count,
+            last_delegated_at: st.last_delegated_at,
+          });
+        }
+      } catch (err) {
+        console.error("[io] squad_agents: getAgentTaskStats failed:", err);
+      }
+
       const lines = agents.map((a) => {
         const leadBadge = a.is_lead === 1 ? " ⭐ [LEAD]" : "";
         const qaBadge = a.is_qa === 1 ? " 🛡️ [QA]" : "";
-        return `- **${a.character_name}**${leadBadge}${qaBadge} — ${a.role_title} (${a.model_tier}) — ${a.status}${a.personality ? `\n  _${a.personality}_` : ""}`;
+        const st = statsByName.get(a.character_name) ?? { task_count: 0, last_delegated_at: null };
+        const statsStr = st.task_count === 0
+          ? " — 📊 never delegated"
+          : ` — 📊 ${st.task_count} ${st.task_count === 1 ? "task" : "tasks"} · last ${formatRelativeTime(st.last_delegated_at)}`;
+        return `- **${a.character_name}**${leadBadge}${qaBadge} — ${a.role_title} (${a.model_tier}) — ${a.status}${statsStr}${a.personality ? `\n  _${a.personality}_` : ""}`;
       });
 
       const coverage = assessSquadCoverage(agents);
       const coverageBlock = coverage.warning ? `\n\n${coverage.warning}` : "";
-      return `**${squad.name}** — 🎬 ${universeName}\n\n${lines.join("\n")}${coverageBlock}`;
+
+      // Stalest-specialist hint (issue #61): exclude the lead so the hint
+      // points at an under-utilised teammate rather than the coordinator.
+      let stalestBlock = "";
+      try {
+        const lead = agents.find((a) => a.is_lead === 1);
+        const stalest = deps.getStalestSpecialist(slug, characterNames, {
+          excludeCharacters: lead ? [lead.character_name] : [],
+        });
+        const hint = formatStalestHint(stalest);
+        if (hint) stalestBlock = `\n\n${hint}`;
+      } catch (err) {
+        console.error("[io] squad_agents: getStalestSpecialist failed:", err);
+      }
+
+      return `**${squad.name}** — 🎬 ${universeName}\n\n${lines.join("\n")}${coverageBlock}${stalestBlock}`;
     },
   });
 
