@@ -67,3 +67,11 @@ export function cancelTask(taskId: string, reason = "Cancelled by user"): void {
     )
     .run(reason, taskId);
 }
+
+export function listRecentTasks(limit = 50): AgentTask[] {
+  return getDb()
+    .prepare(
+      "SELECT * FROM agent_tasks ORDER BY datetime(started_at) DESC, task_id DESC LIMIT ?",
+    )
+    .all(limit) as AgentTask[];
+}

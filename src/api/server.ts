@@ -7,7 +7,7 @@ import { listSkills } from "../copilot/skills.js";
 import { listSquads, createSquad, listSquadAgents } from "../store/squads.js";
 import { getAgentInfo, cancelAgentTask } from "../copilot/agents.js";
 import { abortOrchestrator } from "../copilot/orchestrator.js";
-import { getActiveTasks } from "../store/tasks.js";
+import { getActiveTasks, getTask, listRecentTasks } from "../store/tasks.js";
 import { IO_VERSION } from "../paths.js";
 import { requireAuth } from "./auth.js";
 
@@ -147,6 +147,35 @@ export async function startApiServer(): Promise<void> {
     } catch (e) {
       console.error("Error listing agents:", e);
       res.status(500).json({ error: "Failed to list agents" });
+    }
+  });
+
+  // Task history endpoints
+  api.get("/tasks", (req: Request, res: Response) => {
+    try {
+      const limitRaw = req.query.limit;
+      const parsed = typeof limitRaw === "string" ? parseInt(limitRaw, 10) : NaN;
+      const limit = Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, 200) : 50;
+      const tasks = listRecentTasks(limit);
+      res.json({ tasks });
+    } catch (e) {
+      console.error("Error listing tasks:", e);
+      res.status(500).json({ error: "Failed to list tasks" });
+    }
+  });
+
+  api.get("/tasks/:taskId", (req: Request, res: Response) => {
+    try {
+      const taskId = Array.isArray(req.params.taskId) ? req.params.taskId[0] : req.params.taskId;
+      const task = getTask(taskId);
+      if (!task) {
+        res.status(404).json({ error: "Task not found" });
+        return;
+      }
+      res.json({ task });
+    } catch (e) {
+      console.error("Error fetching task:", e);
+      res.status(500).json({ error: "Failed to fetch task" });
     }
   });
 
