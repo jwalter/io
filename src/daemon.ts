@@ -4,6 +4,7 @@ import { startApiServer, setMessageHandler as setApiHandler, broadcastToSSE } fr
 import { createBot, startBot, stopBot, sendProactiveMessage, setMessageHandler as setTelegramHandler } from "./telegram/bot.js";
 import { getDb, closeDb } from "./store/db.js";
 import { clearStaleTasks } from "./store/tasks.js";
+import { startScheduler, stopScheduler } from "./copilot/scheduler.js";
 import { config } from "./config.js";
 import { ensureWikiStructure } from "./wiki/fs.js";
 import { autoUpdate } from "./update.js";
@@ -112,6 +113,9 @@ export async function startDaemon(): Promise<void> {
     console.log("[io] Telegram not configured — skipping bot. Set telegramBotToken in ~/.io/config.json");
   }
 
+  // Start the squad scheduler (background cron-style stand-ups).
+  startScheduler();
+
   console.log("[io] IO is fully operational.");
 
   // Notify Telegram if restarting
@@ -142,6 +146,7 @@ async function shutdown(): Promise<void> {
     try { await stopBot(); } catch { /* best effort */ }
   }
 
+  stopScheduler();
   await shutdownOrchestrator();
   try { await stopClient(); } catch { /* best effort */ }
   closeDb();

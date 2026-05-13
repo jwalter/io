@@ -88,6 +88,20 @@ export function getDb(): BetterSqlite3.Database {
       comments TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`,
+    `CREATE TABLE IF NOT EXISTS squad_schedules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      squad_slug TEXT NOT NULL,
+      name TEXT NOT NULL,
+      cron_expr TEXT NOT NULL,
+      agenda TEXT NOT NULL,
+      notes TEXT,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      last_run_at DATETIME,
+      next_run_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_squad_schedules_due
+       ON squad_schedules (enabled, next_run_at)`,
   ];
 
   for (const migration of migrations) {

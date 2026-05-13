@@ -5,6 +5,15 @@ import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, mkdirSy
 import { join, dirname, resolve, sep } from "path";
 import { homedir } from "os";
 import { UNIVERSES } from "./universes.js";
+import { validateCron, nextRun } from "./cron.js";
+import {
+  createSchedule,
+  deleteSchedule,
+  getSchedule,
+  listSchedules,
+  setScheduleEnabled,
+} from "../store/schedules.js";
+import { runScheduleNow } from "./scheduler.js";
 
 // ---------------------------------------------------------------------------
 // QA / test coverage heuristics
@@ -1141,7 +1150,141 @@ export function createTools(deps: ToolDeps) {
     },
   });
 
-  return [wikiRead, wikiWrite, wikiSearch, wikiDelete, wikiList, squadCreate, squadRecall, squadStatus, squadLogDecision, squadDelegate, squadTaskStatus, squadDelete, squadAnalyze, squadAddAgent, squadAgents, squadRemoveAgent, squadSetLead, squadSetQA, squadTaskReviews, skillList, skillInstall, skillRemove, skillSearch, configUpdate, checkUpdate, shell, fileOps, bash, readFile, viewTool, grepTool, strReplaceEditor, github];
+
+  // ---------------------------------------------------------------------------
+  // Squad schedules — recurring stand-ups via cron-style expressions.
+  // ---------------------------------------------------------------------------
+
+  const KNOWN_AGENDA_ITEMS = ["triage", "prioritize", "ideation"] as const;
+
+  const squadScheduleCreate = defineTool("squad_schedule_create", {
+    description:
+      "Schedule a recurring stand-up for a squad. The squad wakes on the cron schedule, the team lead runs the agenda, and teammates are pulled in via delegate_to_teammate. Built-in agenda items: triage (process needs-triage issues), prioritize (pick highest-priority ready work and start it), ideation (brainstorm + open needs-review issues). Custom agenda items are passed through to the lead verbatim.",
+    skipPermission: true,
+    parameters: z.object({
+      slug: z.string().describe("Squad slug to schedule"),
+      name: z
+        .string()
+        .describe("Human-friendly name for this schedule, e.g. 'Daily 5AM stand-up'"),
+      cron: z
+        .string()
+        .describe(
+          "Standard 5-field cron expression: 'minute hour dom month dow'. Examples: '0 5 * * *' = daily at 5:00, '0 9 * * 1-5' = 9AM weekdays, '*/15 * * * *' = every 15 minutes.",
+        ),
+      agenda: z
+        .array(z.string())
+        .min(1)
+        .describe(
+          `Ordered agenda. Built-in items: ${KNOWN_AGENDA_ITEMS.join(", ")}. You may include custom items; the team lead will improvise.`,
+        ),
+      notes: z
+        .string()
+        .optional()
+        .describe("Optional operator notes appended to the stand-up prompt."),
+    }),
+    handler: async ({ slug, name, cron, agenda, notes }) => {
+      const squad = deps.getSquad(slug);
+      if (!squad) return `Squad not found: ${slug}`;
+      const v = validateCron(cron);
+      if (!v.ok) return `Invalid cron expression: ${v.error}`;
+      const created = createSchedule({
+        squadSlug: slug,
+        name,
+        cronExpr: cron,
+        agenda,
+        notes: notes ?? null,
+        nextRunAt: v.next.toISOString(),
+      });
+      return `📅 Scheduled "${created.name}" for squad "${squad.name}" (id ${created.id}).\n- Cron: \`${cron}\`\n- Agenda: ${agenda.join(", ")}\n- Next run: ${v.next.toISOString()}`;
+    },
+  });
+
+  const squadScheduleList = defineTool("squad_schedule_list", {
+    description:
+      "List squad stand-up schedules. Pass a slug to filter to one squad, or omit to list all.",
+    skipPermission: true,
+    parameters: z.object({
+      slug: z.string().optional().describe("Optional squad slug to filter"),
+    }),
+    handler: async ({ slug }) => {
+      const schedules = listSchedules(slug);
+      if (schedules.length === 0) {
+        return slug
+          ? `No schedules for squad "${slug}".`
+          : "No squad schedules configured.";
+      }
+      return schedules
+        .map((s) => {
+          const enabled = s.enabled ? "▶️ enabled" : "⏸️ paused";
+          const last = s.last_run_at ? `last ${s.last_run_at}` : "never run";
+          const next = s.next_run_at ?? "—";
+          return `- **${s.name}** (id ${s.id}) — squad \`${s.squad_slug}\` — ${enabled}\n    cron: \`${s.cron_expr}\` — agenda: ${s.agenda.join(", ")}\n    next: ${next} — ${last}${s.notes ? `\n    notes: ${s.notes}` : ""}`;
+        })
+        .join("\n");
+    },
+  });
+
+  const squadScheduleDelete = defineTool("squad_schedule_delete", {
+    description: "Delete a squad schedule by id.",
+    skipPermission: true,
+    parameters: z.object({
+      id: z.number().int().describe("Schedule id (from squad_schedule_list)"),
+    }),
+    handler: async ({ id }) => {
+      const existing = getSchedule(id);
+      if (!existing) return `Schedule ${id} not found.`;
+      deleteSchedule(id);
+      return `🗑️ Deleted schedule "${existing.name}" (id ${id}).`;
+    },
+  });
+
+  const squadSchedulePause = defineTool("squad_schedule_pause", {
+    description: "Pause a squad schedule so it stops firing (preserves config).",
+    skipPermission: true,
+    parameters: z.object({ id: z.number().int().describe("Schedule id") }),
+    handler: async ({ id }) => {
+      const existing = getSchedule(id);
+      if (!existing) return `Schedule ${id} not found.`;
+      setScheduleEnabled(id, false);
+      return `⏸️ Paused schedule "${existing.name}" (id ${id}).`;
+    },
+  });
+
+  const squadScheduleResume = defineTool("squad_schedule_resume", {
+    description:
+      "Resume a paused squad schedule. The next run is computed from now using the stored cron expression.",
+    skipPermission: true,
+    parameters: z.object({ id: z.number().int().describe("Schedule id") }),
+    handler: async ({ id }) => {
+      const existing = getSchedule(id);
+      if (!existing) return `Schedule ${id} not found.`;
+      setScheduleEnabled(id, true);
+      try {
+        const next = nextRun(existing.cron_expr);
+        // Update next_run_at via the store's helper would be cleaner, but we
+        // can also just re-run reconcile on next tick. Inline update:
+        const { updateNextRun } = await import("../store/schedules.js");
+        updateNextRun(id, next.toISOString());
+        return `▶️ Resumed schedule "${existing.name}" (id ${id}). Next run: ${next.toISOString()}`;
+      } catch (err) {
+        return `Resumed schedule "${existing.name}" but failed to compute next run: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    },
+  });
+
+  const squadScheduleRunNow = defineTool("squad_schedule_run_now", {
+    description:
+      "Manually fire a squad schedule immediately (useful for testing). Does not affect the next scheduled occurrence.",
+    skipPermission: true,
+    parameters: z.object({ id: z.number().int().describe("Schedule id") }),
+    handler: async ({ id }) => {
+      const result = await runScheduleNow(id);
+      if (!result.ok) return `Failed: ${result.error}`;
+      return `🚀 Fired schedule ${id} now. Use squad_task_status to follow the resulting stand-up.`;
+    },
+  });
+
+  return [wikiRead, wikiWrite, wikiSearch, wikiDelete, wikiList, squadCreate, squadRecall, squadStatus, squadLogDecision, squadDelegate, squadTaskStatus, squadDelete, squadAnalyze, squadAddAgent, squadAgents, squadRemoveAgent, squadSetLead, squadSetQA, squadTaskReviews, squadScheduleCreate, squadScheduleList, squadScheduleDelete, squadSchedulePause, squadScheduleResume, squadScheduleRunNow, skillList, skillInstall, skillRemove, skillSearch, configUpdate, checkUpdate, shell, fileOps, bash, readFile, viewTool, grepTool, strReplaceEditor, github];
 }
 
 function walkDirectory(dir: string, maxDepth = 3, depth = 0): string[] {

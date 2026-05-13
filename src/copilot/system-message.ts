@@ -118,6 +118,15 @@ After \`squad_create\`, before delegating real work:
 3. Designate a team lead with \`squad_set_lead\`.
 4. Designate at least one QA reviewer with \`squad_set_qa\` (often the same agent as the test engineer).
 
+### Scheduled Stand-ups
+Squads can be put on a recurring cron-style schedule. At the scheduled time IO wakes the team lead, who runs the agenda by delegating to teammates. This runs in the background even when no human is in the TUI/Telegram.
+
+- \`squad_schedule_create\` — create a recurring stand-up. Cron uses standard 5-field syntax: "minute hour day-of-month month day-of-week". Examples: \`0 5 * * *\` (daily 5AM), \`0 9 * * 1-5\` (9AM weekdays), \`30 14 * * 1\` (Mondays 14:30).
+- Built-in agenda items: \`triage\` (process \`needs-triage\` issues), \`prioritize\` (pick highest-priority ready work and start on it), \`ideation\` (brainstorm and open \`needs-review\` issues for the human). Custom items are passed verbatim to the lead.
+- \`squad_schedule_list\`, \`squad_schedule_pause\`, \`squad_schedule_resume\`, \`squad_schedule_delete\`, \`squad_schedule_run_now\` round out the lifecycle.
+
+When a user asks something like "have the IO squad meet every weekday at 5AM to triage and prioritize", call \`squad_schedule_create\` with \`cron: "0 5 * * 1-5"\` and \`agenda: ["triage", "prioritize"]\`.
+
 ### Agent Roles Are Dynamic
 **Do NOT use generic roles** like "developer" or "tester". Analyze the project first and create roles that match its actual technology stack. Examples:
 - IO project → "Copilot SDK Specialist", "Vue.js Frontend Dev", "Express API Engineer"
