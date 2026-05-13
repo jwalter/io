@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { EventEmitter } from "events";
 import { execSync } from "child_process";
 import {
   readFileSync,
@@ -11,7 +12,7 @@ import {
 import { join, dirname, resolve } from "path";
 import { homedir } from "os";
 import { defineTool, approveAll } from "@github/copilot-sdk";
-import type { CopilotSession } from "@github/copilot-sdk";
+import type { CopilotSession, SessionEvent } from "@github/copilot-sdk";
 import { z } from "zod";
 
 import { getClient } from "./client.js";
@@ -111,6 +112,63 @@ export function getAgentInfo(): AgentInfo[] {
   return agents;
 }
 
+// ---------------------------------------------------------------------------
+// Live task event streaming — captures relevant events emitted by an agent's
+// session while it processes a task. Buffers per task so late subscribers can
+// replay the conversation up to the live edge, and emits events for current
+// SSE subscribers.
+// ---------------------------------------------------------------------------
+
+export interface TaskStreamEvent {
+  ts: number;
+  type: string;
+  data: unknown;
+}
+
+const STREAM_EVENT_TYPES = new Set<string>([
+  "assistant.turn_start",
+  "assistant.intent",
+  "assistant.reasoning",
+  "assistant.reasoning_delta",
+  "assistant.message_delta",
+  "assistant.message",
+  "assistant.turn_end",
+  "tool.execution_start",
+  "tool.execution_progress",
+  "tool.execution_partial_result",
+  "tool.execution_complete",
+  "session.error",
+  "session.warning",
+]);
+
+const MAX_TASK_EVENTS = 1000;
+const taskEventBuffers = new Map<string, TaskStreamEvent[]>();
+const taskEventEmitter = new EventEmitter();
+taskEventEmitter.setMaxListeners(0);
+
+function recordTaskEvent(taskId: string, ev: TaskStreamEvent): void {
+  let buf = taskEventBuffers.get(taskId);
+  if (!buf) {
+    buf = [];
+    taskEventBuffers.set(taskId, buf);
+  }
+  buf.push(ev);
+  if (buf.length > MAX_TASK_EVENTS) buf.splice(0, buf.length - MAX_TASK_EVENTS);
+  taskEventEmitter.emit(taskId, ev);
+}
+
+export function getTaskEvents(taskId: string): TaskStreamEvent[] {
+  return taskEventBuffers.get(taskId) ?? [];
+}
+
+export function subscribeToTaskEvents(
+  taskId: string,
+  listener: (ev: TaskStreamEvent) => void,
+): () => void {
+  taskEventEmitter.on(taskId, listener);
+  return () => taskEventEmitter.off(taskId, listener);
+}
+
 export async function delegateToAgent(
   squadSlug: string,
   task: string,
@@ -152,6 +210,22 @@ export async function delegateToAgent(
   updateSquadStatus(squadSlug, "working");
   if (agent) updateAgentStatus(squadSlug, agent.character_name, "working");
 
+  // Subscribe to the agent session's events for the duration of this task so
+  // the web UI can preview the agent's "thread of consciousness" live.
+  recordTaskEvent(taskId, {
+    ts: Date.now(),
+    type: "task.start",
+    data: { taskId, agentKey, description: task },
+  });
+  const unsubscribe = session.on((event: SessionEvent) => {
+    if (!STREAM_EVENT_TYPES.has(event.type)) return;
+    recordTaskEvent(taskId, {
+      ts: Date.now(),
+      type: event.type,
+      data: (event as { data?: unknown }).data ?? null,
+    });
+  });
+
   // Run the task in the background — return taskId immediately
   void (async () => {
     try {
@@ -160,12 +234,16 @@ export async function delegateToAgent(
       completeTask(taskId, result);
       updateSquadStatus(squadSlug, "idle");
       if (agent) updateAgentStatus(squadSlug, agent.character_name, "idle");
+      recordTaskEvent(taskId, { ts: Date.now(), type: "task.done", data: { result } });
       onComplete(taskId, result);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       failTask(taskId, message);
       updateSquadStatus(squadSlug, "error");
       if (agent) updateAgentStatus(squadSlug, agent.character_name, "error");
+      recordTaskEvent(taskId, { ts: Date.now(), type: "task.failed", data: { error: message } });
+    } finally {
+      try { unsubscribe(); } catch { /* ignore */ }
     }
   })();
 
@@ -535,6 +613,7 @@ export async function cancelAgentTask(taskId: string): Promise<boolean> {
   }
 
   cancelTask(taskId);
+  recordTaskEvent(taskId, { ts: Date.now(), type: "task.cancelled", data: { reason: "Cancelled by user" } });
 
   // sessionKey is "squadSlug" or "squadSlug:characterName"
   const [squadSlug, characterName] = sessionKey.split(":");
