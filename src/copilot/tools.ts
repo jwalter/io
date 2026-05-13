@@ -31,10 +31,12 @@ export interface ToolDeps {
   getTask: (taskId: string) => { task_id: string; agent_slug: string; description: string; status: string; result: string | null } | undefined;
   getActiveAgentTasks: () => Array<{ taskId: string; agentSlug: string; description: string; status: string }>;
   addSquadAgent: (squadSlug: string, roleTitle: string, charter: string, modelTier?: string) => { character_name: string; role_title: string; personality: string | null; model_tier: string };
-  listSquadAgents: (squadSlug: string) => Array<{ character_name: string; role_title: string; charter: string | null; model_tier: string; personality: string | null; status: string; is_lead?: number }>;
+  listSquadAgents: (squadSlug: string) => Array<{ character_name: string; role_title: string; charter: string | null; model_tier: string; personality: string | null; status: string; is_lead?: number; is_qa?: number }>;
   removeSquadAgent: (squadSlug: string, characterName: string) => boolean;
   setSquadLead: (squadSlug: string, characterName: string) => void;
   getSquadLead: (squadSlug: string) => { character_name: string; role_title: string } | undefined;
+  setSquadQA: (squadSlug: string, characterName: string, isQA: boolean) => void;
+  getTaskReviews: (taskId: string) => Array<{ reviewer_character: string; approved: number; comments: string | null }>;
   listSkills: () => Array<{ name: string; slug: string; description: string; path: string }>;
   installSkill: (repoUrl: string) => Promise<{ name: string; slug: string; description: string; path: string }>;
   removeSkill: (slug: string) => boolean;
@@ -424,7 +426,8 @@ export function createTools(deps: ToolDeps) {
 
       const lines = agents.map((a) => {
         const leadBadge = a.is_lead === 1 ? " ⭐ [LEAD]" : "";
-        return `- **${a.character_name}**${leadBadge} — ${a.role_title} (${a.model_tier}) — ${a.status}${a.personality ? `\n  _${a.personality}_` : ""}`;
+        const qaBadge = a.is_qa === 1 ? " 🛡️ [QA]" : "";
+        return `- **${a.character_name}**${leadBadge}${qaBadge} — ${a.role_title} (${a.model_tier}) — ${a.status}${a.personality ? `\n  _${a.personality}_` : ""}`;
       });
 
       return `**${squad.name}** — 🎬 ${universeName}\n\n${lines.join("\n")}`;
@@ -1003,6 +1006,58 @@ export function createTools(deps: ToolDeps) {
     },
   });
 
+  const squadSetQA = defineTool("squad_set_qa", {
+    description:
+      "Mark a squad agent as a QA reviewer with veto power. QA agents must approve before a PR is promoted from draft to ready.",
+    skipPermission: true,
+    parameters: z.object({
+      slug: z.string().describe("Squad slug"),
+      character_name: z.string().describe("Character name of the agent"),
+      is_qa: z
+        .boolean()
+        .describe("Whether this agent is a QA reviewer (true) or not (false)"),
+    }),
+    handler: async ({ slug, character_name, is_qa }) => {
+      try {
+        const squad = deps.getSquad(slug);
+        if (!squad) return `Squad not found: ${slug}`;
+        const agents = deps.listSquadAgents(slug);
+        const target = agents.find((a) => a.character_name === character_name);
+        if (!target) {
+          return `Agent "${character_name}" not found in squad "${slug}".`;
+        }
+        deps.setSquadQA(slug, character_name, is_qa);
+        return is_qa
+          ? `🛡️ ${character_name} (${target.role_title}) is now a QA reviewer for squad "${squad.name}". They have veto power over PR promotion.`
+          : `${character_name} is no longer a QA reviewer for squad "${squad.name}".`;
+      } catch (err) {
+        return `Error: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    },
+  });
+
+  const squadTaskReviews = defineTool("squad_task_reviews", {
+    description:
+      "Get the peer reviews left on a completed task by the squad. Shows who approved or rejected and any comments.",
+    skipPermission: true,
+    parameters: z.object({
+      task_id: z.string().describe("The task ID to fetch reviews for"),
+    }),
+    handler: async ({ task_id }) => {
+      const reviews = deps.getTaskReviews(task_id);
+      if (reviews.length === 0) {
+        return `No reviews found for task ${task_id}.`;
+      }
+      return reviews
+        .map((r) => {
+          const verdict = r.approved === 1 ? "✅ APPROVED" : "❌ REJECTED";
+          const comments = r.comments ? `\n  ${r.comments.replace(/\n/g, "\n  ")}` : "";
+          return `- **${r.reviewer_character}** — ${verdict}${comments}`;
+        })
+        .join("\n");
+    },
+  });
+
   const squadSetLead = defineTool("squad_set_lead", {
     description:
       "Designate an agent as the team lead for their squad. The lead receives delegated tasks (when no specific agent is targeted) and orchestrates the team by divvying subtasks to teammates.",
@@ -1030,7 +1085,7 @@ export function createTools(deps: ToolDeps) {
     },
   });
 
-  return [wikiRead, wikiWrite, wikiSearch, wikiDelete, wikiList, squadCreate, squadRecall, squadStatus, squadLogDecision, squadDelegate, squadTaskStatus, squadDelete, squadAnalyze, squadAddAgent, squadAgents, squadRemoveAgent, squadSetLead, skillList, skillInstall, skillRemove, skillSearch, configUpdate, checkUpdate, shell, fileOps, bash, readFile, viewTool, grepTool, strReplaceEditor, github];
+  return [wikiRead, wikiWrite, wikiSearch, wikiDelete, wikiList, squadCreate, squadRecall, squadStatus, squadLogDecision, squadDelegate, squadTaskStatus, squadDelete, squadAnalyze, squadAddAgent, squadAgents, squadRemoveAgent, squadSetLead, squadSetQA, squadTaskReviews, skillList, skillInstall, skillRemove, skillSearch, configUpdate, checkUpdate, shell, fileOps, bash, readFile, viewTool, grepTool, strReplaceEditor, github];
 }
 
 function walkDirectory(dir: string, maxDepth = 3, depth = 0): string[] {

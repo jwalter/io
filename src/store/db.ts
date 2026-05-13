@@ -78,6 +78,16 @@ export function getDb(): BetterSqlite3.Database {
       UNIQUE(squad_slug, character_name)
     )`,
     `ALTER TABLE squad_agents ADD COLUMN is_lead INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE squad_agents ADD COLUMN is_qa INTEGER NOT NULL DEFAULT 0`,
+    `CREATE TABLE IF NOT EXISTS squad_task_reviews (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id TEXT NOT NULL,
+      squad_slug TEXT NOT NULL,
+      reviewer_character TEXT NOT NULL,
+      approved INTEGER NOT NULL DEFAULT 0,
+      comments TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
   ];
 
   for (const migration of migrations) {

@@ -34,6 +34,7 @@ import type { SquadAgent } from "../store/squads.js";
 import {
   createTask,
   completeTask,
+  createReview,
   failTask,
   getActiveTasks,
   getTask,
@@ -242,6 +243,28 @@ export async function delegateToAgent(
       updateSquadStatus(squadSlug, "idle");
       if (agent) updateAgentStatus(squadSlug, agent.character_name, "idle");
       recordTaskEvent(taskId, { ts: Date.now(), type: "task.done", data: { result } });
+      try {
+        await runPeerReview(
+          squadSlug,
+          agent?.character_name ?? "",
+          taskId,
+          task,
+          result,
+        );
+      } catch (reviewErr) {
+        console.error(
+          "[io] Peer review error:",
+          reviewErr instanceof Error ? reviewErr.message : reviewErr,
+        );
+        recordTaskEvent(taskId, {
+          ts: Date.now(),
+          type: "task.review_error",
+          data: {
+            error:
+              reviewErr instanceof Error ? reviewErr.message : String(reviewErr),
+          },
+        });
+      }
       onComplete(taskId, result);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -679,6 +702,157 @@ function walkDirectory(dir: string, maxDepth = 3, depth = 0): string[] {
     }
   }
   return results;
+}
+
+
+/**
+ * Run a peer review phase after a task completes. Every other agent on the
+ * squad reviews the work and votes APPROVED / REJECTED. QA agents
+ * (is_qa === 1) have veto power: if any QA agent rejects, the PR is left as
+ * draft. Otherwise, any GitHub PR URL found in the task result is promoted
+ * from draft to ready via `gh pr ready`.
+ */
+async function runPeerReview(
+  squadSlug: string,
+  originalAgentCharacter: string,
+  taskId: string,
+  taskDescription: string,
+  taskResult: string,
+): Promise<void> {
+  const reviewers = listSquadAgents(squadSlug).filter(
+    (a) => a.character_name !== originalAgentCharacter,
+  );
+
+  if (reviewers.length === 0) {
+    recordTaskEvent(taskId, {
+      ts: Date.now(),
+      type: "task.review_complete",
+      data: { promoted: false, reason: "No other agents to review" },
+    });
+    return;
+  }
+
+  const reviewPrompt = `You are reviewing the following completed task:
+
+## Task
+${taskDescription}
+
+## Work Done
+${taskResult}
+
+Review the work. Respond with:
+- First line: APPROVED or REJECTED
+- Remaining lines: your review comments`;
+
+  const reviews: Array<{
+    reviewer: string;
+    is_qa: boolean;
+    approved: boolean;
+    comments: string;
+  }> = [];
+
+  for (const reviewer of reviewers) {
+    try {
+      const session = await getOrCreateAgentSession(
+        squadSlug,
+        reviewer,
+        `Peer review of task ${taskId}`,
+      );
+      const response = await session.sendAndWait(
+        { prompt: reviewPrompt },
+        300_000,
+      );
+      const content = response?.data?.content ?? "";
+      const lines = content.split(/\r?\n/);
+      const firstLine = (lines[0] ?? "").trim().toUpperCase();
+      const approved =
+        firstLine.includes("APPROVED") && !firstLine.includes("REJECTED");
+      const comments = lines.slice(1).join("\n").trim() || null;
+
+      createReview(
+        taskId,
+        squadSlug,
+        reviewer.character_name,
+        approved,
+        comments ?? undefined,
+      );
+      recordTaskEvent(taskId, {
+        ts: Date.now(),
+        type: "task.review",
+        data: {
+          reviewer: reviewer.character_name,
+          is_qa: reviewer.is_qa === 1,
+          approved,
+          comments,
+        },
+      });
+      reviews.push({
+        reviewer: reviewer.character_name,
+        is_qa: reviewer.is_qa === 1,
+        approved,
+        comments: comments ?? "",
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(
+        `[io] Reviewer ${reviewer.character_name} failed:`,
+        message,
+      );
+      recordTaskEvent(taskId, {
+        ts: Date.now(),
+        type: "task.review_error",
+        data: { reviewer: reviewer.character_name, error: message },
+      });
+    }
+  }
+
+  const qaRejection = reviews.find((r) => r.is_qa && !r.approved);
+  const prMatch = taskResult.match(
+    /https:\/\/github\.com\/([^/\s]+)\/([^/\s]+)\/pull\/(\d+)/,
+  );
+
+  if (qaRejection) {
+    recordTaskEvent(taskId, {
+      ts: Date.now(),
+      type: "task.review_complete",
+      data: {
+        promoted: false,
+        reason: `QA veto from ${qaRejection.reviewer}`,
+        prUrl: prMatch ? prMatch[0] : null,
+      },
+    });
+    return;
+  }
+
+  if (!prMatch) {
+    recordTaskEvent(taskId, {
+      ts: Date.now(),
+      type: "task.review_complete",
+      data: { promoted: false, reason: "No PR URL found in task result" },
+    });
+    return;
+  }
+
+  const [prUrl, owner, repo, prNumber] = prMatch;
+  try {
+    execSync(`gh pr ready ${prNumber} --repo ${owner}/${repo}`, {
+      encoding: "utf-8",
+      timeout: 30_000,
+      env: { ...process.env, HOME: process.env.HOME || homedir() },
+    });
+    recordTaskEvent(taskId, {
+      ts: Date.now(),
+      type: "task.review_complete",
+      data: { promoted: true, prUrl },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    recordTaskEvent(taskId, {
+      ts: Date.now(),
+      type: "task.review_complete",
+      data: { promoted: false, reason: `gh pr ready failed: ${message}`, prUrl },
+    });
+  }
 }
 
 

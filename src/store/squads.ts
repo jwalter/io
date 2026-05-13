@@ -26,6 +26,7 @@ export interface SquadAgent {
   copilot_session_id: string | null;
   status: string;
   is_lead: number;
+  is_qa: number;
   created_at: string;
 }
 
@@ -258,4 +259,13 @@ export function getSquadLead(squadSlug: string): SquadAgent | undefined {
       "SELECT * FROM squad_agents WHERE squad_slug = ? AND is_lead = 1 LIMIT 1",
     )
     .get(squadSlug) as SquadAgent | undefined;
+}
+
+
+export function setSquadQA(squadSlug: string, characterName: string, isQA: boolean): void {
+  getDb()
+    .prepare(
+      "UPDATE squad_agents SET is_qa = ? WHERE squad_slug = ? AND character_name = ?",
+    )
+    .run(isQA ? 1 : 0, squadSlug, characterName);
 }
