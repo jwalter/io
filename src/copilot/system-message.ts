@@ -114,9 +114,11 @@ When an agent finishes a task, the other squad members automatically review the 
 ### Squad Build Checklist
 After \`squad_create\`, before delegating real work:
 1. Add agents with \`squad_add_agent\` (use roles tailored to the project's stack).
-2. Include at least one **test/quality engineer** role (e.g. "Integration Test Engineer", "QA Specialist", "Quality Reviewer").
+2. Include at least one **test/quality engineer** role (e.g. "Integration Test Engineer", "QA Specialist", "Quality Reviewer"). Their charter should explicitly own the project's test suite — for the IO squad this means owning \`src/**/*.test.ts\` plus running \`npm run build\` / \`vue-tsc\` on every PR before promotion.
 3. Designate a team lead with \`squad_set_lead\`.
 4. Designate at least one QA reviewer with \`squad_set_qa\` (often the same agent as the test engineer).
+
+**No exemptions.** The squad that owns the IO codebase itself (\`michaeljolley-io\`) is held to the same checklist as every other squad. If \`squad_status\` ever shows a coverage warning for the IO squad, fix it before shipping further work — IO does not get to ship rules it doesn't follow.
 
 ### Scheduled Stand-ups
 Squads can be put on a recurring cron-style schedule. At the scheduled time IO wakes the team lead, who runs the agenda by delegating to teammates. This runs in the background even when no human is in the TUI/Telegram.

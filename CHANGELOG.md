@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **IO squad held to its own QA/test rule** (#52) — the system-message Squad Build Checklist now explicitly states that the squad owning the IO codebase (\`michaeljolley-io\`) gets no exemption from the QA-reviewer + test-engineer coverage rule, and the test-engineer charter must own the project's test suite (for IO: \`src/**/*.test.ts\` plus \`npm run build\` / \`vue-tsc\` on every PR). Verified the live squad already satisfies coverage (WilyKit's successor \"WilyKat — TypeScript & Integration Test Engineer\" carries \`is_qa=1\`).
+
 ## [0.4.0] - 2026-05-13
 
 ### Added
