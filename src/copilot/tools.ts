@@ -7,6 +7,15 @@ import { homedir } from "os";
 import { UNIVERSES } from "./universes.js";
 import { validateCron, nextRun } from "./cron.js";
 import {
+  createIoSchedule,
+  deleteIoSchedule,
+  getIoSchedule,
+  listIoSchedules,
+  setIoScheduleEnabled,
+  updateIoScheduleNextRun,
+} from "../store/io-schedules.js";
+import { runIoScheduleNow } from "./io-scheduler.js";
+import {
   createSchedule,
   deleteSchedule,
   getSchedule,
@@ -1317,7 +1326,130 @@ export function createTools(deps: ToolDeps) {
     },
   });
 
-  return [wikiRead, wikiWrite, wikiSearch, wikiDelete, wikiList, squadCreate, squadRecall, squadStatus, squadLogDecision, squadDelegate, squadTaskStatus, squadDelete, squadAnalyze, squadAddAgent, squadAgents, squadRemoveAgent, squadSetLead, squadSetQA, squadTaskReviews, squadScheduleCreate, squadScheduleList, squadScheduleDelete, squadSchedulePause, squadScheduleResume, squadScheduleRunNow, skillList, skillInstall, skillRemove, skillSearch, configUpdate, checkUpdate, shell, fileOps, bash, readFile, viewTool, grepTool, strReplaceEditor, github];
+  // -------------------------------------------------------------------------
+  // IO-level (squad-independent) schedules.
+  // -------------------------------------------------------------------------
+  const scheduleCreate = defineTool("schedule_create", {
+    description:
+      "Schedule a recurring task for IO itself (no squad required). At the scheduled time, the prompt is delivered to the orchestrator as a background message, just like any TUI/Telegram input. Use for daily digests, health checks, monitoring, or any automation that does not belong to a project squad.",
+    skipPermission: true,
+    parameters: z.object({
+      name: z
+        .string()
+        .describe(
+          "Human-friendly name, e.g. 'Morning digest' or 'Hourly health check'",
+        ),
+      cron: z
+        .string()
+        .describe(
+          "Standard 5-field cron expression: 'minute hour dom month dow'. Examples: '0 5 * * *' = daily at 5:00, '0 9 * * 1-5' = 9AM weekdays, '*/15 * * * *' = every 15 minutes.",
+        ),
+      prompt: z
+        .string()
+        .describe(
+          "The prompt to send to the orchestrator each time the schedule fires. Treat it like the message a user would type — concrete, action-oriented.",
+        ),
+      notes: z
+        .string()
+        .optional()
+        .describe("Optional operator notes appended to the prompt."),
+    }),
+    handler: async ({ name, cron, prompt, notes }) => {
+      const v = validateCron(cron);
+      if (!v.ok) return `Invalid cron expression: ${v.error}`;
+      const created = createIoSchedule({
+        name,
+        cronExpr: cron,
+        prompt,
+        notes: notes ?? null,
+        nextRunAt: v.next.toISOString(),
+      });
+      return `⏰ Scheduled IO task "${created.name}" (id ${created.id}).\n- Cron: \`${cron}\`\n- Next run: ${v.next.toISOString()}`;
+    },
+  });
+
+  const scheduleList = defineTool("schedule_list", {
+    description:
+      "List all IO-level schedules (those not attached to a squad). For squad schedules, use squad_schedule_list.",
+    skipPermission: true,
+    parameters: z.object({}),
+    handler: async () => {
+      const schedules = listIoSchedules();
+      if (schedules.length === 0) {
+        return "No IO schedules configured.";
+      }
+      return schedules
+        .map((s) => {
+          const enabled = s.enabled ? "▶️ enabled" : "⏸️ paused";
+          const last = s.last_run_at ? `last ${s.last_run_at}` : "never run";
+          const next = s.next_run_at ?? "—";
+          const promptPreview =
+            s.prompt.length > 120 ? s.prompt.slice(0, 120) + "…" : s.prompt;
+          return `- **${s.name}** (id ${s.id}) — ${enabled}\n    cron: \`${s.cron_expr}\`\n    next: ${next} — ${last}\n    prompt: ${promptPreview.replace(/\n/g, " ")}${s.notes ? `\n    notes: ${s.notes}` : ""}`;
+        })
+        .join("\n");
+    },
+  });
+
+  const scheduleDelete = defineTool("schedule_delete", {
+    description: "Delete an IO schedule by id.",
+    skipPermission: true,
+    parameters: z.object({
+      id: z.number().int().describe("Schedule id (from schedule_list)"),
+    }),
+    handler: async ({ id }) => {
+      const existing = getIoSchedule(id);
+      if (!existing) return `IO schedule ${id} not found.`;
+      deleteIoSchedule(id);
+      return `🗑️ Deleted IO schedule "${existing.name}" (id ${id}).`;
+    },
+  });
+
+  const schedulePause = defineTool("schedule_pause", {
+    description:
+      "Pause an IO schedule so it stops firing (preserves config — resume with schedule_resume).",
+    skipPermission: true,
+    parameters: z.object({ id: z.number().int().describe("Schedule id") }),
+    handler: async ({ id }) => {
+      const existing = getIoSchedule(id);
+      if (!existing) return `IO schedule ${id} not found.`;
+      setIoScheduleEnabled(id, false);
+      return `⏸️ Paused IO schedule "${existing.name}" (id ${id}).`;
+    },
+  });
+
+  const scheduleResume = defineTool("schedule_resume", {
+    description:
+      "Resume a paused IO schedule. The next run is computed from now using the stored cron expression.",
+    skipPermission: true,
+    parameters: z.object({ id: z.number().int().describe("Schedule id") }),
+    handler: async ({ id }) => {
+      const existing = getIoSchedule(id);
+      if (!existing) return `IO schedule ${id} not found.`;
+      setIoScheduleEnabled(id, true);
+      try {
+        const next = nextRun(existing.cron_expr);
+        updateIoScheduleNextRun(id, next.toISOString());
+        return `▶️ Resumed IO schedule "${existing.name}" (id ${id}). Next run: ${next.toISOString()}`;
+      } catch (err) {
+        return `Resumed IO schedule "${existing.name}" but failed to compute next run: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    },
+  });
+
+  const scheduleRunNow = defineTool("schedule_run_now", {
+    description:
+      "Manually fire an IO schedule immediately (useful for testing). Does not affect the next regularly-scheduled occurrence beyond the natural advance.",
+    skipPermission: true,
+    parameters: z.object({ id: z.number().int().describe("Schedule id") }),
+    handler: async ({ id }) => {
+      const ok = await runIoScheduleNow(id);
+      if (!ok) return `IO schedule ${id} not found.`;
+      return `🚀 Fired IO schedule ${id} now.`;
+    },
+  });
+
+  return [wikiRead, wikiWrite, wikiSearch, wikiDelete, wikiList, squadCreate, squadRecall, squadStatus, squadLogDecision, squadDelegate, squadTaskStatus, squadDelete, squadAnalyze, squadAddAgent, squadAgents, squadRemoveAgent, squadSetLead, squadSetQA, squadTaskReviews, squadScheduleCreate, squadScheduleList, squadScheduleDelete, squadSchedulePause, squadScheduleResume, squadScheduleRunNow, scheduleCreate, scheduleList, scheduleDelete, schedulePause, scheduleResume, scheduleRunNow, skillList, skillInstall, skillRemove, skillSearch, configUpdate, checkUpdate, shell, fileOps, bash, readFile, viewTool, grepTool, strReplaceEditor, github];
 }
 
 function walkDirectory(dir: string, maxDepth = 3, depth = 0): string[] {
