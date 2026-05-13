@@ -160,7 +160,7 @@ export function getSquadAgent(
 export function listSquadAgents(squadSlug: string): SquadAgent[] {
   return getDb()
     .prepare(
-      "SELECT * FROM squad_agents WHERE squad_slug = ? ORDER BY created_at",
+      "SELECT * FROM squad_agents WHERE squad_slug = ? ORDER BY id ASC",
     )
     .all(squadSlug) as SquadAgent[];
 }

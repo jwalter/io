@@ -69,38 +69,65 @@
           :key="squad.id"
           class="bg-gray-800 border border-gray-700 rounded-lg p-4 hover:border-blue-500 transition-colors"
         >
-          <div class="flex justify-between items-start mb-3">
-            <div class="flex-1">
-              <h3 class="font-bold text-gray-100">{{ squad.name }}</h3>
-              <p class="text-sm text-gray-500">{{ squad.slug }}</p>
+          <button
+            type="button"
+            @click="toggleSquad(squad.slug)"
+            class="w-full text-left focus:outline-none"
+            :aria-expanded="isExpanded(squad.slug)"
+          >
+            <div class="flex justify-between items-start mb-3">
+              <div class="flex-1 flex items-center gap-2">
+                <span
+                  class="inline-block transition-transform text-gray-400"
+                  :class="isExpanded(squad.slug) ? 'rotate-90' : ''"
+                >▶</span>
+                <div>
+                  <h3 class="font-bold text-gray-100">{{ squad.name }}</h3>
+                  <p class="text-sm text-gray-500">{{ squad.slug }}</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <span v-if="squad.universe" class="px-2 py-1 rounded text-xs font-medium bg-purple-900 text-purple-100">
+                  🎬 {{ universeLabel(squad.universe) }}
+                </span>
+                <span :class="[
+                  'px-2 py-1 rounded text-xs font-medium',
+                  squad.status === 'working'
+                    ? 'bg-blue-900 text-blue-100'
+                    : squad.status === 'error'
+                      ? 'bg-red-900 text-red-100'
+                      : 'bg-gray-700 text-gray-200'
+                ]">
+                  {{ squad.status }}
+                </span>
+              </div>
             </div>
-            <div class="flex items-center gap-2">
-              <span v-if="squad.universe" class="px-2 py-1 rounded text-xs font-medium bg-purple-900 text-purple-100">
-                🎬 {{ universeLabel(squad.universe) }}
-              </span>
-              <span :class="[
-                'px-2 py-1 rounded text-xs font-medium',
-                squad.status === 'working'
-                  ? 'bg-blue-900 text-blue-100'
-                  : squad.status === 'error'
-                    ? 'bg-red-900 text-red-100'
-                    : 'bg-gray-700 text-gray-200'
-              ]">
-                {{ squad.status }}
-              </span>
-            </div>
-          </div>
-          <p class="text-sm text-gray-400 mb-2">📁 {{ squad.project_path }}</p>
+            <p class="text-sm text-gray-400">📁 {{ squad.project_path }}</p>
+          </button>
 
-          <!-- Agent Roster -->
-          <div v-if="squadAgents[squad.slug] && squadAgents[squad.slug].length > 0" class="mt-3 border-t border-gray-700 pt-3">
-            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Team Roster</p>
-            <div class="grid gap-2">
-              <div
-                v-for="agent in squadAgents[squad.slug]"
-                :key="agent.character_name"
-                class="flex items-center gap-3 bg-gray-750 rounded px-3 py-2"
-                :class="agent.status === 'working' ? 'bg-blue-950 border border-blue-800' : 'bg-gray-900'"
+          <div v-if="isExpanded(squad.slug)" class="mt-4 pt-4 border-t border-gray-700">
+            <div class="flex justify-between items-center text-xs text-gray-500 mb-3">
+              <span v-if="squad.model">Model: {{ squad.model }}</span>
+              <span>{{ formatDate(squad.created_at) }}</span>
+            </div>
+
+            <h4 class="font-semibold text-gray-200 text-sm mb-2">Team Roster</h4>
+            <div v-if="agentsLoading[squad.slug]" class="text-gray-400 text-sm py-2">
+              Loading agents...
+            </div>
+            <div v-else-if="agentsError[squad.slug]" class="text-red-400 text-sm py-2">
+              {{ agentsError[squad.slug] }}
+            </div>
+            <div v-else-if="!agentsBySquad[squad.slug] || agentsBySquad[squad.slug].length === 0"
+                 class="text-gray-500 text-sm italic py-2">
+              No agents assigned yet
+            </div>
+            <ul v-else class="space-y-2">
+              <li
+                v-for="agent in agentsBySquad[squad.slug]"
+                :key="agent.id ?? agent.character_name"
+                class="flex items-center gap-3 rounded px-3 py-2"
+                :class="agent.status === 'working' ? 'bg-blue-950 border border-blue-800' : 'bg-gray-900 border border-gray-700'"
               >
                 <div class="flex-1 min-w-0">
                   <span class="text-sm font-medium text-gray-100">{{ agent.character_name }}</span>
@@ -114,16 +141,8 @@
                 ]">
                   {{ agent.status }}
                 </span>
-              </div>
-            </div>
-          </div>
-          <div v-else class="mt-3 border-t border-gray-700 pt-3">
-            <p class="text-xs text-gray-500 italic">No agents assigned yet</p>
-          </div>
-
-          <div class="flex justify-between items-center text-xs text-gray-500 mt-3">
-            <span v-if="squad.model">Model: {{ squad.model }}</span>
-            <span>{{ formatDate(squad.created_at) }}</span>
+              </li>
+            </ul>
           </div>
         </div>
       </div>
@@ -132,17 +151,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { apiFetch } from '../lib/api'
-
-interface SquadAgent {
-  character_name: string
-  role_title: string
-  charter: string | null
-  model_tier: string
-  personality: string | null
-  status: string
-}
 
 interface Squad {
   id: number
@@ -157,6 +167,17 @@ interface Squad {
   updated_at: string
 }
 
+interface SquadAgent {
+  id?: number
+  squad_slug?: string
+  character_name: string
+  role_title: string
+  charter?: string | null
+  model_tier?: string
+  personality?: string | null
+  status: string
+}
+
 const UNIVERSE_NAMES: Record<string, string> = {
   'a-team': 'The A-Team',
   'transformers': 'Transformers',
@@ -167,12 +188,16 @@ const UNIVERSE_NAMES: Record<string, string> = {
 }
 
 const squads = ref<Squad[]>([])
-const squadAgents = ref<Record<string, SquadAgent[]>>({})
 const loading = ref(true)
 const error = ref<string | null>(null)
 const showCreateForm = ref(false)
 const creating = ref(false)
 const createError = ref<string | null>(null)
+
+const expanded = reactive<Record<string, boolean>>({})
+const agentsBySquad = reactive<Record<string, SquadAgent[]>>({})
+const agentsLoading = reactive<Record<string, boolean>>({})
+const agentsError = reactive<Record<string, string | null>>({})
 
 const form = ref({
   slug: '',
@@ -194,6 +219,32 @@ const formatDate = (dateStr: string) => {
   })
 }
 
+const isExpanded = (slug: string) => !!expanded[slug]
+
+const toggleSquad = async (slug: string) => {
+  expanded[slug] = !expanded[slug]
+  if (expanded[slug] && !agentsBySquad[slug] && !agentsLoading[slug]) {
+    await loadAgents(slug)
+  }
+}
+
+const loadAgents = async (slug: string) => {
+  agentsLoading[slug] = true
+  agentsError[slug] = null
+  try {
+    const response = await apiFetch(`/api/squads/${encodeURIComponent(slug)}/agents`)
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    const data = (await response.json()) as { agents: SquadAgent[] }
+    agentsBySquad[slug] = data.agents
+  } catch (e) {
+    agentsError[slug] = e instanceof Error ? e.message : 'Failed to load agents'
+  } finally {
+    agentsLoading[slug] = false
+  }
+}
+
 const loadSquads = async () => {
   try {
     const response = await apiFetch('/api/squads')
@@ -202,19 +253,6 @@ const loadSquads = async () => {
     }
     const data = (await response.json()) as { squads: Squad[] }
     squads.value = data.squads
-
-    // Load agents for each squad
-    for (const squad of data.squads) {
-      try {
-        const agentResp = await apiFetch(`/api/squads/${squad.slug}/agents`)
-        if (agentResp.ok) {
-          const agentData = (await agentResp.json()) as { agents: SquadAgent[] }
-          squadAgents.value[squad.slug] = agentData.agents
-        }
-      } catch {
-        // Non-critical — just skip
-      }
-    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load squads'
   } finally {
