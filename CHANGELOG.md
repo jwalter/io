@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **Dedicated team lead enforcement** (#71) — squad creation guidance now requires the team lead to be a PM / Senior Engineer with **no domain responsibility** (their sole job is coordinating, delegating, and reviewing). `squad_status`, `squad_agents`, and `squad_delegate` now surface a ⚠️ coverage warning when no lead is designated *or* when the lead's role title looks like a domain specialist (e.g. "Frontend Lead", "Test Manager"). `squad_set_lead` echoes the same warning at designation time. The team lead's automatic veto power on PR promotion (added in #48) is now documented alongside QA veto power as first-class — any QA reviewer, test engineer (when designated as QA), or the team lead can block a draft PR from being promoted to ready.
+
 ## [0.4.0] - 2026-05-13
 
 ### Added
