@@ -71,14 +71,20 @@
       </ul>
     </div>
 
-    <div v-if="auth.authEnabled && auth.user" class="p-4 border-t border-gray-800">
-      <p class="text-xs text-gray-500 truncate mb-2">{{ auth.user.email }}</p>
-      <button
-        @click="handleSignOut"
-        class="w-full px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors"
-      >
-        Sign out
-      </button>
+    <div class="p-4 border-t border-gray-800">
+      <template v-if="auth.authEnabled && auth.user">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs text-gray-500 truncate">{{ auth.user.email }}</p>
+          <span v-if="version" class="text-[10px] text-gray-600 shrink-0 ml-2">v{{ version }}</span>
+        </div>
+        <button
+          @click="handleSignOut"
+          class="w-full px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors"
+        >
+          Sign out
+        </button>
+      </template>
+      <span v-else-if="version" class="text-[10px] text-gray-600">v{{ version }}</span>
     </div>
   </nav>
 </template>
@@ -93,6 +99,7 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 
+const version = ref('')
 const unreadCount = ref(0)
 let notificationSource: EventSource | null = null
 
@@ -102,11 +109,19 @@ async function handleSignOut() {
 }
 
 function onNotificationsClick() {
-  // Clear badge immediately when the user navigates to notifications
   unreadCount.value = 0
 }
 
 onMounted(async () => {
+  // Fetch version
+  try {
+    const res = await apiFetch('/api/status')
+    if (res.ok) {
+      const data = (await res.json()) as { version?: string }
+      version.value = data.version ?? ''
+    }
+  } catch { /* best effort */ }
+
   // Fetch initial unread count
   try {
     const res = await apiFetch('/api/notifications?unread=true&limit=1')
