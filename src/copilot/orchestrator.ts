@@ -8,7 +8,7 @@ import {
 import { config } from "../config.js";
 import { SESSIONS_DIR, IO_VERSION } from "../paths.js";
 import { getState, setState, deleteState, logConversation } from "../store/db.js";
-import { clearStaleTasks, getSquadWorkDistribution, getTask, getTaskReviews } from "../store/tasks.js";
+import { clearStaleTasks, getAgentTaskStats, getSquadWorkDistribution, getStalestSpecialist, getTask, getTaskReviews } from "../store/tasks.js";
 import {
   getSquad,
   listSquads,
@@ -169,6 +169,13 @@ function getToolDeps() {
       })),
     getSquadWorkDistribution: (slug: string, limit?: number) =>
       getSquadWorkDistribution(slug, limit),
+    getAgentTaskStats: (squadSlug: string, characterNames: string[]) =>
+      getAgentTaskStats(squadSlug, characterNames),
+    getStalestSpecialist: (
+      squadSlug: string,
+      characterNames: string[],
+      options?: { excludeCharacters?: string[]; freshIfWithinHours?: number },
+    ) => getStalestSpecialist(squadSlug, characterNames, options),
     listSkills,
     installSkill,
     removeSkill,
