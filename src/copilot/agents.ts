@@ -15,7 +15,7 @@ import type { CopilotSession } from "@github/copilot-sdk";
 import { z } from "zod";
 
 import { getClient } from "./client.js";
-import { getModelForTask, getModelForTier } from "./model-router.js";
+import { getModelForTask, getModelForTier, classifyComplexity } from "./model-router.js";
 import type { Tier } from "./model-router.js";
 import {
   getSquad,
@@ -51,6 +51,7 @@ export interface AgentInfo {
 
 // Key format: "squadSlug:characterName" for per-agent sessions, "squadSlug" for legacy
 const agentSessions = new Map<string, CopilotSession>();
+const agentSessionModels = new Map<string, string>();
 
 function agentSessionKey(squadSlug: string, characterName?: string): string {
   return characterName ? `${squadSlug}:${characterName}` : squadSlug;
@@ -174,6 +175,7 @@ export async function shutdownAgents(): Promise<void> {
       // best-effort cleanup
     }
     agentSessions.delete(key);
+    agentSessionModels.delete(key);
   }
 }
 
@@ -197,7 +199,9 @@ export function getActiveAgentTasks(): Array<{
 
 /**
  * Create or resume a Copilot session for a specific named agent.
- * The system message includes the agent's character personality, role, and charter.
+ * Model is selected per-task: uses the higher of the agent's default tier
+ * and the task's classified complexity. This means an agent never gets a
+ * model worse than their baseline, but can be upgraded for complex tasks.
  */
 async function getOrCreateAgentSession(
   squadSlug: string,
@@ -205,15 +209,33 @@ async function getOrCreateAgentSession(
   taskDescription?: string,
 ): Promise<CopilotSession> {
   const key = agentSessionKey(squadSlug, agent.character_name);
+
+  // Determine model based on task complexity vs agent's default tier
+  const agentTier = agent.model_tier as Tier;
+  const taskTier = taskDescription ? classifyComplexity(taskDescription) : agentTier;
+  const tierRank: Record<Tier, number> = { high: 3, medium: 2, low: 1 };
+  const effectiveTier = tierRank[taskTier] >= tierRank[agentTier] ? taskTier : agentTier;
+  const model = getModelForTier(effectiveTier);
+
+  // If we have a cached session, check if the model matches; if not, destroy and recreate
   const existing = agentSessions.get(key);
-  if (existing) return existing;
+  if (existing) {
+    // Sessions don't expose their model, so track it separately
+    const cachedModel = agentSessionModels.get(key);
+    if (cachedModel === model) return existing;
+
+    // Model changed — destroy old session for the upgraded model
+    console.error(`[io] Agent ${agent.character_name}: upgrading model ${cachedModel} → ${model} for task complexity`);
+    try { await existing.destroy(); } catch { /* best-effort */ }
+    agentSessions.delete(key);
+    agentSessionModels.delete(key);
+  }
 
   const squad = getSquad(squadSlug)!;
   const client = await getClient();
   const decisions = getDecisionsSummary(squadSlug);
 
-  // Resolve model from agent's tier preference
-  const model = getModelForTier(agent.model_tier as Tier);
+  console.error(`[io] Agent ${agent.character_name}: using model "${model}" (agent tier: ${agentTier}, task tier: ${taskTier}, effective: ${effectiveTier})`);
 
   const universeName = squad.universe
     ? getUniverse(squad.universe)?.name ?? squad.universe
@@ -270,6 +292,7 @@ Stay in character — let your personality color your work style and communicati
 
   updateAgentSession(squadSlug, agent.character_name, session.sessionId);
   agentSessions.set(key, session);
+  agentSessionModels.set(key, model);
 
   return session;
 }
