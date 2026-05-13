@@ -55,6 +55,9 @@ All tools are created in `src/copilot/tools.ts` via the `createTools(deps)` fact
 | `squad_status` | List all squads and their status | _(none)_ |
 | `squad_log_decision` | Log an important decision for a squad | `slug: string` — squad slug; `decision: string` — the decision made; `context?: string` — reasoning |
 | `squad_delegate` | Delegate a task to a squad's worker agent | `slug: string` — squad slug; `task: string` — the task to delegate; `agent?: string` — character name of a specific agent to target (e.g., `"Hannibal"`, `"Optimus Prime"`) |
+| `squad_set_lead` | Designate an agent as the squad's team lead. The lead must be a **dedicated PM / Senior Engineer with no domain responsibility** — their sole job is coordinating, delegating, and reviewing. The lead automatically holds veto power on PR promotion. | `slug: string` — squad slug; `character_name: string` — character name of the agent to make team lead |
+| `squad_set_qa` | Mark a squad agent as a QA reviewer with veto power. QA agents must approve before a PR is promoted from draft to ready. | `slug: string` — squad slug; `character_name: string` — character name of the agent; `is_qa: boolean` — whether this agent is a QA reviewer |
+| `squad_task_reviews` | Get the peer reviews left on a completed task. Reviewers tagged ⭐ (lead) and 🛡️ (QA) hold veto power — any rejection from either blocks PR promotion. | `task_id: string` — the task ID to fetch reviews for |
 | `squad_delete` | Delete a squad | `slug: string` — squad slug |
 
 #### Available Universes
@@ -71,6 +74,16 @@ When creating a squad, you can optionally specify one of six 80s pop culture uni
 | `ghostbusters` | Venkman, Egon, Ray, Winston, Janine, Louis, Dana, Gozer |
 
 Each character comes with a personality description that influences the agent's communication style in its responses.
+
+#### Squad Coverage Warnings
+
+`squad_status`, `squad_agents`, and `squad_delegate` surface a ⚠️ warning when any of the following are missing:
+
+- A **dedicated team lead** designated via `squad_set_lead` whose role is coordination-only (PM / Senior Engineer with no domain responsibility). The warning also fires if a lead is set but their role title looks like a domain specialist (e.g. "Frontend Lead", "Test Manager").
+- A **QA reviewer** designated via `squad_set_qa`.
+- A **test/quality engineer** — an agent whose `role_title` contains `test`, `qa`, or `quality`.
+
+Delegation is not blocked by these warnings, but the gap should be fixed before promoting work. The team lead, QA reviewers, and test engineers (when designated as QA) all hold veto power on PR promotion — any rejection from any of them keeps the PR as a draft.
 
 ### Shell
 

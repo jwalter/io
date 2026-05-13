@@ -16,12 +16,14 @@ import type { CopilotSession, SessionEvent } from "@github/copilot-sdk";
 import { z } from "zod";
 
 import { getClient } from "./client.js";
+import { sendWithIdleTimeout } from "./session-timeout.js";
 import { getModelForTask, getModelForTier, classifyComplexity } from "./model-router.js";
 import type { Tier } from "./model-router.js";
 import {
   getSquad,
   updateSquadSession,
   updateSquadStatus,
+  getDecisions,
   getDecisionsSummary,
   logDecision,
   listSquadAgents,
@@ -188,6 +190,54 @@ export function subscribeToTaskEvents(
   return () => taskEventEmitter.off(taskId, listener);
 }
 
+// ---------------------------------------------------------------------------
+// Task prompt envelope (issue #54)
+//
+// Before sending a task to an agent we prepend a short "Recent squad
+// decisions" preamble and append a tail that asks the agent to call
+// squad_log_decision if their work involved a non-trivial architectural
+// choice. This is the lowest-friction nudge we can give: agents see what
+// they're augmenting AND a reminder to capture institutional knowledge.
+// ---------------------------------------------------------------------------
+
+const RECENT_DECISIONS_LIMIT = 5;
+
+function buildTaskPromptEnvelope(squadSlug: string, task: string): string {
+  const recent = getDecisions(squadSlug, RECENT_DECISIONS_LIMIT);
+  const preamble = recent.length === 0
+    ? `## Recent squad decisions
+_(None recorded yet — be the first to log one with \`squad_log_decision\` if your work involves a real architectural choice.)_`
+    : `## Recent squad decisions (last ${recent.length})
+You should treat these as load-bearing context. Reverse them only with a clear reason and a new \`squad_log_decision\` entry.
+
+${recent
+        .slice()
+        .reverse()
+        .map((d) => {
+          const ctx = d.context ? ` — _${d.context}_` : "";
+          return `- [${d.created_at}] **${d.decision}**${ctx}`;
+        })
+        .join("\n")}`;
+
+  const tail = `## Capturing institutional knowledge
+When you finish this task, if your work involved a non-trivial architectural choice (a strategy, a tradeoff, an interface decision, a workaround with a clear reason), call \`squad_log_decision\` with **one sentence** summarizing the choice and **a short context** explaining why. Examples:
+- decision: "Use idle-reset timeout instead of wall-clock for agent tasks" / context: "Wall-clock killed 2/3 long-running tasks mid-progress (#42, #45)."
+- decision: "Veto power expanded to lead + QA + test engineers" / context: "Single-reviewer veto was too narrow when test engineer wasn't designated QA."
+
+If your work was a routine implementation that didn't make a real choice (e.g. small docs edit, mechanical refactor, one-line fix), skip the call — don't log noise.`;
+
+  return `${preamble}
+
+---
+
+## Task
+${task}
+
+---
+
+${tail}`;
+}
+
 export async function delegateToAgent(
   squadSlug: string,
   task: string,
@@ -222,14 +272,33 @@ export async function delegateToAgent(
     }
   }
 
+  const agentKey = agent
+    ? agentSessionKey(squadSlug, agent.character_name)
+    : squadSlug;
+
+  // Idempotency: if an identical task is already running on this agent_slug,
+  // join the existing task instead of racing a second instance. (Issue #53)
+  const normalizedTask = task.trim();
+  const duplicate = getActiveTasks().find(
+    (t) => t.agent_slug === agentKey && t.description.trim() === normalizedTask,
+  );
+  if (duplicate) {
+    console.error(
+      `[io] Dedup: task with identical description already running on ${agentKey} (taskId=${duplicate.task_id}); returning existing taskId.`,
+    );
+    recordTaskEvent(duplicate.task_id, {
+      ts: Date.now(),
+      type: "task.dedup_joined",
+      data: { agentKey, description: normalizedTask },
+    });
+    return duplicate.task_id;
+  }
+
   const session = agent
     ? await getOrCreateAgentSession(squadSlug, agent, task)
     : await getOrCreateSession(squadSlug, task);
 
   const taskId = randomUUID();
-  const agentKey = agent
-    ? agentSessionKey(squadSlug, agent.character_name)
-    : squadSlug;
 
   createTask(taskId, agentKey, task);
   updateSquadStatus(squadSlug, "working");
@@ -254,8 +323,41 @@ export async function delegateToAgent(
   // Run the task in the background — return taskId immediately
   void (async () => {
     try {
-      const response = await session.sendAndWait({ prompt: task }, 600_000);
-      const result = response?.data?.content ?? "Task completed (no output)";
+      const envelopedTask = buildTaskPromptEnvelope(squadSlug, task);
+      const sendResult = await sendWithIdleTimeout(session, envelopedTask, {
+        // Reset on every progress event; only abort if the agent goes
+        // genuinely silent for this long. 10 minutes covers the longest
+        // realistic tool call (npm install, full build, large file edits)
+        // while still catching truly stuck sessions. (Issue #53)
+        idleMs: 10 * 60_000,
+        // Absolute upper bound — 60 minutes. Anything longer is almost
+        // certainly a runaway loop; cap it.
+        hardCapMs: 60 * 60_000,
+        onIdleTimeout: ({ lastEventType, idleMs }) => {
+          console.error(
+            `[io] Agent task ${taskId} idle for ${Math.round(idleMs / 1000)}s (last event: ${lastEventType ?? "none"}) — aborting session.`,
+          );
+        },
+      });
+      if (sendResult.timedOut) {
+        const partial = sendResult.content;
+        recordTaskEvent(taskId, {
+          ts: Date.now(),
+          type: "task.timeout",
+          data: {
+            reason: sendResult.timeoutReason,
+            lastEventType: sendResult.lastEventType,
+            partial,
+          },
+        });
+        const stamped = `[task timed out — ${sendResult.timeoutReason === "idle" ? "idle reset" : "hard cap"}; last event: ${sendResult.lastEventType ?? "none"}]\n\n${partial}`;
+        failTask(taskId, stamped);
+        updateSquadStatus(squadSlug, "idle");
+        if (agent) updateAgentStatus(squadSlug, agent.character_name, "idle");
+        onComplete(taskId, stamped);
+        return;
+      }
+      const result = sendResult.content || "Task completed (no output)";
       completeTask(taskId, result);
       updateSquadStatus(squadSlug, "idle");
       if (agent) updateAgentStatus(squadSlug, agent.character_name, "idle");
@@ -411,10 +513,26 @@ async function getOrCreateAgentSession(
     leadSection = `
 
 ## Team Lead Role
-You are the team lead for this squad. When you receive a task, your job is to:
-1. Break it down into concrete subtasks
-2. Assign each subtask to the most appropriate teammate using the \`delegate_to_teammate\` tool
-3. Collect results and synthesize a final summary
+You are the team lead for this squad. **Your sole job is coordination — you do NOT write code, own any domain, or implement features yourself.** Every incoming task must be analyzed, decomposed, and assigned to the appropriate domain specialist via the \`delegate_to_teammate\` tool. The only work you perform directly is breaking tasks down, delegating, and synthesizing results.
+
+### Fan-out planning (REQUIRED before any work begins)
+When a task arrives, BEFORE touching code or shell, you MUST:
+
+1. **List every distinct work-area** the task touches (e.g. "API endpoint", "DB migration", "frontend component", "tests", "docs"). One bullet per area.
+2. **Score each teammate's charter** against each area — for every area, name the teammate whose charter most closely matches and quote the keyword/phrase from their charter that justifies the assignment.
+3. **Produce a fan-out plan** as a short markdown list: \`- <area> → <teammate> — <one-sentence subtask>\`.
+4. **Delegate each subtask in the plan via \`delegate_to_teammate\`** — in parallel where the subtasks are independent. Do NOT shell, edit, or write code yourself between steps 1–3 and the first \`delegate_to_teammate\` call.
+
+### When you may implement directly
+Only if **all** of the following are true:
+- The task is genuinely trivial (a one-line change, a typo fix, a single-file rename) AND fits no teammate's charter better than yours.
+- No teammate's charter covers the work-area at all.
+- A prior \`delegate_to_teammate\` attempt for this exact subtask failed twice with a clear, unrecoverable error.
+
+If you find yourself reaching for the shell or file_ops on a normal feature/bug task, **stop** — that's a signal you skipped the fan-out plan. Go back and delegate.
+
+### Reviewing teammate output
+After every \`delegate_to_teammate\` call returns, read the result, decide whether it satisfies the subtask, and either accept it (move on to the next subtask) or send a follow-up \`delegate_to_teammate\` to the same teammate with the specific gap to address. Synthesize the final summary only after every subtask is accepted.
 
 ## Your Team
 ${roster}`;
@@ -708,6 +826,15 @@ function buildAgentTools(squadSlug: string, isLead = false) {
             return `Error: "${teammate}" is the team lead. Delegate to a non-lead teammate.`;
           }
 
+          // Record this sub-delegation as a first-class task so the squad's
+          // work-distribution stats reflect real fan-out (issue #51).
+          const childTaskId = randomUUID();
+          const childAgentKey = agentSessionKey(
+            squadSlug,
+            teammateAgent.character_name,
+          );
+          createTask(childTaskId, childAgentKey, task, "delegate_to_teammate");
+
           updateAgentStatus(squadSlug, teammateAgent.character_name, "working");
           try {
             const session = await getOrCreateAgentSession(
@@ -715,14 +842,34 @@ function buildAgentTools(squadSlug: string, isLead = false) {
               teammateAgent,
               task,
             );
-            const response = await session.sendAndWait({ prompt: task }, 300_000);
+            const envelopedTask = buildTaskPromptEnvelope(squadSlug, task);
+            // Idle-reset timeout: 10min between progress events, 30min
+            // hard cap. (Issue #53 — replaces #51's 30min wall-clock cap
+            // that still killed agents mid-tool-call when they had
+            // long-running shell work between assistant messages.)
+            const sendResult = await sendWithIdleTimeout(session, envelopedTask, {
+              idleMs: 10 * 60_000,
+              hardCapMs: 30 * 60_000,
+              onIdleTimeout: ({ lastEventType }) => {
+                console.error(
+                  `[io] Teammate ${teammateAgent.character_name} idle (last event: ${lastEventType ?? "none"}) — aborting.`,
+                );
+              },
+            });
             const result =
-              response?.data?.content ?? "(teammate returned no output)";
+              sendResult.content || "(teammate returned no output)";
             updateAgentStatus(squadSlug, teammateAgent.character_name, "idle");
+            if (sendResult.timedOut) {
+              const stamped = `[teammate timed out — ${sendResult.timeoutReason === "idle" ? "idle reset" : "hard cap"}; last event: ${sendResult.lastEventType ?? "none"}]\n\n${result}`;
+              failTask(childTaskId, stamped);
+              return stamped;
+            }
+            completeTask(childTaskId, result);
             return result;
           } catch (err) {
             updateAgentStatus(squadSlug, teammateAgent.character_name, "error");
             const message = err instanceof Error ? err.message : String(err);
+            failTask(childTaskId, message);
             return `Error from teammate "${teammate}": ${message}`;
           }
         } catch (err) {

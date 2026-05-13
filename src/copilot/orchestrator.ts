@@ -8,13 +8,14 @@ import {
 import { config } from "../config.js";
 import { SESSIONS_DIR, IO_VERSION } from "../paths.js";
 import { getState, setState, deleteState, logConversation } from "../store/db.js";
-import { clearStaleTasks, getTask, getTaskReviews } from "../store/tasks.js";
+import { clearStaleTasks, getSquadWorkDistribution, getTask, getTaskReviews } from "../store/tasks.js";
 import {
   getSquad,
   listSquads,
   createSquad,
   deleteSquad,
   logDecision,
+  getDecisions,
   getDecisionsSummary,
   updateSquadStatus,
   addSquadAgent,
@@ -103,6 +104,12 @@ function getToolDeps() {
     deleteSquad,
     logDecision,
     getDecisionsSummary,
+    getRecentDecisions: (slug: string, limit?: number) =>
+      getDecisions(slug, limit ?? 5).map((d) => ({
+        decision: d.decision,
+        context: d.context,
+        created_at: d.created_at,
+      })),
     updateSquadStatus,
     delegateToAgent,
     getTask,
@@ -160,6 +167,8 @@ function getToolDeps() {
         comments: r.comments,
         squad_slug: r.squad_slug,
       })),
+    getSquadWorkDistribution: (slug: string, limit?: number) =>
+      getSquadWorkDistribution(slug, limit),
     listSkills,
     installSkill,
     removeSkill,
