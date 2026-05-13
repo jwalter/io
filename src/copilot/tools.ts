@@ -6,6 +6,53 @@ import { join, dirname, resolve, sep } from "path";
 import { homedir } from "os";
 import { UNIVERSES } from "./universes.js";
 
+// ---------------------------------------------------------------------------
+// QA / test coverage heuristics
+//
+// Every squad must have:
+//   1. At least one agent designated as QA (is_qa === 1) - see squad_set_qa.
+//   2. At least one agent whose role title implies a testing/quality focus.
+//
+// These are surfaced as warnings on squad_status, squad_agents, and
+// squad_delegate so users can fix coverage gaps before promoting work.
+// ---------------------------------------------------------------------------
+
+const TEST_ROLE_KEYWORDS = ["test", "qa", "quality", "tester", "sdet", "qe"];
+
+export function roleLooksLikeTesting(roleTitle: string | null | undefined): boolean {
+  if (!roleTitle) return false;
+  const lower = roleTitle.toLowerCase();
+  return TEST_ROLE_KEYWORDS.some((kw) => {
+    const re = new RegExp(`(^|[^a-z])${kw}([^a-z]|$)`);
+    return re.test(lower);
+  });
+}
+
+export interface SquadCoverage {
+  hasQa: boolean;
+  hasTestRole: boolean;
+  missing: string[];
+  warning: string | null;
+}
+
+export function assessSquadCoverage(
+  agents: Array<{ role_title: string; is_qa?: number }>,
+): SquadCoverage {
+  const hasQa = agents.some((a) => a.is_qa === 1);
+  const hasTestRole = agents.some((a) => roleLooksLikeTesting(a.role_title));
+  const missing: string[] = [];
+  if (!hasQa) missing.push("QA reviewer (use squad_set_qa)");
+  if (!hasTestRole) {
+    missing.push(
+      "test/quality engineer (add an agent whose role_title contains 'test', 'qa', or 'quality')",
+    );
+  }
+  const warning = missing.length > 0
+    ? `⚠️ Squad coverage gap: missing ${missing.join(" and ")}.`
+    : null;
+  return { hasQa, hasTestRole, missing, warning };
+}
+
 // Ensure child processes have HOME set (systemd services often don't)
 function shellEnv(): NodeJS.ProcessEnv {
   const env = { ...process.env };
@@ -150,7 +197,9 @@ export function createTools(deps: ToolDeps) {
           const agentList = agents.length > 0
             ? "\n  Agents: " + agents.map((a) => `${a.character_name} (${a.role_title})`).join(", ")
             : "\n  Agents: none — use squad_add_agent to build the team";
-          return `- **${s.name}** (\`${s.slug}\`) — ${s.status} — 🎬 ${universeName}${leadLine}${agentList}\n  📁 ${s.projectPath}`;
+          const coverage = assessSquadCoverage(agents);
+          const coverageLine = coverage.warning ? `\n  ${coverage.warning}` : "";
+          return `- **${s.name}** (\`${s.slug}\`) — ${s.status} — 🎬 ${universeName}${leadLine}${agentList}${coverageLine}\n  📁 ${s.projectPath}`;
         })
         .join("\n");
     },
@@ -192,12 +241,17 @@ export function createTools(deps: ToolDeps) {
     }),
     handler: async ({ slug, task, agent }) => {
       console.error(`[io] squad_delegate called: ${slug}${agent ? ` → ${agent}` : ""} — ${task.slice(0, 100)}…`);
+      const roster = deps.listSquadAgents(slug);
+      const coverage = assessSquadCoverage(roster);
       try {
         const taskId = await deps.delegateToAgent(slug, task, (id, result) => {
           console.error(`[io] Agent task ${id} completed for squad ${slug}`);
         }, agent);
         const agentLabel = agent ? `agent "${agent}" in squad "${slug}"` : `squad "${slug}"`;
-        return `Task delegated to ${agentLabel}. Task ID: ${taskId}\n\nThe agent is working on this in the background. Use squad_task_status to check progress.`;
+        const warningPrefix = coverage.warning
+          ? `${coverage.warning} Reviews from this squad will not be vetoed by a designated QA agent until this is fixed.\n\n`
+          : "";
+        return `${warningPrefix}Task delegated to ${agentLabel}. Task ID: ${taskId}\n\nThe agent is working on this in the background. Use squad_task_status to check progress.`;
       } catch (err) {
         return `Error delegating task: ${err instanceof Error ? err.message : String(err)}`;
       }
@@ -430,7 +484,9 @@ export function createTools(deps: ToolDeps) {
         return `- **${a.character_name}**${leadBadge}${qaBadge} — ${a.role_title} (${a.model_tier}) — ${a.status}${a.personality ? `\n  _${a.personality}_` : ""}`;
       });
 
-      return `**${squad.name}** — 🎬 ${universeName}\n\n${lines.join("\n")}`;
+      const coverage = assessSquadCoverage(agents);
+      const coverageBlock = coverage.warning ? `\n\n${coverage.warning}` : "";
+      return `**${squad.name}** — 🎬 ${universeName}\n\n${lines.join("\n")}${coverageBlock}`;
     },
   });
 
