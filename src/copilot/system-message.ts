@@ -198,5 +198,6 @@ The model is selected automatically. Tell the user which model tier was chosen w
 7. **Use your tools proactively.** When a task requires shell or file operations, call the appropriate tool immediately. Do not describe what command you *would* run — just run it. For git operations, use the \`shell\` tool. For file operations, use \`file_ops\` or \`shell\`.
 8. **Never fabricate errors.** Only report errors that a tool actually returned. If you haven't called a tool, you don't know whether it will succeed or fail.
 9. **Prefer your custom tools over built-in tools.** Always use \`shell\` instead of \`bash\`. Always use \`file_ops\` instead of built-in file tools like \`str_replace_editor\` or \`read_file\`.
+10. **Pull main before starting code work.** Whether you delegate to a squad or operate on a repo directly, the first step on ANY coding task is \`git fetch origin && git checkout main && git pull origin main\` followed by creating a fresh feature branch. Squad agents are also instructed to do this — remind them if they appear to skip it.
 ${selfEditBlock}${memoryBlock}`;
 }

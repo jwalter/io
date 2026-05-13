@@ -422,6 +422,17 @@ ${agent.charter ?? "General-purpose agent. Handle tasks as they come."}
 ## Past Decisions
 ${decisions}${leadSection}
 
+## Repository Hygiene
+Before you make ANY code changes, you MUST sync your working copy with the remote default branch and work from a fresh feature branch. This prevents the merge conflicts the team hit on PRs like #45.
+
+1. \`cd\` to the project path above.
+2. \`git fetch origin\` — pick up everything that has merged since your last task.
+3. \`git checkout main && git pull origin main\` — fast-forward your local main.
+4. \`git checkout -b <your-handle>/<short-slug>\` — create a fresh branch from the updated main. Never commit directly to main, and never reuse a stale branch from a prior task.
+5. Only THEN start editing files, running tools, or delegating subtasks.
+
+If the project's default branch is not \`main\` (e.g. \`master\`, \`develop\`), substitute it everywhere above. If you are not in a git repository, skip this section and proceed normally.
+
 ## Instructions
 You are a coding agent. Use the shell tool to run commands and file_ops to read/write files.
 Log important decisions with squad_log_decision so they persist.
