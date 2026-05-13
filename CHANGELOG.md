@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-05-13
+
+### Added
+
+- **Scheduled stand-ups** (#45) — squads can be put on a recurring cron-style schedule via `squad_schedule_create` (and `_list`/`_pause`/`_resume`/`_delete`/`_run_now`). Built-in agenda items: `triage`, `prioritize`, `ideation`. Runs in the background daemon even when no human is in the TUI/Telegram.
+- **Tiered human-readable activity log** (#47) — task event streams now carry a per-event `summary` and a new `GET /tasks/:id/activity` endpoint exposes a merged view. Web UI activity modal shows a clean summary by default with click-to-expand detail and a master "Show details" toggle. TUI gains `/activity [id|N]` and `/verbose` commands.
+- **Active-agent model badge** (#38) — the web UI now shows the model an agent is using while it's working.
+- **QA reviewer + test-engineer enforcement** (#41) — every squad must have a QA reviewer (`squad_set_qa`) and at least one role with a testing/quality focus. `squad_status`, `squad_agents`, and `squad_delegate` surface a ⚠️ warning when either is missing (warn, not block).
+
+### Changed
+
+- **Team lead carries implicit veto power** (#48) — the lead now blocks PR auto-promotion on rejection without needing to also be designated as QA. `squad_task_reviews` badges reviewers ⭐ lead / 🛡️ QA / ⭐🛡️ both and tags rejections from either as **veto**.
+
+### Fixed
+
+- **Robust APPROVED/REJECTED parsing in peer review** (#43) — verdict parsing now strips markdown, scans the first 10 non-empty lines for a line-leading verdict, and falls back to first occurrence anywhere. Fixes auto-promotion failing on reviews with blank leading lines, headers, or chatty preambles.
+
 ## [1.0.0] - 2026-05-08
 
 ### 🚀 Complete TypeScript Rewrite

@@ -1,6 +1,6 @@
 {
   "name": "heyio",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "IO — a personal AI assistant built on the GitHub Copilot SDK",
   "bin": {
     "io": "dist/index.js"
