@@ -397,10 +397,26 @@ async function getOrCreateAgentSession(
     leadSection = `
 
 ## Team Lead Role
-You are the team lead for this squad. When you receive a task, your job is to:
-1. Break it down into concrete subtasks
-2. Assign each subtask to the most appropriate teammate using the \`delegate_to_teammate\` tool
-3. Collect results and synthesize a final summary
+You are the team lead for this squad. **Your sole job is coordination — you do NOT write code, own any domain, or implement features yourself.** Every incoming task must be analyzed, decomposed, and assigned to the appropriate domain specialist via the \`delegate_to_teammate\` tool. The only work you perform directly is breaking tasks down, delegating, and synthesizing results.
+
+### Fan-out planning (REQUIRED before any work begins)
+When a task arrives, BEFORE touching code or shell, you MUST:
+
+1. **List every distinct work-area** the task touches (e.g. "API endpoint", "DB migration", "frontend component", "tests", "docs"). One bullet per area.
+2. **Score each teammate's charter** against each area — for every area, name the teammate whose charter most closely matches and quote the keyword/phrase from their charter that justifies the assignment.
+3. **Produce a fan-out plan** as a short markdown list: \`- <area> → <teammate> — <one-sentence subtask>\`.
+4. **Delegate each subtask in the plan via \`delegate_to_teammate\`** — in parallel where the subtasks are independent. Do NOT shell, edit, or write code yourself between steps 1–3 and the first \`delegate_to_teammate\` call.
+
+### When you may implement directly
+Only if **all** of the following are true:
+- The task is genuinely trivial (a one-line change, a typo fix, a single-file rename) AND fits no teammate's charter better than yours.
+- No teammate's charter covers the work-area at all.
+- A prior \`delegate_to_teammate\` attempt for this exact subtask failed twice with a clear, unrecoverable error.
+
+If you find yourself reaching for the shell or file_ops on a normal feature/bug task, **stop** — that's a signal you skipped the fan-out plan. Go back and delegate.
+
+### Reviewing teammate output
+After every \`delegate_to_teammate\` call returns, read the result, decide whether it satisfies the subtask, and either accept it (move on to the next subtask) or send a follow-up \`delegate_to_teammate\` to the same teammate with the specific gap to address. Synthesize the final summary only after every subtask is accepted.
 
 ## Your Team
 ${roster}`;
@@ -694,6 +710,15 @@ function buildAgentTools(squadSlug: string, isLead = false) {
             return `Error: "${teammate}" is the team lead. Delegate to a non-lead teammate.`;
           }
 
+          // Record this sub-delegation as a first-class task so the squad's
+          // work-distribution stats reflect real fan-out (issue #51).
+          const childTaskId = randomUUID();
+          const childAgentKey = agentSessionKey(
+            squadSlug,
+            teammateAgent.character_name,
+          );
+          createTask(childTaskId, childAgentKey, task, "delegate_to_teammate");
+
           updateAgentStatus(squadSlug, teammateAgent.character_name, "working");
           try {
             const session = await getOrCreateAgentSession(
@@ -701,14 +726,19 @@ function buildAgentTools(squadSlug: string, isLead = false) {
               teammateAgent,
               task,
             );
-            const response = await session.sendAndWait({ prompt: task }, 300_000);
+            // 30-minute idle timeout — specialists often need to read code,
+            // run tests, and edit files. The previous 5-minute cap caused
+            // leads to give up and self-implement (issue #51).
+            const response = await session.sendAndWait({ prompt: task }, 1_800_000);
             const result =
               response?.data?.content ?? "(teammate returned no output)";
             updateAgentStatus(squadSlug, teammateAgent.character_name, "idle");
+            completeTask(childTaskId, result);
             return result;
           } catch (err) {
             updateAgentStatus(squadSlug, teammateAgent.character_name, "error");
             const message = err instanceof Error ? err.message : String(err);
+            failTask(childTaskId, message);
             return `Error from teammate "${teammate}": ${message}`;
           }
         } catch (err) {
