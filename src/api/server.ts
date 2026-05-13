@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 import express, { type Request, type Response } from "express";
 import { config } from "../config.js";
-import { listSkills } from "../copilot/skills.js";
+import { listSkills, installSkill } from "../copilot/skills.js";
 import { listSquads, createSquad, listSquadAgents } from "../store/squads.js";
 import { getAgentInfo, cancelAgentTask, getTaskEvents, subscribeToTaskEvents } from "../copilot/agents.js";
 import { summarize, summarizeEvent } from "../copilot/event-summary.js";
@@ -84,6 +84,40 @@ export async function startApiServer(): Promise<void> {
     } catch (e) {
       console.error("Error listing skills:", e);
       res.status(500).json({ error: "Failed to list skills" });
+    }
+  });
+
+
+  // Install a skill from a git repo URL (mirrors the skill_install tool)
+  api.post("/skills", async (req: Request, res: Response) => {
+    const { repoUrl } = req.body as { repoUrl?: unknown };
+
+    if (repoUrl === undefined || repoUrl === null || typeof repoUrl !== "string") {
+      res.status(400).json({ error: "Missing required field: repoUrl" });
+      return;
+    }
+    if (repoUrl.trim() === "") {
+      res.status(400).json({ error: "repoUrl must not be empty" });
+      return;
+    }
+    const trimmed = repoUrl.trim();
+    const looksLikeGitUrl =
+      trimmed.startsWith("http://") ||
+      trimmed.startsWith("https://") ||
+      trimmed.startsWith("git@") ||
+      trimmed.startsWith("git://") ||
+      trimmed.endsWith(".git");
+    if (!looksLikeGitUrl) {
+      res.status(400).json({ error: "repoUrl does not look like a git repository URL" });
+      return;
+    }
+
+    try {
+      const skill = await installSkill(trimmed);
+      res.status(201).json({ skill });
+    } catch (e) {
+      console.error("Error installing skill:", e);
+      res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
     }
   });
 

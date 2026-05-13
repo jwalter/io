@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Added
+
+- **Install skills from the web UI** (#21) — the Skills tab now has an "Add Skill" form. Enter a git repository URL and click **Install** to install a skill without leaving the browser (mirrors the existing `skill_install` tool / TUI / Telegram path). The skills list refreshes after a successful install; validation and install errors are surfaced inline. Backed by a new `POST /api/skills` endpoint (auth-protected) that reuses `installSkill(repoUrl)` from `src/copilot/skills.ts`.
+
+
 ### Changed
 
 - **Lead briefing + fan-out enforcement** (#51) — the team-lead system message now mandates a fan-out plan (work-area breakdown + charter-keyed teammate scoring + per-area subtask) before the lead may touch shell, files, or self-implement. Direct lead implementation is restricted to trivial single-file changes that fit no teammate's charter.
