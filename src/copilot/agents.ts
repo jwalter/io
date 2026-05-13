@@ -807,6 +807,7 @@ Review the work. Respond with:
   const reviews: Array<{
     reviewer: string;
     is_qa: boolean;
+    is_lead: boolean;
     approved: boolean;
     comments: string;
   }> = [];
@@ -839,6 +840,7 @@ Review the work. Respond with:
         data: {
           reviewer: reviewer.character_name,
           is_qa: reviewer.is_qa === 1,
+          is_lead: reviewer.is_lead === 1,
           approved,
           comments,
         },
@@ -846,6 +848,7 @@ Review the work. Respond with:
       reviews.push({
         reviewer: reviewer.character_name,
         is_qa: reviewer.is_qa === 1,
+        is_lead: reviewer.is_lead === 1,
         approved,
         comments: comments ?? "",
       });
@@ -864,15 +867,24 @@ Review the work. Respond with:
   }
 
   const hasQaReviewers = reviews.some((r) => r.is_qa);
+  const hasLeadReviewer = reviews.some((r) => r.is_lead);
   const qaRejection = reviews.find((r) => r.is_qa && !r.approved);
-  const nonQaRejections = reviews.filter((r) => !r.is_qa && !r.approved);
-  if (!hasQaReviewers && nonQaRejections.length > 0) {
+  // Team lead has implicit veto power equivalent to a QA reviewer. If the lead
+  // is also a QA agent the qaRejection branch already covers it; this catches
+  // the lead-but-not-QA case.
+  const leadRejection = reviews.find(
+    (r) => r.is_lead && !r.is_qa && !r.approved,
+  );
+  const advisoryRejections = reviews.filter(
+    (r) => !r.is_qa && !r.is_lead && !r.approved,
+  );
+  if (!hasQaReviewers && !hasLeadReviewer && advisoryRejections.length > 0) {
     recordTaskEvent(taskId, {
       ts: Date.now(),
       type: "task.review_advisory",
       data: {
-        reason: "No QA reviewers designated; non-QA rejections are advisory and do not block promotion.",
-        rejectedBy: nonQaRejections.map((r) => r.reviewer),
+        reason: "No QA reviewers or team lead designated; rejections are advisory and do not block promotion.",
+        rejectedBy: advisoryRejections.map((r) => r.reviewer),
       },
     });
   }
@@ -887,6 +899,19 @@ Review the work. Respond with:
       data: {
         promoted: false,
         reason: `QA veto from ${qaRejection.reviewer}`,
+        prUrl: prMatch ? prMatch[0] : null,
+      },
+    });
+    return;
+  }
+
+  if (leadRejection) {
+    recordTaskEvent(taskId, {
+      ts: Date.now(),
+      type: "task.review_complete",
+      data: {
+        promoted: false,
+        reason: `Lead veto from ${leadRejection.reviewer}`,
         prUrl: prMatch ? prMatch[0] : null,
       },
     });

@@ -247,57 +247,6 @@
               </ul>
             </div>
 
-            <!-- Activity log -->
-            <div>
-              <div class="flex justify-between items-center mb-2">
-                <p class="text-xs uppercase tracking-wider text-gray-500">Activity</p>
-                <label class="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer select-none">
-                  <input type="checkbox" v-model="showAllDetails" class="accent-blue-500" />
-                  Show details
-                </label>
-              </div>
-              <div
-                v-if="activityLoading && activityEntries.length === 0"
-                class="text-sm text-gray-500 italic py-1"
-              >
-                No activity yet
-              </div>
-              <div
-                v-else-if="activityEntries.length === 0"
-                class="text-sm text-gray-500 italic py-1"
-              >
-                No activity yet
-              </div>
-              <ul v-else class="space-y-0.5">
-                <li v-for="(entry, idx) in activityEntries" :key="idx">
-                  <button
-                    type="button"
-                    @click="toggleEntry(idx)"
-                    class="w-full text-left flex items-start gap-2 px-2 py-1 rounded hover:bg-gray-800 transition-colors"
-                  >
-                    <span class="flex-shrink-0 text-base leading-5 mt-px">{{ entry.icon }}</span>
-                    <span :class="['text-sm flex-1 break-words leading-5', entryTextClass(entry)]">{{ entry.summary }}</span>
-                    <span
-                      v-if="entry.status"
-                      :class="['text-xs px-1.5 py-0.5 rounded flex-shrink-0 self-start', entryBadgeClass(entry.status)]"
-                    >
-                      {{ entry.status }}
-                    </span>
-                  </button>
-                  <div
-                    v-if="showAllDetails || expandedEntries.has(idx)"
-                    class="ml-8 mt-1 mb-1 space-y-2"
-                  >
-                    <pre
-                      v-if="entry.detail"
-                      class="text-sm text-gray-200 bg-gray-800 border border-gray-700 rounded p-2 whitespace-pre-wrap break-words"
-                    >{{ entry.detail }}</pre>
-                    <pre class="text-xs text-gray-500 bg-gray-950 border border-gray-800 rounded p-2 whitespace-pre-wrap break-words">{{ JSON.stringify(entry.raw, null, 2) }}</pre>
-                  </div>
-                </li>
-              </ul>
-            </div>
-
             <div>
               <p class="text-xs uppercase tracking-wider text-gray-500 mb-1">Result</p>
               <pre v-if="selectedTask.result" class="text-sm text-gray-100 bg-gray-800 border border-gray-700 rounded p-3 whitespace-pre-wrap break-words font-mono max-h-96 overflow-y-auto">{{ selectedTask.result }}</pre>
@@ -562,7 +511,7 @@ const startActivityStream = (taskId: string) => {
   stopActivityStream()
   loadActivity(taskId, { initial: true })
   try {
-    activityEventSource = new EventSource(`/api/tasks/${encodeURIComponent(taskId)}/events`)
+    activityEventSource = new EventSource(authenticatedUrl(`/api/tasks/${encodeURIComponent(taskId)}/events`))
     activityEventSource.onmessage = () => {
       // Coalesce bursts of SSE events into one refetch every 250ms.
       scheduleActivityRefresh(taskId)

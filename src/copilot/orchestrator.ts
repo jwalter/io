@@ -137,6 +137,7 @@ function getToolDeps() {
         reviewer_character: r.reviewer_character,
         approved: r.approved,
         comments: r.comments,
+        squad_slug: r.squad_slug,
       })),
     listSkills,
     installSkill,
