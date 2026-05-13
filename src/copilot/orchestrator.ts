@@ -15,6 +15,7 @@ import {
   createSquad,
   deleteSquad,
   logDecision,
+  getDecisions,
   getDecisionsSummary,
   updateSquadStatus,
   addSquadAgent,
@@ -101,6 +102,12 @@ function getToolDeps() {
     deleteSquad,
     logDecision,
     getDecisionsSummary,
+    getRecentDecisions: (slug: string, limit?: number) =>
+      getDecisions(slug, limit ?? 5).map((d) => ({
+        decision: d.decision,
+        context: d.context,
+        created_at: d.created_at,
+      })),
     updateSquadStatus,
     delegateToAgent,
     getTask,

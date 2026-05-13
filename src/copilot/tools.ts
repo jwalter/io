@@ -254,6 +254,10 @@ export interface ToolDeps {
   deleteSquad: (slug: string) => void;
   logDecision: (squadSlug: string, decision: string, context?: string) => void;
   getDecisionsSummary: (squadSlug: string) => string;
+  getRecentDecisions: (
+    squadSlug: string,
+    limit?: number,
+  ) => Array<{ decision: string; context: string | null; created_at: string }>;
   updateSquadStatus: (slug: string, status: string) => void;
   delegateToAgent: (squadSlug: string, task: string, onComplete: (taskId: string, result: string) => void, targetAgent?: string) => Promise<string>;
   getTask: (taskId: string) => { task_id: string; agent_slug: string; description: string; status: string; result: string | null } | undefined;
@@ -385,7 +389,14 @@ export function createTools(deps: ToolDeps) {
           const coverage = assessSquadCoverage(agents);
           const coverageLine = coverage.warning ? `\n  ${coverage.warning}` : "";
           const distLine = formatWorkDistribution(s.slug, lead, deps);
-          return `- **${s.name}** (\`${s.slug}\`) — ${s.status} — 🎬 ${universeName}${leadLine}${agentList}${coverageLine}${distLine}\n  📁 ${s.projectPath}`;
+          const recentDecisions = deps.getRecentDecisions(s.slug, 3);
+          const decisionsLine = recentDecisions.length === 0
+            ? "\n  📜 Recent decisions: _none recorded — squad is not capturing institutional knowledge_"
+            : "\n  📜 Recent decisions: " +
+              recentDecisions
+                .map((d) => `\"${d.decision.length > 80 ? d.decision.slice(0, 80) + "…" : d.decision}\"`)
+                .join("; ");
+          return `- **${s.name}** (\`${s.slug}\`) — ${s.status} — 🎬 ${universeName}${leadLine}${agentList}${coverageLine}${distLine}${decisionsLine}\n  📁 ${s.projectPath}`;
         })
         .join("\n");
     },
