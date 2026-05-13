@@ -1316,7 +1316,7 @@ export function createTools(deps: ToolDeps) {
 
   const squadScheduleRunNow = defineTool("squad_schedule_run_now", {
     description:
-      "Manually fire a squad schedule immediately (useful for testing). Does not affect the next scheduled occurrence.",
+      "Manually fire a squad schedule immediately (useful for testing). last_run_at and next_run_at are preserved so the regular schedule is untouched.",
     skipPermission: true,
     parameters: z.object({ id: z.number().int().describe("Schedule id") }),
     handler: async ({ id }) => {
@@ -1439,7 +1439,7 @@ export function createTools(deps: ToolDeps) {
 
   const scheduleRunNow = defineTool("schedule_run_now", {
     description:
-      "Manually fire an IO schedule immediately (useful for testing). Does not affect the next regularly-scheduled occurrence beyond the natural advance.",
+      "Manually fire an IO schedule immediately (useful for testing). last_run_at and next_run_at are preserved so the regular schedule is untouched.",
     skipPermission: true,
     parameters: z.object({ id: z.number().int().describe("Schedule id") }),
     handler: async ({ id }) => {

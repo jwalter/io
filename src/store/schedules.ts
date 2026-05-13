@@ -125,3 +125,20 @@ export function updateNextRun(id: number, nextRunAt: string | null): void {
     .prepare("UPDATE squad_schedules SET next_run_at = ? WHERE id = ?")
     .run(nextRunAt, id);
 }
+
+/**
+ * Overwrite both last_run_at and next_run_at directly. Unlike
+ * recordScheduleRun this accepts NULL for last_run_at, which is needed when
+ * restoring a schedule's "never run" state after a manual run_now.
+ */
+export function setScheduleTimestamps(
+  id: number,
+  lastRunAt: string | null,
+  nextRunAt: string | null,
+): void {
+  getDb()
+    .prepare(
+      "UPDATE squad_schedules SET last_run_at = ?, next_run_at = ? WHERE id = ?",
+    )
+    .run(lastRunAt, nextRunAt, id);
+}

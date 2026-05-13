@@ -95,3 +95,20 @@ export function updateIoScheduleNextRun(
     .prepare("UPDATE io_schedules SET next_run_at = ? WHERE id = ?")
     .run(nextRunAt, id);
 }
+
+/**
+ * Overwrite both last_run_at and next_run_at directly. Unlike
+ * recordIoScheduleRun this accepts NULL for last_run_at, which is needed when
+ * restoring a schedule's "never run" state after a manual run_now.
+ */
+export function setIoScheduleTimestamps(
+  id: number,
+  lastRunAt: string | null,
+  nextRunAt: string | null,
+): void {
+  getDb()
+    .prepare(
+      "UPDATE io_schedules SET last_run_at = ?, next_run_at = ? WHERE id = ?",
+    )
+    .run(lastRunAt, nextRunAt, id);
+}

@@ -11,7 +11,7 @@
 // Schedules survive daemon restarts because next_run_at is persisted. On
 // startup we backfill any next_run_at fields that became stale (or are NULL).
 
-import { listSchedules, listDueSchedules, recordScheduleRun, updateNextRun, type SquadSchedule } from "../store/schedules.js";
+import { listSchedules, listDueSchedules, recordScheduleRun, setScheduleTimestamps, updateNextRun, type SquadSchedule } from "../store/schedules.js";
 import { getSquad } from "../store/squads.js";
 import { delegateToAgent } from "./agents.js";
 import { nextRun } from "./cron.js";
@@ -145,11 +145,26 @@ export function stopScheduler(): void {
   timer = undefined;
 }
 
-/** Manually fire a schedule. Used by squad_schedule_run_now. */
+/**
+ * Manually fire a schedule. Used by squad_schedule_run_now.
+ *
+ * Snapshots last_run_at and next_run_at before firing and restores them
+ * after, so a manual fire never disturbs the regular schedule (a user
+ * testing a 05:00 schedule at 04:30 should not have today's 05:00 run
+ * skipped or shifted). The fireSchedule path itself advances both fields
+ * because that's correct for an automatic firing — only manual runs need
+ * to leave the schedule untouched.
+ */
 export async function runScheduleNow(scheduleId: number): Promise<{ ok: boolean; error?: string }> {
   const all = listSchedules();
   const s = all.find((x) => x.id === scheduleId);
   if (!s) return { ok: false, error: `Schedule ${scheduleId} not found` };
-  await fireSchedule(s);
+  const previousLast = s.last_run_at;
+  const previousNext = s.next_run_at;
+  try {
+    await fireSchedule(s);
+  } finally {
+    setScheduleTimestamps(scheduleId, previousLast, previousNext);
+  }
   return { ok: true };
 }

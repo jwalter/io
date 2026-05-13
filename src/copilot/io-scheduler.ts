@@ -8,6 +8,7 @@ import {
   listIoSchedules,
   listDueIoSchedules,
   recordIoScheduleRun,
+  setIoScheduleTimestamps,
   updateIoScheduleNextRun,
   type IoSchedule,
 } from "../store/io-schedules.js";
@@ -128,13 +129,26 @@ export function stopIoScheduler(): void {
 
 /**
  * Force a schedule to run immediately. Used by the `schedule_run_now` tool.
- * Does not mutate next_run_at on success (the next regular tick handles that
- * via fireSchedule).
+ *
+ * The regular tick path (`fireSchedule`) advances `last_run_at` and
+ * `next_run_at` as a side effect, which is correct for an automatic firing
+ * but is the wrong behaviour for a manual one — a user testing a schedule at
+ * 04:30 should not have the 05:00 occurrence skipped or the schedule shifted.
+ * We therefore snapshot both timestamps before firing and restore them after,
+ * leaving the persisted schedule untouched.
  */
 export async function runIoScheduleNow(id: number): Promise<boolean> {
   const all = listIoSchedules();
   const s = all.find((x) => x.id === id);
   if (!s) return false;
-  await fireSchedule(s);
+  const previousLast = s.last_run_at;
+  const previousNext = s.next_run_at;
+  try {
+    await fireSchedule(s);
+  } finally {
+    // Restore the original timestamps even if fireSchedule threw, so a
+    // failed manual run cannot silently shift the schedule either.
+    setIoScheduleTimestamps(id, previousLast, previousNext);
+  }
   return true;
 }
