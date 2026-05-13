@@ -92,7 +92,7 @@ export interface ToolDeps {
   setSquadLead: (squadSlug: string, characterName: string) => void;
   getSquadLead: (squadSlug: string) => { character_name: string; role_title: string } | undefined;
   setSquadQA: (squadSlug: string, characterName: string, isQA: boolean) => void;
-  getTaskReviews: (taskId: string) => Array<{ reviewer_character: string; approved: number; comments: string | null }>;
+  getTaskReviews: (taskId: string) => Array<{ reviewer_character: string; approved: number; comments: string | null; squad_slug: string }>;
   listSkills: () => Array<{ name: string; slug: string; description: string; path: string }>;
   installSkill: (repoUrl: string) => Promise<{ name: string; slug: string; description: string; path: string }>;
   removeSkill: (slug: string) => boolean;
@@ -1113,11 +1113,44 @@ export function createTools(deps: ToolDeps) {
       if (reviews.length === 0) {
         return `No reviews found for task ${task_id}.`;
       }
+      // Look up reviewer roles (lead/qa) so we can flag where each verdict
+      // came from. Lead and QA reviewers both have veto power.
+      const rolesBySquad = new Map<
+        string,
+        Map<string, { is_lead: boolean; is_qa: boolean }>
+      >();
+      const rolesFor = (squadSlug: string, character: string) => {
+        let squadMap = rolesBySquad.get(squadSlug);
+        if (!squadMap) {
+          squadMap = new Map();
+          for (const a of deps.listSquadAgents(squadSlug)) {
+            squadMap.set(a.character_name, {
+              is_lead: a.is_lead === 1,
+              is_qa: a.is_qa === 1,
+            });
+          }
+          rolesBySquad.set(squadSlug, squadMap);
+        }
+        return squadMap.get(character) ?? { is_lead: false, is_qa: false };
+      };
       return reviews
         .map((r) => {
-          const verdict = r.approved === 1 ? "✅ APPROVED" : "❌ REJECTED";
+          const { is_lead, is_qa } = rolesFor(r.squad_slug, r.reviewer_character);
+          const approved = r.approved === 1;
+          let badge = "";
+          if (is_lead && is_qa) badge = "⭐🛡️ ";
+          else if (is_lead) badge = "⭐ ";
+          else if (is_qa) badge = "🛡️ ";
+          const verdict = approved
+            ? `${badge}✅ APPROVED`
+            : `${badge}❌ REJECTED`;
+          const tags: string[] = [];
+          if (is_lead) tags.push("lead");
+          if (is_qa) tags.push("QA");
+          const tagSuffix = tags.length ? ` _(${tags.join(", ")})_` : "";
+          const veto = !approved && (is_lead || is_qa) ? " — **veto**" : "";
           const comments = r.comments ? `\n  ${r.comments.replace(/\n/g, "\n  ")}` : "";
-          return `- **${r.reviewer_character}** — ${verdict}${comments}`;
+          return `- **${r.reviewer_character}**${tagSuffix} — ${verdict}${veto}${comments}`;
         })
         .join("\n");
     },

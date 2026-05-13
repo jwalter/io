@@ -106,7 +106,7 @@ When an agent finishes a task, the other squad members automatically review the 
 
 - **Required**: every squad must have at least one agent designated as QA via \`squad_set_qa\`, AND at least one agent whose role title implies a testing/quality focus (e.g. role contains "test", "qa", or "quality"). Both can be the same agent.
 - \`squad_status\`, \`squad_agents\`, and \`squad_delegate\` will surface a ⚠️ warning when either is missing. Delegation is not blocked, but you should fix the gap before promoting work.
-- **QA agents have veto power**: if any QA reviewer rejects, the PR stays as a draft.
+- **QA agents and the team lead have veto power**: if any QA reviewer or the team lead rejects, the PR stays as a draft. The lead's veto is automatic — no need to also designate them as QA.
 - Non-QA rejections are advisory — they're recorded but don't block promotion.
 - When all QA approvals pass (or no QA agents exist) and the task result contains a GitHub PR URL, the PR is automatically promoted from draft to ready via \`gh pr ready\`.
 - Use \`squad_task_reviews\` to inspect the reviews on any completed task.
