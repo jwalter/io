@@ -61,8 +61,21 @@
             <p class="text-sm text-gray-100 break-words">{{ agent.currentTask }}</p>
           </div>
 
-          <div class="text-xs text-gray-500">
-            Last updated: {{ formatTime(new Date()) }}
+          <div class="flex justify-between items-center">
+            <div class="text-xs text-gray-500">
+              Last updated: {{ formatTime(new Date()) }}
+            </div>
+            <button
+              v-if="agent.status === 'working' && agent.currentTaskId"
+              type="button"
+              @click="stopTask(agent.currentTaskId)"
+              :disabled="stoppingTaskIds.has(agent.currentTaskId)"
+              class="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs px-3 py-1 rounded transition-colors flex items-center gap-1"
+              title="Stop this agent's current task"
+            >
+              <span class="inline-block w-2 h-2 bg-white rounded-sm"></span>
+              {{ stoppingTaskIds.has(agent.currentTaskId) ? 'Stopping...' : 'Stop' }}
+            </button>
           </div>
         </div>
       </div>
@@ -82,12 +95,30 @@ interface Agent {
   universe?: string
   status: 'idle' | 'working' | 'error'
   currentTask?: string
+  currentTaskId?: string
 }
 
 const agents = ref<Agent[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
+const stoppingTaskIds = ref<Set<string>>(new Set())
 let refreshInterval: NodeJS.Timer | null = null
+
+const stopTask = async (taskId: string) => {
+  if (stoppingTaskIds.value.has(taskId)) return
+  stoppingTaskIds.value.add(taskId)
+  // Force reactivity for Set
+  stoppingTaskIds.value = new Set(stoppingTaskIds.value)
+  try {
+    await apiFetch(`/api/tasks/${encodeURIComponent(taskId)}/cancel`, { method: 'POST' })
+    await refreshAgents()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to stop task'
+  } finally {
+    stoppingTaskIds.value.delete(taskId)
+    stoppingTaskIds.value = new Set(stoppingTaskIds.value)
+  }
+}
 
 const formatTime = (date: Date) => {
   return date.toLocaleTimeString('en-US', {

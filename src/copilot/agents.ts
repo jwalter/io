@@ -35,6 +35,7 @@ import {
   failTask,
   getActiveTasks,
   getTask,
+  cancelTask,
 } from "../store/tasks.js";
 import { SESSIONS_DIR } from "../paths.js";
 import { getUniverse } from "./universes.js";
@@ -47,6 +48,7 @@ export interface AgentInfo {
   universe?: string;
   status: "idle" | "working" | "error";
   currentTask?: string;
+  currentTaskId?: string;
 }
 
 // Key format: "squadSlug:characterName" for per-agent sessions, "squadSlug" for legacy
@@ -60,8 +62,10 @@ function agentSessionKey(squadSlug: string, characterName?: string): string {
 export function getAgentInfo(): AgentInfo[] {
   const activeTasks = getActiveTasks();
   const tasksByAgent = new Map<string, string>();
+  const taskIdsByAgent = new Map<string, string>();
   for (const task of activeTasks) {
     tasksByAgent.set(task.agent_slug, task.description);
+    taskIdsByAgent.set(task.agent_slug, task.task_id);
   }
 
   const agents: AgentInfo[] = [];
@@ -79,6 +83,7 @@ export function getAgentInfo(): AgentInfo[] {
     if (characterName) {
       const agent = getSquadAgent(squadSlug, characterName);
       const currentTask = tasksByAgent.get(key) ?? tasksByAgent.get(squadSlug);
+      const currentTaskId = taskIdsByAgent.get(key) ?? taskIdsByAgent.get(squadSlug);
       agents.push({
         slug: squadSlug,
         name: agent ? `${agent.character_name} (${agent.role_title})` : characterName,
@@ -87,15 +92,18 @@ export function getAgentInfo(): AgentInfo[] {
         universe: squad?.universe ?? undefined,
         status: agent?.status === "working" ? "working" : currentTask ? "working" : "idle",
         currentTask,
+        currentTaskId,
       });
     } else {
       // Legacy generic agent
       const currentTask = tasksByAgent.get(squadSlug);
+      const currentTaskId = taskIdsByAgent.get(squadSlug);
       agents.push({
         slug: squadSlug,
         name: squad?.name ?? squadSlug,
         status: currentTask ? "working" : squad?.status === "error" ? "error" : "idle",
         currentTask,
+        currentTaskId,
       });
     }
   }
@@ -505,4 +513,37 @@ function walkDirectory(dir: string, maxDepth = 3, depth = 0): string[] {
     }
   }
   return results;
+}
+
+
+/**
+ * Cancel a running agent task by aborting its session and marking the task
+ * cancelled. Returns true if the task existed and was running.
+ */
+export async function cancelAgentTask(taskId: string): Promise<boolean> {
+  const task = getTask(taskId);
+  if (!task || task.status !== "running") return false;
+
+  const sessionKey = task.agent_slug;
+  const session = agentSessions.get(sessionKey);
+  if (session) {
+    try {
+      await session.abort();
+    } catch (err) {
+      console.error("[io] Error aborting agent session:", err instanceof Error ? err.message : err);
+    }
+  }
+
+  cancelTask(taskId);
+
+  // sessionKey is "squadSlug" or "squadSlug:characterName"
+  const [squadSlug, characterName] = sessionKey.split(":");
+  if (squadSlug) {
+    try { updateSquadStatus(squadSlug, "idle"); } catch { /* ignore */ }
+  }
+  if (squadSlug && characterName) {
+    try { updateAgentStatus(squadSlug, characterName, "idle"); } catch { /* ignore */ }
+  }
+
+  return true;
 }

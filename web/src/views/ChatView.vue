@@ -46,8 +46,20 @@
           class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 disabled:opacity-50"
         />
         <button
+          v-if="store.isLoading"
+          type="button"
+          @click="stopOrchestrator"
+          :disabled="stopping"
+          class="bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm transition-colors flex items-center gap-2"
+          title="Stop the orchestrator"
+        >
+          <span class="inline-block w-3 h-3 bg-white rounded-sm"></span>
+          {{ stopping ? 'Stopping...' : 'Stop' }}
+        </button>
+        <button
+          v-else
           type="submit"
-          :disabled="store.isLoading || !input.trim()"
+          :disabled="!input.trim()"
           class="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm transition-colors"
         >
           Send
@@ -64,7 +76,20 @@ import { apiFetch, authenticatedUrl } from '../lib/api'
 
 const store = useChatStore()
 const input = ref('')
+const stopping = ref(false)
 const messagesEl = ref<HTMLElement | null>(null)
+
+async function stopOrchestrator() {
+  if (stopping.value) return
+  stopping.value = true
+  try {
+    await apiFetch('/api/orchestrator/abort', { method: 'POST' })
+  } catch {
+    // best-effort — UI will recover when SSE delivers done/error
+  } finally {
+    stopping.value = false
+  }
+}
 
 const isStreaming = computed(() =>
   store.messages.some((m) => m.streaming)

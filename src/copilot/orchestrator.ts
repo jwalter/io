@@ -490,3 +490,19 @@ export async function shutdownOrchestrator(): Promise<void> {
   clientResetPromise = undefined;
   client = undefined;
 }
+
+/**
+ * Abort the orchestrator's current in-flight request. The session remains valid
+ * for subsequent prompts. Returns true if a session existed and abort was
+ * attempted, false otherwise.
+ */
+export async function abortOrchestrator(): Promise<boolean> {
+  if (!orchestratorSession) return false;
+  try {
+    await orchestratorSession.abort();
+    return true;
+  } catch (err) {
+    console.error("[io] Error aborting orchestrator session:", err instanceof Error ? err.message : err);
+    return false;
+  }
+}
