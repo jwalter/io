@@ -76,6 +76,39 @@ export function listRecentTasks(limit = 50): AgentTask[] {
     .all(limit) as AgentTask[];
 }
 
+export interface SquadWorkDistribution {
+  total: number;
+  perAgent: Array<{ agent_slug: string; count: number }>;
+}
+
+/**
+ * Per-agent task count for the most recent `limit` tasks belonging to a
+ * squad. Matches tasks routed to the squad itself (`agent_slug = squadSlug`)
+ * AND tasks routed to a named agent on the squad (`agent_slug LIKE 'squadSlug:%'`).
+ * Used by squad_status to surface fan-out imbalance.
+ */
+export function getSquadWorkDistribution(
+  squadSlug: string,
+  limit = 20,
+): SquadWorkDistribution {
+  const rows = getDb()
+    .prepare(
+      `SELECT agent_slug FROM agent_tasks
+       WHERE agent_slug = ? OR agent_slug LIKE ?
+       ORDER BY datetime(started_at) DESC, task_id DESC
+       LIMIT ?`,
+    )
+    .all(squadSlug, `${squadSlug}:%`, limit) as Array<{ agent_slug: string }>;
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    counts.set(row.agent_slug, (counts.get(row.agent_slug) ?? 0) + 1);
+  }
+  const perAgent = Array.from(counts.entries())
+    .map(([agent_slug, count]) => ({ agent_slug, count }))
+    .sort((a, b) => b.count - a.count);
+  return { total: rows.length, perAgent };
+}
+
 export interface TaskReview {
   id: number;
   task_id: string;

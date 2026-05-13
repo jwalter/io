@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **Lead briefing + fan-out enforcement** (#51) — the team-lead system message now mandates a fan-out plan (work-area breakdown + charter-keyed teammate scoring + per-area subtask) before the lead may touch shell, files, or self-implement. Direct lead implementation is restricted to trivial single-file changes that fit no teammate's charter.
+- **Soft delegation-budget warning** (#51) — `squad_status` now shows a per-agent work-distribution breakdown for the last 20 tasks and surfaces a ⚠️ "Lead overload" warning when the lead handled more than 80% of recent work.
+- **Sub-delegations are tracked as first-class tasks** (#51) — `delegate_to_teammate` now records each subtask in `agent_tasks` (`origin_channel='delegate_to_teammate'`), so the work-distribution stat reflects real fan-out instead of misreporting that the lead did 100% of the work.
+- **Increased `delegate_to_teammate` timeout** (#51) — bumped the per-call idle timeout from 5 minutes to 30 minutes so specialists have room to read, edit, and run tests without the lead giving up and self-implementing.
+
 ## [0.4.0] - 2026-05-13
 
 ### Added
