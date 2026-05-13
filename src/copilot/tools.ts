@@ -98,6 +98,7 @@ export interface ToolDeps {
   addSquadAgent: (squadSlug: string, roleTitle: string, charter: string, modelTier?: string) => { character_name: string; role_title: string; personality: string | null; model_tier: string };
   listSquadAgents: (squadSlug: string) => Array<{ character_name: string; role_title: string; charter: string | null; model_tier: string; personality: string | null; status: string; is_lead?: number; is_qa?: number }>;
   removeSquadAgent: (squadSlug: string, characterName: string) => boolean;
+  resetSquadAgent: (squadSlug: string, characterName: string) => { found: boolean; previousStatus: string; agent: { character_name: string; role_title: string } | null };
   setSquadLead: (squadSlug: string, characterName: string) => void;
   getSquadLead: (squadSlug: string) => { character_name: string; role_title: string } | undefined;
   setSquadQA: (squadSlug: string, characterName: string, isQA: boolean) => void;
@@ -522,6 +523,34 @@ export function createTools(deps: ToolDeps) {
       return removed
         ? `Agent "${character_name}" removed from squad "${slug}".`
         : `Agent "${character_name}" not found in squad "${slug}".`;
+    },
+  });
+
+  const squadResetAgent = defineTool("squad_reset_agent", {
+    description:
+      "Clear a squad agent's error state and return them to idle without removing them. Preserves their charter, role title, character name, and is_lead/is_qa flags. Drops the agent's in-memory and persisted Copilot session so the next task starts fresh. Safe to call on a non-error agent (no-op with a clear message).",
+    skipPermission: true,
+    parameters: z.object({
+      slug: z.string().describe("Squad slug"),
+      character_name: z.string().describe("Character name of the agent to reset"),
+    }),
+    handler: async ({ slug, character_name }) => {
+      console.error(`[io] squad_reset_agent called: ${slug} — ${character_name}`);
+      const squad = deps.getSquad(slug);
+      if (!squad) return `Squad not found: ${slug}`;
+      const result = deps.resetSquadAgent(slug, character_name);
+      if (!result.found || !result.agent) {
+        return `Agent "${character_name}" not found in squad "${slug}".`;
+      }
+      const { previousStatus, agent } = result;
+      if (previousStatus === "error") {
+        return `🔄 ${agent.character_name} (${agent.role_title}) reset from 'error' → 'idle'. Charter and role preserved; next task will create a fresh Copilot session.`;
+      }
+      if (previousStatus === "idle") {
+        return `${agent.character_name} (${agent.role_title}) is already 'idle'. No-op: in-memory session cache and persisted session id were cleared anyway so the next task starts fresh.`;
+      }
+      // working / unknown
+      return `⚠️ ${agent.character_name} (${agent.role_title}) was in '${previousStatus}' (not 'error'). Forced to 'idle' and cleared session anyway — verify no task is actually still running for this agent (call squad_task_status).`;
     },
   });
 
@@ -1449,7 +1478,7 @@ export function createTools(deps: ToolDeps) {
     },
   });
 
-  return [wikiRead, wikiWrite, wikiSearch, wikiDelete, wikiList, squadCreate, squadRecall, squadStatus, squadLogDecision, squadDelegate, squadTaskStatus, squadDelete, squadAnalyze, squadAddAgent, squadAgents, squadRemoveAgent, squadSetLead, squadSetQA, squadTaskReviews, squadScheduleCreate, squadScheduleList, squadScheduleDelete, squadSchedulePause, squadScheduleResume, squadScheduleRunNow, scheduleCreate, scheduleList, scheduleDelete, schedulePause, scheduleResume, scheduleRunNow, skillList, skillInstall, skillRemove, skillSearch, configUpdate, checkUpdate, shell, fileOps, bash, readFile, viewTool, grepTool, strReplaceEditor, github];
+  return [wikiRead, wikiWrite, wikiSearch, wikiDelete, wikiList, squadCreate, squadRecall, squadStatus, squadLogDecision, squadDelegate, squadTaskStatus, squadDelete, squadAnalyze, squadAddAgent, squadAgents, squadRemoveAgent, squadResetAgent, squadSetLead, squadSetQA, squadTaskReviews, squadScheduleCreate, squadScheduleList, squadScheduleDelete, squadSchedulePause, squadScheduleResume, squadScheduleRunNow, scheduleCreate, scheduleList, scheduleDelete, schedulePause, scheduleResume, scheduleRunNow, skillList, skillInstall, skillRemove, skillSearch, configUpdate, checkUpdate, shell, fileOps, bash, readFile, viewTool, grepTool, strReplaceEditor, github];
 }
 
 function walkDirectory(dir: string, maxDepth = 3, depth = 0): string[] {

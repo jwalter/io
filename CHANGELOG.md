@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **`squad_reset_agent` tool** (#56) — clears an agent's error state and returns them to `idle` without removing them. Preserves charter, role title, character name, and `is_lead`/`is_qa` flags. Drops the in-memory cached `CopilotSession` (and model) plus the persisted `copilot_session_id` so the next task creates a fresh session instead of trying to resume a poisoned one. Safe to call on a non-error agent (no-op with a clear message). Wired through `ToolDeps.resetSquadAgent` (orchestrator) → new `clearAgentSession` in `src/store/squads.ts` + new `clearAgentInMemorySession` in `src/copilot/agents.ts`. Documented in `docs/reference/tools.md`.
+
 ## [0.4.0] - 2026-05-13
 
 ### Added

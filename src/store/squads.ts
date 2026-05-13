@@ -204,6 +204,22 @@ export function updateAgentStatus(
 }
 
 /**
+ * Clear an agent's persisted copilot_session_id. Used during error recovery
+ * so the next task creates a fresh session instead of trying to resume a
+ * poisoned one.
+ */
+export function clearAgentSession(
+  squadSlug: string,
+  characterName: string,
+): void {
+  getDb()
+    .prepare(
+      "UPDATE squad_agents SET copilot_session_id = NULL WHERE squad_slug = ? AND character_name = ?",
+    )
+    .run(squadSlug, characterName);
+}
+
+/**
  * Reset any agent left in a non-idle status from a previous daemon run.
  * The in-memory Copilot sessions don't survive a restart, so persisted
  * "working" or "error" rows can never be accurate after startup. Returns
