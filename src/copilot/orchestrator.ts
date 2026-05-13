@@ -8,7 +8,7 @@ import {
 import { config } from "../config.js";
 import { SESSIONS_DIR, IO_VERSION } from "../paths.js";
 import { getState, setState, deleteState, logConversation } from "../store/db.js";
-import { clearStaleTasks, getTask } from "../store/tasks.js";
+import { clearStaleTasks, getTask, getTaskReviews } from "../store/tasks.js";
 import {
   getSquad,
   listSquads,
@@ -22,6 +22,7 @@ import {
   removeSquadAgent,
   setSquadLead,
   getSquadLead,
+  setSquadQA,
 } from "../store/squads.js";
 import { readPage, writePage, assertPagePath, deletePage, listPages } from "../wiki/fs.js";
 import { resolveModelTiers } from "./model-router.js";
@@ -120,6 +121,7 @@ function getToolDeps() {
         personality: a.personality,
         status: a.status,
         is_lead: a.is_lead,
+        is_qa: a.is_qa,
       })),
     removeSquadAgent,
     setSquadLead,
@@ -129,6 +131,13 @@ function getToolDeps() {
         ? { character_name: lead.character_name, role_title: lead.role_title }
         : undefined;
     },
+    setSquadQA,
+    getTaskReviews: (taskId: string) =>
+      getTaskReviews(taskId).map((r) => ({
+        reviewer_character: r.reviewer_character,
+        approved: r.approved,
+        comments: r.comments,
+      })),
     listSkills,
     installSkill,
     removeSkill,

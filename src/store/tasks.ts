@@ -75,3 +75,39 @@ export function listRecentTasks(limit = 50): AgentTask[] {
     )
     .all(limit) as AgentTask[];
 }
+
+export interface TaskReview {
+  id: number;
+  task_id: string;
+  squad_slug: string;
+  reviewer_character: string;
+  approved: number;
+  comments: string | null;
+  created_at: string;
+}
+
+export function createReview(
+  taskId: string,
+  squadSlug: string,
+  reviewerCharacter: string,
+  approved: boolean,
+  comments?: string,
+): TaskReview {
+  const db = getDb();
+  const info = db
+    .prepare(
+      "INSERT INTO squad_task_reviews (task_id, squad_slug, reviewer_character, approved, comments) VALUES (?, ?, ?, ?, ?)",
+    )
+    .run(taskId, squadSlug, reviewerCharacter, approved ? 1 : 0, comments ?? null);
+  return db
+    .prepare("SELECT * FROM squad_task_reviews WHERE id = ?")
+    .get(info.lastInsertRowid) as TaskReview;
+}
+
+export function getTaskReviews(taskId: string): TaskReview[] {
+  return getDb()
+    .prepare(
+      "SELECT * FROM squad_task_reviews WHERE task_id = ? ORDER BY created_at ASC, id ASC",
+    )
+    .all(taskId) as TaskReview[];
+}

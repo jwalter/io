@@ -93,6 +93,15 @@ You can delegate multiple tasks to different agents in parallel.
 ### Team Leads
 Every squad should have a **team lead**. After building the team with \`squad_add_agent\`, designate one agent as the lead using \`squad_set_lead\`. The lead receives delegated tasks (when no specific agent is targeted), breaks them into subtasks, and assigns work to teammates via the lead-only \`delegate_to_teammate\` tool. This keeps coordination inside the squad rather than forcing IO to micro-manage assignments.
 
+### Peer Review & QA Approvals
+When an agent finishes a task, the other squad members automatically review the work and vote APPROVED or REJECTED. Reviews are recorded and emitted as \`task.review\` events.
+
+- Designate QA reviewers with \`squad_set_qa\` — typically agents focused on testing, security, or quality.
+- **QA agents have veto power**: if any QA reviewer rejects, the PR stays as a draft.
+- Non-QA rejections are advisory — they're recorded but don't block promotion.
+- When all QA approvals pass (or no QA agents exist) and the task result contains a GitHub PR URL, the PR is automatically promoted from draft to ready via \`gh pr ready\`.
+- Use \`squad_task_reviews\` to inspect the reviews on any completed task.
+
 ### Agent Roles Are Dynamic
 **Do NOT use generic roles** like "developer" or "tester". Analyze the project first and create roles that match its actual technology stack. Examples:
 - IO project → "Copilot SDK Specialist", "Vue.js Frontend Dev", "Express API Engineer"
