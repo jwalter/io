@@ -169,6 +169,71 @@ export function assessSquadCoverage(
   return { hasLead, hasDedicatedLead, hasQa, hasTestRole, missing, warning };
 }
 
+// ---------------------------------------------------------------------------
+// Work-distribution diagnostics
+//
+// Squads can fall into an anti-pattern (#51) where the team lead handles
+// every delegated task instead of fanning out to specialists. We surface a
+// soft warning on squad_status when the lead handles more than this share
+// of recent tasks.
+// ---------------------------------------------------------------------------
+
+const WORK_DISTRIBUTION_WINDOW = 20;
+const LEAD_OVERLOAD_THRESHOLD = 0.8;
+
+interface WorkDistributionDeps {
+  getSquadWorkDistribution: (
+    squadSlug: string,
+    limit?: number,
+  ) => {
+    total: number;
+    perAgent: Array<{ agent_slug: string; count: number }>;
+  };
+}
+
+function formatWorkDistribution(
+  squadSlug: string,
+  lead: { character_name: string; role_title: string } | undefined,
+  deps: WorkDistributionDeps,
+): string {
+  const dist = deps.getSquadWorkDistribution(squadSlug, WORK_DISTRIBUTION_WINDOW);
+  if (dist.total === 0) return "";
+
+  const friendly = (agentSlug: string): string => {
+    if (agentSlug === squadSlug) return "(unassigned)";
+    const idx = agentSlug.indexOf(":");
+    return idx >= 0 ? agentSlug.slice(idx + 1) : agentSlug;
+  };
+
+  const breakdown = dist.perAgent
+    .map(
+      (a) =>
+        `${friendly(a.agent_slug)} ${a.count} (${Math.round(
+          (a.count / dist.total) * 100,
+        )}%)`,
+    )
+    .join(", ");
+
+  const lines: string[] = [];
+  lines.push(
+    `\n  📊 Work distribution (last ${dist.total} task${dist.total === 1 ? "" : "s"}): ${breakdown}`,
+  );
+
+  if (lead) {
+    const leadKey = `${squadSlug}:${lead.character_name}`;
+    const leadCount =
+      dist.perAgent.find((a) => a.agent_slug === leadKey)?.count ?? 0;
+    const share = leadCount / dist.total;
+    if (share > LEAD_OVERLOAD_THRESHOLD) {
+      lines.push(
+        `\n  ⚠️ Lead overload: ${lead.character_name} handled ${Math.round(share * 100)}% of recent tasks (threshold ${Math.round(LEAD_OVERLOAD_THRESHOLD * 100)}%). The lead should be delegating to specialists via delegate_to_teammate, not self-implementing — see issue #51.`,
+      );
+    }
+  }
+
+  return lines.join("");
+}
+
 // Ensure child processes have HOME set (systemd services often don't)
 function shellEnv(): NodeJS.ProcessEnv {
   const env = { ...process.env };
@@ -200,6 +265,10 @@ export interface ToolDeps {
   getSquadLead: (squadSlug: string) => { character_name: string; role_title: string } | undefined;
   setSquadQA: (squadSlug: string, characterName: string, isQA: boolean) => void;
   getTaskReviews: (taskId: string) => Array<{ reviewer_character: string; approved: number; comments: string | null; squad_slug: string }>;
+  getSquadWorkDistribution: (squadSlug: string, limit?: number) => {
+    total: number;
+    perAgent: Array<{ agent_slug: string; count: number }>;
+  };
   listSkills: () => Array<{ name: string; slug: string; description: string; path: string }>;
   installSkill: (repoUrl: string) => Promise<{ name: string; slug: string; description: string; path: string }>;
   removeSkill: (slug: string) => boolean;
@@ -315,7 +384,8 @@ export function createTools(deps: ToolDeps) {
             : "\n  Agents: none — use squad_add_agent to build the team";
           const coverage = assessSquadCoverage(agents);
           const coverageLine = coverage.warning ? `\n  ${coverage.warning}` : "";
-          return `- **${s.name}** (\`${s.slug}\`) — ${s.status} — 🎬 ${universeName}${leadLine}${agentList}${coverageLine}\n  📁 ${s.projectPath}`;
+          const distLine = formatWorkDistribution(s.slug, lead, deps);
+          return `- **${s.name}** (\`${s.slug}\`) — ${s.status} — 🎬 ${universeName}${leadLine}${agentList}${coverageLine}${distLine}\n  📁 ${s.projectPath}`;
         })
         .join("\n");
     },
