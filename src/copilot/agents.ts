@@ -52,6 +52,7 @@ export interface AgentInfo {
   status: "idle" | "working" | "error";
   currentTask?: string;
   currentTaskId?: string;
+  model?: string;
 }
 
 // Key format: "squadSlug:characterName" for per-agent sessions, "squadSlug" for legacy
@@ -96,6 +97,7 @@ export function getAgentInfo(): AgentInfo[] {
         status: agent?.status === "working" ? "working" : currentTask ? "working" : "idle",
         currentTask,
         currentTaskId,
+        model: agentSessionModels.get(key),
       });
     } else {
       // Legacy generic agent
@@ -107,6 +109,7 @@ export function getAgentInfo(): AgentInfo[] {
         status: currentTask ? "working" : squad?.status === "error" ? "error" : "idle",
         currentTask,
         currentTaskId,
+        model: agentSessionModels.get(key),
       });
     }
   }
