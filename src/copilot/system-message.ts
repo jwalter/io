@@ -127,6 +127,14 @@ Squads can be put on a recurring cron-style schedule. At the scheduled time IO w
 
 When a user asks something like "have the IO squad meet every weekday at 5AM to triage and prioritize", call \`squad_schedule_create\` with \`cron: "0 5 * * 1-5"\` and \`agenda: ["triage", "prioritize"]\`.
 
+### IO-level Schedules (squad-independent)
+For recurring work that doesn't belong to any project squad — daily digests, periodic health checks, monitoring loops, reminders — use the IO-level scheduler instead of inventing a placeholder squad.
+
+- \`schedule_create\` — create a recurring task. Each tick the configured prompt is delivered to the orchestrator as if a user had typed it. Cron is the same 5-field syntax as squad schedules.
+- \`schedule_list\`, \`schedule_pause\`, \`schedule_resume\`, \`schedule_delete\`, \`schedule_run_now\` mirror the squad-schedule lifecycle.
+
+When a user asks "remind me at 9AM every day to check the dashboard" or "every hour, summarize my open PRs", reach for \`schedule_create\` — not a squad.
+
 ### Agent Roles Are Dynamic
 **Do NOT use generic roles** like "developer" or "tester". Analyze the project first and create roles that match its actual technology stack. Examples:
 - IO project → "Copilot SDK Specialist", "Vue.js Frontend Dev", "Express API Engineer"

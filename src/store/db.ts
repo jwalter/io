@@ -102,6 +102,19 @@ export function getDb(): BetterSqlite3.Database {
     )`,
     `CREATE INDEX IF NOT EXISTS idx_squad_schedules_due
        ON squad_schedules (enabled, next_run_at)`,
+    `CREATE TABLE IF NOT EXISTS io_schedules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      cron_expr TEXT NOT NULL,
+      prompt TEXT NOT NULL,
+      notes TEXT,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      last_run_at DATETIME,
+      next_run_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_io_schedules_due
+       ON io_schedules (enabled, next_run_at)`,
   ];
 
   for (const migration of migrations) {

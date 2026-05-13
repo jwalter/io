@@ -7,6 +7,7 @@ import { clearStaleTasks } from "./store/tasks.js";
 import { reconcileAgentStatuses, reconcileSquadStatuses } from "./store/squads.js";
 import { backfillReviewVerdicts } from "./copilot/review-backfill.js";
 import { startScheduler, stopScheduler } from "./copilot/scheduler.js";
+import { startIoScheduler, stopIoScheduler } from "./copilot/io-scheduler.js";
 import { config } from "./config.js";
 import { ensureWikiStructure } from "./wiki/fs.js";
 import { autoUpdate } from "./update.js";
@@ -145,6 +146,9 @@ export async function startDaemon(): Promise<void> {
   // Start the squad scheduler (background cron-style stand-ups).
   startScheduler();
 
+  // Start the IO-level scheduler (squad-independent recurring tasks).
+  startIoScheduler();
+
   console.log("[io] IO is fully operational.");
 
   // Notify Telegram if restarting
@@ -176,6 +180,7 @@ async function shutdown(): Promise<void> {
   }
 
   stopScheduler();
+  stopIoScheduler();
   await shutdownOrchestrator();
   try { await stopClient(); } catch { /* best effort */ }
   closeDb();
