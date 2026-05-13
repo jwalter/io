@@ -3,6 +3,7 @@ import ChatView from '../views/ChatView.vue'
 import SkillsView from '../views/SkillsView.vue'
 import SquadsView from '../views/SquadsView.vue'
 import AgentActivityView from '../views/AgentActivityView.vue'
+import SchedulesView from '../views/SchedulesView.vue'
 import LoginView from '../views/LoginView.vue'
 import { useAuthStore } from '../stores/auth'
 
@@ -38,6 +39,11 @@ const router = createRouter({
       path: '/activity',
       name: 'activity',
       component: AgentActivityView,
+    },
+    {
+      path: '/schedules',
+      name: 'schedules',
+      component: SchedulesView,
     },
   ],
 })
