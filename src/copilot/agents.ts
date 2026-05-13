@@ -709,6 +709,63 @@ function walkDirectory(dir: string, maxDepth = 3, depth = 0): string[] {
 
 
 /**
+ * Parse APPROVED/REJECTED verdict from a reviewer's free-form response.
+ *
+ * Robust to common formatting variants:
+ *   - Leading blank lines or markdown headers (e.g. "## Review\n\nAPPROVED")
+ *   - Markdown emphasis (e.g. "**APPROVED**")
+ *   - Verdict appearing only later in the response
+ *   - Both tokens appearing in the same line ("I almost said REJECTED but APPROVED")
+ *
+ * Strategy:
+ *   1. Strip markdown noise.
+ *   2. Look at the first 10 non-empty lines for a *line-leading* verdict.
+ *   3. Fall back to the first occurrence of either token anywhere in the body.
+ *   4. If neither token appears, treat as REJECTED (conservative).
+ */
+export function parseReviewVerdict(content: string): boolean {
+  if (!content) return false;
+  const stripped = content.replace(/[*_`#>]/g, "");
+  const lines = stripped
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .slice(0, 10);
+  for (const line of lines) {
+    const lead = line
+      .toUpperCase()
+      .match(/^[^A-Z]*\b(APPROVED|REJECTED)\b/);
+    if (lead) return lead[1] === "APPROVED";
+  }
+  const upper = stripped.toUpperCase();
+  const a = upper.search(/\bAPPROVED\b/);
+  const r = upper.search(/\bREJECTED\b/);
+  if (a === -1 && r === -1) return false;
+  if (a === -1) return false;
+  if (r === -1) return true;
+  return a < r;
+}
+
+/**
+ * Return the reviewer's prose comments with any leading verdict line stripped.
+ * Preserves the original formatting (no upper-casing, no markdown stripping).
+ */
+export function stripLeadingVerdictLine(content: string): string {
+  if (!content) return "";
+  const lines = content.split(/\r?\n/);
+  let i = 0;
+  while (i < lines.length && lines[i].trim() === "") i++;
+  if (i < lines.length) {
+    const probe = lines[i]
+      .replace(/[*_`#>]/g, "")
+      .trim()
+      .toUpperCase();
+    if (/^(APPROVED|REJECTED)\b/.test(probe)) i++;
+  }
+  return lines.slice(i).join("\n").trim();
+}
+
+/**
  * Run a peer review phase after a task completes. Every other agent on the
  * squad reviews the work and votes APPROVED / REJECTED. QA agents
  * (is_qa === 1) have veto power: if any QA agent rejects, the PR is left as
@@ -766,11 +823,8 @@ Review the work. Respond with:
         300_000,
       );
       const content = response?.data?.content ?? "";
-      const lines = content.split(/\r?\n/);
-      const firstLine = (lines[0] ?? "").trim().toUpperCase();
-      const approved =
-        firstLine.includes("APPROVED") && !firstLine.includes("REJECTED");
-      const comments = lines.slice(1).join("\n").trim() || null;
+      const approved = parseReviewVerdict(content);
+      const comments = stripLeadingVerdictLine(content) || null;
 
       createReview(
         taskId,
@@ -809,7 +863,19 @@ Review the work. Respond with:
     }
   }
 
+  const hasQaReviewers = reviews.some((r) => r.is_qa);
   const qaRejection = reviews.find((r) => r.is_qa && !r.approved);
+  const nonQaRejections = reviews.filter((r) => !r.is_qa && !r.approved);
+  if (!hasQaReviewers && nonQaRejections.length > 0) {
+    recordTaskEvent(taskId, {
+      ts: Date.now(),
+      type: "task.review_advisory",
+      data: {
+        reason: "No QA reviewers designated; non-QA rejections are advisory and do not block promotion.",
+        rejectedBy: nonQaRejections.map((r) => r.reviewer),
+      },
+    });
+  }
   const prMatch = taskResult.match(
     /https:\/\/github\.com\/([^/\s]+)\/([^/\s]+)\/pull\/(\d+)/,
   );
