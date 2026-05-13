@@ -141,6 +141,17 @@
                 ]">
                   {{ agent.status }}
                 </span>
+                <button
+                  v-if="agent.status === 'working' && agent.currentTaskId"
+                  type="button"
+                  @click="stopAgentTask(squad.slug, agent.currentTaskId)"
+                  :disabled="stoppingTaskIds.has(agent.currentTaskId)"
+                  class="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs px-2 py-1 rounded transition-colors flex items-center gap-1"
+                  title="Stop this agent's current task"
+                >
+                  <span class="inline-block w-2 h-2 bg-white rounded-sm"></span>
+                  {{ stoppingTaskIds.has(agent.currentTaskId) ? 'Stopping...' : 'Stop' }}
+                </button>
               </li>
             </ul>
           </div>
@@ -176,6 +187,8 @@ interface SquadAgent {
   model_tier?: string
   personality?: string | null
   status: string
+  currentTaskId?: string | null
+  currentTask?: string | null
 }
 
 const UNIVERSE_NAMES: Record<string, string> = {
@@ -198,6 +211,22 @@ const expanded = reactive<Record<string, boolean>>({})
 const agentsBySquad = reactive<Record<string, SquadAgent[]>>({})
 const agentsLoading = reactive<Record<string, boolean>>({})
 const agentsError = reactive<Record<string, string | null>>({})
+const stoppingTaskIds = ref<Set<string>>(new Set())
+
+const stopAgentTask = async (squadSlug: string, taskId: string) => {
+  if (stoppingTaskIds.value.has(taskId)) return
+  stoppingTaskIds.value = new Set(stoppingTaskIds.value).add(taskId)
+  try {
+    await apiFetch(`/api/tasks/${encodeURIComponent(taskId)}/cancel`, { method: 'POST' })
+    await loadAgents(squadSlug, true)
+  } catch (e) {
+    agentsError[squadSlug] = e instanceof Error ? e.message : 'Failed to stop task'
+  } finally {
+    const next = new Set(stoppingTaskIds.value)
+    next.delete(taskId)
+    stoppingTaskIds.value = next
+  }
+}
 
 const form = ref({
   slug: '',
@@ -228,7 +257,8 @@ const toggleSquad = async (slug: string) => {
   }
 }
 
-const loadAgents = async (slug: string) => {
+const loadAgents = async (slug: string, force = false) => {
+  if (!force && agentsLoading[slug]) return
   agentsLoading[slug] = true
   agentsError[slug] = null
   try {

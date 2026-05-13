@@ -5,7 +5,9 @@ import express, { type Request, type Response } from "express";
 import { config } from "../config.js";
 import { listSkills } from "../copilot/skills.js";
 import { listSquads, createSquad, listSquadAgents } from "../store/squads.js";
-import { getAgentInfo } from "../copilot/agents.js";
+import { getAgentInfo, cancelAgentTask } from "../copilot/agents.js";
+import { abortOrchestrator } from "../copilot/orchestrator.js";
+import { getActiveTasks } from "../store/tasks.js";
 import { IO_VERSION } from "../paths.js";
 import { requireAuth } from "./auth.js";
 
@@ -116,7 +118,21 @@ export async function startApiServer(): Promise<void> {
     try {
       const slug = Array.isArray(req.params.slug) ? req.params.slug[0] : req.params.slug;
       const agents = listSquadAgents(slug);
-      res.json({ agents });
+      const activeTasks = getActiveTasks();
+      const taskByKey = new Map<string, { task_id: string; description: string }>();
+      for (const t of activeTasks) {
+        taskByKey.set(t.agent_slug, { task_id: t.task_id, description: t.description });
+      }
+      const enriched = agents.map((a) => {
+        const key = `${slug}:${a.character_name}`;
+        const task = taskByKey.get(key) ?? taskByKey.get(slug);
+        return {
+          ...a,
+          currentTaskId: task?.task_id ?? null,
+          currentTask: task?.description ?? null,
+        };
+      });
+      res.json({ agents: enriched });
     } catch (e) {
       console.error("Error listing squad agents:", e);
       res.status(500).json({ error: "Failed to list squad agents" });
@@ -131,6 +147,32 @@ export async function startApiServer(): Promise<void> {
     } catch (e) {
       console.error("Error listing agents:", e);
       res.status(500).json({ error: "Failed to list agents" });
+    }
+  });
+
+  // Stop / cancel endpoints
+  api.post("/orchestrator/abort", async (_req: Request, res: Response) => {
+    try {
+      const aborted = await abortOrchestrator();
+      res.json({ aborted });
+    } catch (e) {
+      console.error("Error aborting orchestrator:", e);
+      res.status(500).json({ error: "Failed to abort orchestrator" });
+    }
+  });
+
+  api.post("/tasks/:taskId/cancel", async (req: Request, res: Response) => {
+    try {
+      const taskId = Array.isArray(req.params.taskId) ? req.params.taskId[0] : req.params.taskId;
+      const cancelled = await cancelAgentTask(taskId);
+      if (!cancelled) {
+        res.status(404).json({ error: "Task not found or not running" });
+        return;
+      }
+      res.json({ cancelled: true });
+    } catch (e) {
+      console.error("Error cancelling task:", e);
+      res.status(500).json({ error: "Failed to cancel task" });
     }
   });
 

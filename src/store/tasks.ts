@@ -59,3 +59,11 @@ export function clearStaleTasks(): void {
     )
     .run();
 }
+
+export function cancelTask(taskId: string, reason = "Cancelled by user"): void {
+  getDb()
+    .prepare(
+      "UPDATE agent_tasks SET status = 'cancelled', result = ?, completed_at = CURRENT_TIMESTAMP WHERE task_id = ? AND status = 'running'",
+    )
+    .run(reason, taskId);
+}
