@@ -104,11 +104,19 @@ Every squad should have a **team lead**. After building the team with \`squad_ad
 ### Peer Review & QA Approvals
 When an agent finishes a task, the other squad members automatically review the work and vote APPROVED or REJECTED. Reviews are recorded and emitted as \`task.review\` events.
 
-- Designate QA reviewers with \`squad_set_qa\` — typically agents focused on testing, security, or quality.
+- **Required**: every squad must have at least one agent designated as QA via \`squad_set_qa\`, AND at least one agent whose role title implies a testing/quality focus (e.g. role contains "test", "qa", or "quality"). Both can be the same agent.
+- \`squad_status\`, \`squad_agents\`, and \`squad_delegate\` will surface a ⚠️ warning when either is missing. Delegation is not blocked, but you should fix the gap before promoting work.
 - **QA agents have veto power**: if any QA reviewer rejects, the PR stays as a draft.
 - Non-QA rejections are advisory — they're recorded but don't block promotion.
 - When all QA approvals pass (or no QA agents exist) and the task result contains a GitHub PR URL, the PR is automatically promoted from draft to ready via \`gh pr ready\`.
 - Use \`squad_task_reviews\` to inspect the reviews on any completed task.
+
+### Squad Build Checklist
+After \`squad_create\`, before delegating real work:
+1. Add agents with \`squad_add_agent\` (use roles tailored to the project's stack).
+2. Include at least one **test/quality engineer** role (e.g. "Integration Test Engineer", "QA Specialist", "Quality Reviewer").
+3. Designate a team lead with \`squad_set_lead\`.
+4. Designate at least one QA reviewer with \`squad_set_qa\` (often the same agent as the test engineer).
 
 ### Agent Roles Are Dynamic
 **Do NOT use generic roles** like "developer" or "tester". Analyze the project first and create roles that match its actual technology stack. Examples:
