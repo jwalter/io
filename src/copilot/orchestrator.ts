@@ -21,6 +21,8 @@ import {
   addSquadAgent,
   listSquadAgents,
   removeSquadAgent,
+  updateAgentStatus,
+  clearAgentSession,
   setSquadLead,
   getSquadLead,
   setSquadQA,
@@ -32,7 +34,7 @@ import { getOrchestratorSystemMessage } from "./system-message.js";
 import { createTools } from "./tools.js";
 import { getSkillDirectories, listSkills, installSkill, removeSkill, searchSkillsRegistry } from "./skills.js";
 import { resetClient } from "./client.js";
-import { delegateToAgent, getActiveAgentTasks } from "./agents.js";
+import { delegateToAgent, getActiveAgentTasks, clearAgentInMemorySession } from "./agents.js";
 import { saveConfig } from "../config.js";
 import { checkForUpdate } from "../update.js";
 
@@ -131,6 +133,25 @@ function getToolDeps() {
         is_qa: a.is_qa,
       })),
     removeSquadAgent,
+    resetSquadAgent: (squadSlug: string, characterName: string) => {
+      const agents = listSquadAgents(squadSlug);
+      const target = agents.find((a) => a.character_name === characterName);
+      if (!target) {
+        return { found: false, previousStatus: "", agent: null };
+      }
+      const previousStatus = target.status;
+      updateAgentStatus(squadSlug, characterName, "idle");
+      clearAgentSession(squadSlug, characterName);
+      clearAgentInMemorySession(squadSlug, characterName);
+      return {
+        found: true,
+        previousStatus,
+        agent: {
+          character_name: target.character_name,
+          role_title: target.role_title,
+        },
+      };
+    },
     setSquadLead,
     getSquadLead: (slug: string) => {
       const lead = getSquadLead(slug);

@@ -20,6 +20,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **Decisions surfaced on every delegation + post-task nudge** (#54) — the live agent task prompt is now wrapped in an envelope that (a) prepends the last 5 `squad_decisions` for context and (b) appends a tail asking the agent to call `squad_log_decision` if their work involved a non-trivial architectural choice. Applies to both the orchestrator's main delegation path and the lead's `delegate_to_teammate` sub-delegations. The original task description is still stored verbatim in `agent_tasks.description` — only the LLM prompt is enveloped.
 - **`squad_status` shows recent decisions** (#54) — squad status output now includes a `📜 Recent decisions:` line with the last 3 entries (or a callout when the log is empty), so users can spot when a squad has stopped capturing institutional knowledge.
 
+### Added
+
+- **`squad_reset_agent` tool** (#56) — clears an agent's error state and returns them to `idle` without removing them. Preserves charter, role title, character name, and `is_lead`/`is_qa` flags. Drops the in-memory cached `CopilotSession` (and model) plus the persisted `copilot_session_id` so the next task creates a fresh session instead of trying to resume a poisoned one. Safe to call on a non-error agent (no-op with a clear message). Wired through `ToolDeps.resetSquadAgent` (orchestrator) → new `clearAgentSession` in `src/store/squads.ts` + new `clearAgentInMemorySession` in `src/copilot/agents.ts`. Documented in `docs/reference/tools.md`.
+
 ## [0.4.0] - 2026-05-13
 
 ### Added

@@ -65,6 +65,20 @@ function agentSessionKey(squadSlug: string, characterName?: string): string {
   return characterName ? `${squadSlug}:${characterName}` : squadSlug;
 }
 
+/**
+ * Drop the in-memory cached Copilot session (and model) for an agent so the
+ * next task creates a fresh one. Pairs with `clearAgentSession` in the
+ * store, which nulls the persisted copilot_session_id.
+ */
+export function clearAgentInMemorySession(
+  squadSlug: string,
+  characterName?: string,
+): void {
+  const key = agentSessionKey(squadSlug, characterName);
+  agentSessions.delete(key);
+  agentSessionModels.delete(key);
+}
+
 export function getAgentInfo(): AgentInfo[] {
   const activeTasks = getActiveTasks();
   const tasksByAgent = new Map<string, string>();

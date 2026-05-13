@@ -50,6 +50,7 @@ All tools are created in `src/copilot/tools.ts` via the `createTools(deps)` fact
 | `squad_add_agent` | Add a named specialist agent to a squad. Auto-assigns the next available character from the squad's universe. | `slug: string` — squad slug; `role_title: string` — free-form role (e.g., "Frontend Architect"); `charter: string` — description of the agent's responsibilities; `model_tier?: string` — `high`, `medium`, or `low` (default: `medium`) |
 | `squad_agents` | List the agent roster for a squad with character names, roles, and status | `slug: string` — squad slug |
 | `squad_remove_agent` | Remove a named agent from a squad | `slug: string` — squad slug; `character_name: string` — the character name of the agent to remove |
+| `squad_reset_agent` | Clear an agent's error state and return them to `idle` without removing them. Preserves charter, role title, character name, and lead/QA flags. Drops the cached Copilot session so the next task starts fresh. Safe no-op on non-error agents. | `slug: string` — squad slug; `character_name: string` — character name of the agent to reset |
 | `squad_recall` | Recall a squad's context and past decisions | `slug: string` — squad slug |
 | `squad_status` | List all squads and their status | _(none)_ |
 | `squad_log_decision` | Log an important decision for a squad | `slug: string` — squad slug; `decision: string` — the decision made; `context?: string` — reasoning |
