@@ -194,6 +194,111 @@
             </div>
 
             <div>
+              <div class="flex justify-between items-center mb-2">
+                <p class="text-xs uppercase tracking-wider text-gray-500">Activity</p>
+                <label class="flex items-center gap-2 text-xs text-gray-400 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    v-model="showActivityDetails"
+                    class="rounded bg-gray-700 border-gray-600"
+                  />
+                  Show details
+                </label>
+              </div>
+              <div
+                v-if="activityLoading && activity.length === 0"
+                class="text-sm text-gray-500 italic"
+              >Loading activity…</div>
+              <div
+                v-else-if="activity.length === 0"
+                class="text-sm text-gray-500 italic"
+              >No activity yet</div>
+              <ul
+                v-else
+                class="bg-gray-800 border border-gray-700 rounded divide-y divide-gray-700 max-h-96 overflow-y-auto"
+              >
+                <li
+                  v-for="(entry, idx) in activity"
+                  :key="`${entry.ts}-${idx}-${entry.rawType}`"
+                  class="px-3 py-2 text-sm hover:bg-gray-750 cursor-pointer"
+                  @click="toggleActivityEntry(idx)"
+                >
+                  <div class="flex items-start gap-2" :class="activityKindClass(entry)">
+                    <span class="shrink-0">{{ entry.icon }}</span>
+                    <span class="flex-1 break-words">{{ entry.summary }}</span>
+                    <span class="text-xs text-gray-500 shrink-0">
+                      {{ formatActivityTime(entry.ts) }}
+                    </span>
+                  </div>
+                  <div
+                    v-if="showActivityDetails || expandedActivity.has(idx)"
+                    class="mt-2 pl-6 space-y-1"
+                  >
+                    <pre
+                      v-if="entry.detail"
+                      class="text-xs text-gray-200 bg-gray-900 border border-gray-700 rounded p-2 whitespace-pre-wrap break-words font-mono"
+                    >{{ entry.detail }}</pre>
+                    <pre
+                      class="text-[11px] text-gray-500 bg-gray-900 border border-gray-700 rounded p-2 whitespace-pre-wrap break-words font-mono max-h-48 overflow-y-auto"
+                    >{{ formatRaw(entry.raw) }}</pre>
+                    <p class="text-[10px] text-gray-600 font-mono">{{ entry.rawType }}</p>
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            <!-- Activity log -->
+            <div>
+              <div class="flex justify-between items-center mb-2">
+                <p class="text-xs uppercase tracking-wider text-gray-500">Activity</p>
+                <label class="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer select-none">
+                  <input type="checkbox" v-model="showAllDetails" class="accent-blue-500" />
+                  Show details
+                </label>
+              </div>
+              <div
+                v-if="activityLoading && activityEntries.length === 0"
+                class="text-sm text-gray-500 italic py-1"
+              >
+                No activity yet
+              </div>
+              <div
+                v-else-if="activityEntries.length === 0"
+                class="text-sm text-gray-500 italic py-1"
+              >
+                No activity yet
+              </div>
+              <ul v-else class="space-y-0.5">
+                <li v-for="(entry, idx) in activityEntries" :key="idx">
+                  <button
+                    type="button"
+                    @click="toggleEntry(idx)"
+                    class="w-full text-left flex items-start gap-2 px-2 py-1 rounded hover:bg-gray-800 transition-colors"
+                  >
+                    <span class="flex-shrink-0 text-base leading-5 mt-px">{{ entry.icon }}</span>
+                    <span :class="['text-sm flex-1 break-words leading-5', entryTextClass(entry)]">{{ entry.summary }}</span>
+                    <span
+                      v-if="entry.status"
+                      :class="['text-xs px-1.5 py-0.5 rounded flex-shrink-0 self-start', entryBadgeClass(entry.status)]"
+                    >
+                      {{ entry.status }}
+                    </span>
+                  </button>
+                  <div
+                    v-if="showAllDetails || expandedEntries.has(idx)"
+                    class="ml-8 mt-1 mb-1 space-y-2"
+                  >
+                    <pre
+                      v-if="entry.detail"
+                      class="text-sm text-gray-200 bg-gray-800 border border-gray-700 rounded p-2 whitespace-pre-wrap break-words"
+                    >{{ entry.detail }}</pre>
+                    <pre class="text-xs text-gray-500 bg-gray-950 border border-gray-800 rounded p-2 whitespace-pre-wrap break-words">{{ JSON.stringify(entry.raw, null, 2) }}</pre>
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            <div>
               <p class="text-xs uppercase tracking-wider text-gray-500 mb-1">Result</p>
               <pre v-if="selectedTask.result" class="text-sm text-gray-100 bg-gray-800 border border-gray-700 rounded p-3 whitespace-pre-wrap break-words font-mono max-h-96 overflow-y-auto">{{ selectedTask.result }}</pre>
               <p v-else class="text-sm text-gray-500 italic">No result yet</p>
@@ -227,7 +332,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { apiFetch } from '../lib/api'
+import { apiFetch, authenticatedUrl } from '../lib/api'
 
 interface Agent {
   slug: string
@@ -262,6 +367,25 @@ const selectedTaskId = ref<string | null>(null)
 const selectedTask = ref<AgentTask | null>(null)
 const detailLoading = ref(false)
 const detailError = ref<string | null>(null)
+
+interface ActivityEntry {
+  ts: number
+  kind: 'message' | 'reasoning' | 'tool' | 'outcome' | 'system'
+  icon: string
+  summary: string
+  detail?: string
+  rawType: string
+  raw: unknown
+  toolCallId?: string
+  status?: 'pending' | 'success' | 'error'
+}
+
+const activity = ref<ActivityEntry[]>([])
+const activityLoading = ref(false)
+const showActivityDetails = ref(false)
+const expandedActivity = ref<Set<number>>(new Set())
+let activityEventSource: EventSource | null = null
+let activityRefreshTimer: ReturnType<typeof setTimeout> | null = null
 
 let refreshInterval: ReturnType<typeof setInterval> | null = null
 
@@ -376,16 +500,108 @@ const loadTaskDetail = async (taskId: string) => {
   }
 }
 
+const formatActivityTime = (ts: number) => {
+  if (!ts) return ''
+  const d = new Date(ts)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+}
+
+const formatRaw = (raw: unknown) => {
+  try {
+    return JSON.stringify(raw, null, 2)
+  } catch {
+    return String(raw)
+  }
+}
+
+const activityKindClass = (entry: ActivityEntry) => {
+  if (entry.status === 'success') return 'text-green-300'
+  if (entry.status === 'error') return 'text-red-300'
+  if (entry.status === 'pending') return 'text-blue-300'
+  switch (entry.kind) {
+    case 'message': return 'text-gray-100'
+    case 'reasoning': return 'text-purple-300'
+    case 'tool': return 'text-blue-200'
+    case 'outcome': return 'text-yellow-200'
+    default: return 'text-gray-300'
+  }
+}
+
+const toggleActivityEntry = (idx: number) => {
+  if (showActivityDetails.value) return
+  const next = new Set(expandedActivity.value)
+  if (next.has(idx)) next.delete(idx)
+  else next.add(idx)
+  expandedActivity.value = next
+}
+
+const loadActivity = async (taskId: string, opts: { initial?: boolean } = {}) => {
+  if (opts.initial) activityLoading.value = true
+  try {
+    const response = await apiFetch(`/api/tasks/${encodeURIComponent(taskId)}/activity`)
+    if (!response.ok) return
+    const data = (await response.json()) as { activity: ActivityEntry[] }
+    activity.value = data.activity ?? []
+  } catch {
+    // Non-fatal — activity is best-effort.
+  } finally {
+    if (opts.initial) activityLoading.value = false
+  }
+}
+
+const scheduleActivityRefresh = (taskId: string) => {
+  if (activityRefreshTimer) return
+  activityRefreshTimer = setTimeout(() => {
+    activityRefreshTimer = null
+    if (selectedTaskId.value === taskId) loadActivity(taskId)
+  }, 250)
+}
+
+const startActivityStream = (taskId: string) => {
+  stopActivityStream()
+  loadActivity(taskId, { initial: true })
+  try {
+    activityEventSource = new EventSource(`/api/tasks/${encodeURIComponent(taskId)}/events`)
+    activityEventSource.onmessage = () => {
+      // Coalesce bursts of SSE events into one refetch every 250ms.
+      scheduleActivityRefresh(taskId)
+    }
+    activityEventSource.onerror = () => {
+      // EventSource auto-reconnects; nothing to do.
+    }
+  } catch {
+    activityEventSource = null
+  }
+}
+
+const stopActivityStream = () => {
+  if (activityEventSource) {
+    activityEventSource.close()
+    activityEventSource = null
+  }
+  if (activityRefreshTimer) {
+    clearTimeout(activityRefreshTimer)
+    activityRefreshTimer = null
+  }
+}
+
 const openTask = (taskId: string) => {
   selectedTaskId.value = taskId
   selectedTask.value = null
+  activity.value = []
+  expandedActivity.value = new Set()
   loadTaskDetail(taskId)
+  startActivityStream(taskId)
 }
 
 const closeTask = () => {
   selectedTaskId.value = null
   selectedTask.value = null
   detailError.value = null
+  activity.value = []
+  expandedActivity.value = new Set()
+  stopActivityStream()
 }
 
 const onKeydown = (e: KeyboardEvent) => {
@@ -405,9 +621,21 @@ onMounted(() => {
   refreshInterval = setInterval(refreshAll, 5000)
 })
 
+watch(
+  () => selectedTask.value?.status,
+  (status) => {
+    if (status && status !== 'running') {
+      // Final refresh once, then stop the stream — no more updates expected.
+      if (selectedTaskId.value) loadActivity(selectedTaskId.value)
+      stopActivityStream()
+    }
+  }
+)
+
 onUnmounted(() => {
   if (refreshInterval) clearInterval(refreshInterval)
   document.removeEventListener('keydown', onKeydown)
+  stopActivityStream()
 })
 </script>
 
