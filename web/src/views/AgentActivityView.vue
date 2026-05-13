@@ -42,6 +42,13 @@
                   <span v-if="agent.universe" class="text-xs bg-purple-900 text-purple-200 px-2 py-0.5 rounded">
                     🎬 {{ agent.universe }}
                   </span>
+                  <span
+                    v-if="agent.model && agent.status === 'working'"
+                    class="text-xs bg-emerald-900 text-emerald-200 px-2 py-0.5 rounded"
+                    :title="`Model: ${agent.model}`"
+                  >
+                    🧠 {{ agent.model }}
+                  </span>
                 </div>
               </div>
               <span :class="[
@@ -231,6 +238,7 @@ interface Agent {
   status: 'idle' | 'working' | 'error'
   currentTask?: string
   currentTaskId?: string
+  model?: string
 }
 
 interface AgentTask {
