@@ -6,6 +6,7 @@ import { config } from "../config.js";
 import { listSkills } from "../copilot/skills.js";
 import { listSquads, createSquad, listSquadAgents } from "../store/squads.js";
 import { getAgentInfo, cancelAgentTask, getTaskEvents, subscribeToTaskEvents } from "../copilot/agents.js";
+import { summarize, summarizeEvent } from "../copilot/event-summary.js";
 import { abortOrchestrator } from "../copilot/orchestrator.js";
 import { getActiveTasks, getTask, listRecentTasks } from "../store/tasks.js";
 import { IO_VERSION } from "../paths.js";
@@ -179,6 +180,18 @@ export async function startApiServer(): Promise<void> {
     }
   });
 
+  api.get("/tasks/:taskId/activity", (req: Request, res: Response) => {
+    const taskId = Array.isArray(req.params.taskId) ? req.params.taskId[0] : req.params.taskId;
+    try {
+      const events = getTaskEvents(taskId);
+      const activity = summarize(events);
+      res.json({ taskId, activity });
+    } catch (e) {
+      console.error("Error building task activity:", e);
+      res.status(500).json({ error: "Failed to build task activity" });
+    }
+  });
+
   api.get("/tasks/:taskId/events", (req: Request, res: Response) => {
     const taskId = Array.isArray(req.params.taskId) ? req.params.taskId[0] : req.params.taskId;
 
@@ -190,7 +203,9 @@ export async function startApiServer(): Promise<void> {
 
     const send = (ev: { ts: number; type: string; data: unknown }) => {
       try {
-        res.write(`data: ${JSON.stringify(ev)}\n\n`);
+        const summary = summarizeEvent(ev);
+        const payload = { ...ev, summary };
+        res.write(`data: ${JSON.stringify(payload)}\n\n`);
       } catch {
         // client likely disconnected; cleanup happens on req.close
       }
