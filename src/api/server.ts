@@ -188,15 +188,24 @@ export async function startApiServer(): Promise<void> {
     console.log("[io] Web frontend enabled");
   }
 
-  // Backward-compat: mount API at / (after static files so HTML/CSS/JS are served first)
-  app.use("/", api);
-
-  // SPA fallback — serve index.html for any unmatched route
+  // SPA fallback for browser navigation: when the web frontend is built,
+  // serve index.html for any GET request that accepts HTML and isn't an API
+  // call. This lets vue-router handle client-side routes like /chat, /skills,
+  // /squads, etc. on direct URL access and page refresh. Programmatic clients
+  // (curl, fetch without Accept: text/html) fall through to the backward-compat
+  // API mount below.
   if (existsSync(WEB_DIST)) {
-    app.get("/{*splat}", (_req: Request, res: Response) => {
+    app.get(/.*/, (req: Request, res: Response, next) => {
+      if (req.path.startsWith("/api/")) return next();
+      const accept = req.headers.accept ?? "";
+      if (!accept.includes("text/html")) return next();
       res.sendFile(path.join(WEB_DIST, "index.html"));
     });
   }
+
+  // Backward-compat: mount API at / for non-browser clients (after static files
+  // and SPA fallback so frontend routes are not intercepted).
+  app.use("/", api);
 
   return new Promise<void>((resolve) => {
     app.listen(config.port, () => {
