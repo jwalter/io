@@ -11,6 +11,10 @@ import { abortOrchestrator } from "../copilot/orchestrator.js";
 import { getActiveTasks, getTask, listRecentTasks } from "../store/tasks.js";
 import { IO_VERSION } from "../paths.js";
 import { requireAuth } from "./auth.js";
+import { listSchedules, getSchedule, deleteSchedule, setScheduleEnabled } from "../store/schedules.js";
+import { listIoSchedules, getIoSchedule, deleteIoSchedule, setIoScheduleEnabled } from "../store/io-schedules.js";
+import { runScheduleNow } from "../copilot/scheduler.js";
+import { runIoScheduleNow } from "../copilot/io-scheduler.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIST = path.resolve(__dirname, "../../web-dist");
@@ -43,7 +47,7 @@ export async function startApiServer(): Promise<void> {
 
   app.use((_req: Request, res: Response, next) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
     next();
   });
@@ -251,6 +255,124 @@ export async function startApiServer(): Promise<void> {
     } catch (e) {
       console.error("Error cancelling task:", e);
       res.status(500).json({ error: "Failed to cancel task" });
+    }
+  });
+
+  // Schedules endpoints
+  api.get("/schedules", (_req: Request, res: Response) => {
+    try {
+      const io = listIoSchedules();
+      const squads = listSchedules();
+      res.json({ io, squads });
+    } catch (e) {
+      console.error("Error listing schedules:", e);
+      res.status(500).json({ error: "Failed to list schedules" });
+    }
+  });
+
+  // Squad schedule lifecycle
+  api.post("/schedules/squads/:id/pause", (req: Request, res: Response) => {
+    const id = Number(req.params.id);
+    if (Number.isNaN(id)) { res.status(400).json({ error: "Invalid schedule id" }); return; }
+    try {
+      const ok = setScheduleEnabled(id, false);
+      if (!ok) { res.status(404).json({ error: "Squad schedule not found" }); return; }
+      res.json({ ok: true, schedule: getSchedule(id) });
+    } catch (e) {
+      console.error("Error pausing squad schedule:", e);
+      res.status(500).json({ error: (e instanceof Error ? e.message : String(e)) });
+    }
+  });
+
+  api.post("/schedules/squads/:id/resume", (req: Request, res: Response) => {
+    const id = Number(req.params.id);
+    if (Number.isNaN(id)) { res.status(400).json({ error: "Invalid schedule id" }); return; }
+    try {
+      const ok = setScheduleEnabled(id, true);
+      if (!ok) { res.status(404).json({ error: "Squad schedule not found" }); return; }
+      res.json({ ok: true, schedule: getSchedule(id) });
+    } catch (e) {
+      console.error("Error resuming squad schedule:", e);
+      res.status(500).json({ error: (e instanceof Error ? e.message : String(e)) });
+    }
+  });
+
+  api.post("/schedules/squads/:id/run-now", async (req: Request, res: Response) => {
+    const id = Number(req.params.id);
+    if (Number.isNaN(id)) { res.status(400).json({ error: "Invalid schedule id" }); return; }
+    try {
+      const result = await runScheduleNow(id);
+      if (!result.ok) { res.status(404).json({ error: result.error ?? "Squad schedule not found" }); return; }
+      res.json({ ok: true });
+    } catch (e) {
+      console.error("Error running squad schedule now:", e);
+      res.status(500).json({ error: (e instanceof Error ? e.message : String(e)) });
+    }
+  });
+
+  api.delete("/schedules/squads/:id", (req: Request, res: Response) => {
+    const id = Number(req.params.id);
+    if (Number.isNaN(id)) { res.status(400).json({ error: "Invalid schedule id" }); return; }
+    try {
+      const ok = deleteSchedule(id);
+      if (!ok) { res.status(404).json({ error: "Squad schedule not found" }); return; }
+      res.json({ ok: true });
+    } catch (e) {
+      console.error("Error deleting squad schedule:", e);
+      res.status(500).json({ error: (e instanceof Error ? e.message : String(e)) });
+    }
+  });
+
+  // IO schedule lifecycle
+  api.post("/schedules/io/:id/pause", (req: Request, res: Response) => {
+    const id = Number(req.params.id);
+    if (Number.isNaN(id)) { res.status(400).json({ error: "Invalid schedule id" }); return; }
+    try {
+      const ok = setIoScheduleEnabled(id, false);
+      if (!ok) { res.status(404).json({ error: "IO schedule not found" }); return; }
+      res.json({ ok: true, schedule: getIoSchedule(id) });
+    } catch (e) {
+      console.error("Error pausing IO schedule:", e);
+      res.status(500).json({ error: (e instanceof Error ? e.message : String(e)) });
+    }
+  });
+
+  api.post("/schedules/io/:id/resume", (req: Request, res: Response) => {
+    const id = Number(req.params.id);
+    if (Number.isNaN(id)) { res.status(400).json({ error: "Invalid schedule id" }); return; }
+    try {
+      const ok = setIoScheduleEnabled(id, true);
+      if (!ok) { res.status(404).json({ error: "IO schedule not found" }); return; }
+      res.json({ ok: true, schedule: getIoSchedule(id) });
+    } catch (e) {
+      console.error("Error resuming IO schedule:", e);
+      res.status(500).json({ error: (e instanceof Error ? e.message : String(e)) });
+    }
+  });
+
+  api.post("/schedules/io/:id/run-now", async (req: Request, res: Response) => {
+    const id = Number(req.params.id);
+    if (Number.isNaN(id)) { res.status(400).json({ error: "Invalid schedule id" }); return; }
+    try {
+      const ok = await runIoScheduleNow(id);
+      if (!ok) { res.status(404).json({ error: "IO schedule not found" }); return; }
+      res.json({ ok: true });
+    } catch (e) {
+      console.error("Error running IO schedule now:", e);
+      res.status(500).json({ error: (e instanceof Error ? e.message : String(e)) });
+    }
+  });
+
+  api.delete("/schedules/io/:id", (req: Request, res: Response) => {
+    const id = Number(req.params.id);
+    if (Number.isNaN(id)) { res.status(400).json({ error: "Invalid schedule id" }); return; }
+    try {
+      const ok = deleteIoSchedule(id);
+      if (!ok) { res.status(404).json({ error: "IO schedule not found" }); return; }
+      res.json({ ok: true });
+    } catch (e) {
+      console.error("Error deleting IO schedule:", e);
+      res.status(500).json({ error: (e instanceof Error ? e.message : String(e)) });
     }
   });
 
