@@ -99,24 +99,27 @@ Squads are persistent project teams with **named specialist agents**. Each squad
 Only specify an \`agent\` when the user **explicitly asks** to target a specific squad member by name.
 
 ### Team Leads
-Every squad should have a **team lead**. After building the team with \`squad_add_agent\`, designate one agent as the lead using \`squad_set_lead\`. The lead receives delegated tasks (when no specific agent is targeted), breaks them into subtasks, and assigns work to teammates via the lead-only \`delegate_to_teammate\` tool. This keeps coordination inside the squad rather than forcing IO to micro-manage assignments.
+Every squad **must** have a **dedicated team lead** — a PM / Senior Engineer whose **sole** responsibility is coordinating the team, delegating tasks, and reviewing results. The lead must NOT also own a hands-on engineering domain (no "Frontend Lead", "Test Manager", or "QA Lead" — those mix coordination with domain ownership). When building the squad, explicitly add a lead agent with a role title like "Senior Engineering Lead", "Project Manager", "Tech Lead", or "Principal Engineer" *in addition to* the domain specialists, then designate them with \`squad_set_lead\`. The lead receives delegated tasks (when no specific agent is targeted), breaks them into subtasks, assigns work to teammates via the lead-only \`delegate_to_teammate\` tool, and holds automatic veto power on PR promotion. This keeps coordination inside the squad rather than forcing IO to micro-manage assignments.
 
 ### Peer Review & QA Approvals
 When an agent finishes a task, the other squad members automatically review the work and vote APPROVED or REJECTED. Reviews are recorded and emitted as \`task.review\` events.
 
-- **Required**: every squad must have at least one agent designated as QA via \`squad_set_qa\`, AND at least one agent whose role title implies a testing/quality focus (e.g. role contains "test", "qa", or "quality"). Both can be the same agent.
-- \`squad_status\`, \`squad_agents\`, and \`squad_delegate\` will surface a ⚠️ warning when either is missing. Delegation is not blocked, but you should fix the gap before promoting work.
-- **QA agents and the team lead have veto power**: if any QA reviewer or the team lead rejects, the PR stays as a draft. The lead's veto is automatic — no need to also designate them as QA.
+- **Required**: every squad must have (1) a **dedicated team lead** designated via \`squad_set_lead\` whose role is coordination-only with no domain ownership, (2) at least one agent designated as QA via \`squad_set_qa\`, and (3) at least one agent whose role title implies a testing/quality focus (e.g. role contains "test", "qa", or "quality"). The QA and test-engineer roles can be the same agent, but the lead must be separate from the domain specialists.
+- \`squad_status\`, \`squad_agents\`, and \`squad_delegate\` will surface a ⚠️ warning when any of these are missing — including when a lead is set but their role title looks like a domain specialist. Delegation is not blocked, but you should fix the gap before promoting work.
+- **QA agents, test engineers, and the team lead all have veto power**: if any of them rejects, the PR stays as a draft. The lead's veto is automatic — no need to also designate them as QA. Designating your test engineer as QA gives them the same explicit veto authority.
 - Non-QA rejections are advisory — they're recorded but don't block promotion.
 - When all QA approvals pass (or no QA agents exist) and the task result contains a GitHub PR URL, the PR is automatically promoted from draft to ready via \`gh pr ready\`.
 - Use \`squad_task_reviews\` to inspect the reviews on any completed task.
 
 ### Squad Build Checklist
 After \`squad_create\`, before delegating real work:
-1. Add agents with \`squad_add_agent\` (use roles tailored to the project's stack).
-2. Include at least one **test/quality engineer** role (e.g. "Integration Test Engineer", "QA Specialist", "Quality Reviewer").
-3. Designate a team lead with \`squad_set_lead\`.
-4. Designate at least one QA reviewer with \`squad_set_qa\` (often the same agent as the test engineer).
+1. Add domain-specialist agents with \`squad_add_agent\` (use roles tailored to the project's stack).
+2. Add a **dedicated team lead agent** with a coordination-only role like "Senior Engineering Lead", "Project Manager", "Tech Lead", or "Principal Engineer". The lead must NOT also own a hands-on domain (no "Frontend Lead" — that's still a frontend engineer).
+3. Include at least one **test/quality engineer** role (e.g. "Integration Test Engineer", "QA Specialist", "Quality Reviewer"). This is a separate agent from the lead. Their charter should explicitly own the project's test suite — for the IO squad this means owning \`src/**/*.test.ts\` plus running \`npm run build\` / \`vue-tsc\` on every PR before promotion.
+4. Designate the team lead with \`squad_set_lead\`. The lead automatically holds veto power on PR promotion.
+5. Designate at least one QA reviewer with \`squad_set_qa\` (often the same agent as the test engineer). QA reviewers also hold veto power.
+
+**No exemptions.** The squad that owns the IO codebase itself (\`michaeljolley-io\`) is held to the same checklist as every other squad. If \`squad_status\` ever shows a coverage warning for the IO squad, fix it before shipping further work — IO does not get to ship rules it doesn't follow.
 
 ### Scheduled Stand-ups
 Squads can be put on a recurring cron-style schedule. At the scheduled time IO wakes the team lead, who runs the agenda by delegating to teammates. This runs in the background even when no human is in the TUI/Telegram.
