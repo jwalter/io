@@ -5,7 +5,7 @@ import express, { type Request, type Response } from "express";
 import { config } from "../config.js";
 import { listSkills } from "../copilot/skills.js";
 import { listSquads, createSquad, listSquadAgents } from "../store/squads.js";
-import { getAgentInfo, cancelAgentTask } from "../copilot/agents.js";
+import { getAgentInfo, cancelAgentTask, getTaskEvents, subscribeToTaskEvents } from "../copilot/agents.js";
 import { abortOrchestrator } from "../copilot/orchestrator.js";
 import { getActiveTasks, getTask, listRecentTasks } from "../store/tasks.js";
 import { IO_VERSION } from "../paths.js";
@@ -177,6 +177,40 @@ export async function startApiServer(): Promise<void> {
       console.error("Error fetching task:", e);
       res.status(500).json({ error: "Failed to fetch task" });
     }
+  });
+
+  api.get("/tasks/:taskId/events", (req: Request, res: Response) => {
+    const taskId = Array.isArray(req.params.taskId) ? req.params.taskId[0] : req.params.taskId;
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders();
+
+    const send = (ev: { ts: number; type: string; data: unknown }) => {
+      try {
+        res.write(`data: ${JSON.stringify(ev)}\n\n`);
+      } catch {
+        // client likely disconnected; cleanup happens on req.close
+      }
+    };
+
+    // Replay buffered events first so a late subscriber sees the full thread
+    for (const ev of getTaskEvents(taskId)) send(ev);
+
+    // Subscribe to live events
+    const unsubscribe = subscribeToTaskEvents(taskId, send);
+
+    // Heartbeat to keep proxies / browsers from closing the connection
+    const heartbeat = setInterval(() => {
+      try { res.write(": ping\n\n"); } catch { /* ignore */ }
+    }, 15000);
+
+    req.on("close", () => {
+      clearInterval(heartbeat);
+      unsubscribe();
+    });
   });
 
   // Stop / cancel endpoints

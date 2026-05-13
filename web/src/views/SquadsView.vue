@@ -144,6 +144,16 @@
                 <button
                   v-if="agent.status === 'working' && agent.currentTaskId"
                   type="button"
+                  @click="openPreview(agent)"
+                  class="bg-blue-700 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded transition-colors flex items-center gap-1"
+                  title="Preview this agent's live work"
+                >
+                  <span aria-hidden="true">👁</span>
+                  Preview
+                </button>
+                <button
+                  v-if="agent.status === 'working' && agent.currentTaskId"
+                  type="button"
                   @click="stopAgentTask(squad.slug, agent.currentTaskId)"
                   :disabled="stoppingTaskIds.has(agent.currentTaskId)"
                   class="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs px-2 py-1 rounded transition-colors flex items-center gap-1"
@@ -158,12 +168,68 @@
         </div>
       </div>
     </div>
+
+    <!-- Live agent preview modal -->
+    <div
+      v-if="previewAgent"
+      class="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50"
+      @click.self="closePreview"
+    >
+      <div class="bg-gray-900 border border-gray-700 rounded-lg w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl">
+        <div class="flex justify-between items-center p-4 border-b border-gray-700">
+          <div class="min-w-0">
+            <h3 class="text-lg font-bold text-gray-100 truncate">
+              {{ previewAgent.character_name }}
+              <span class="text-sm font-normal text-gray-400">— {{ previewAgent.role_title }}</span>
+            </h3>
+            <p class="text-xs text-gray-500 mt-1 flex items-center gap-2">
+              <span class="inline-block w-2 h-2 rounded-full" :class="previewConnected ? 'bg-green-400 animate-pulse' : 'bg-gray-500'"></span>
+              {{ previewStatusLabel }}
+            </p>
+          </div>
+          <button
+            type="button"
+            @click="closePreview"
+            class="text-gray-400 hover:text-gray-100 text-2xl leading-none focus:outline-none"
+            aria-label="Close"
+          >×</button>
+        </div>
+
+        <div ref="previewScrollEl" class="overflow-y-auto p-4 space-y-3 flex-1 font-mono text-xs">
+          <div v-if="previewError" class="bg-red-900 text-red-100 p-3 rounded">{{ previewError }}</div>
+          <div v-else-if="previewEvents.length === 0" class="text-gray-500 italic text-center py-8">
+            Waiting for activity...
+          </div>
+          <div
+            v-for="(ev, idx) in previewEvents"
+            :key="idx"
+            class="border border-gray-800 rounded p-2 bg-gray-950"
+          >
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-blue-400">{{ ev.type }}</span>
+              <span class="text-gray-600 text-[10px]">{{ formatEventTime(ev.ts) }}</span>
+            </div>
+            <pre class="text-gray-200 whitespace-pre-wrap break-words">{{ formatEventBody(ev) }}</pre>
+          </div>
+        </div>
+
+        <div class="p-3 border-t border-gray-700 flex justify-end">
+          <button
+            type="button"
+            @click="closePreview"
+            class="bg-gray-700 hover:bg-gray-600 text-gray-100 text-sm px-4 py-2 rounded transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { apiFetch } from '../lib/api'
+import { ref, reactive, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { apiFetch, authenticatedUrl } from '../lib/api'
 
 interface Squad {
   id: number
@@ -212,6 +278,101 @@ const agentsBySquad = reactive<Record<string, SquadAgent[]>>({})
 const agentsLoading = reactive<Record<string, boolean>>({})
 const agentsError = reactive<Record<string, string | null>>({})
 const stoppingTaskIds = ref<Set<string>>(new Set())
+
+const previewAgent = ref<SquadAgent | null>(null)
+const previewEvents = ref<Array<{ ts: number; type: string; data: unknown }>>([])
+const previewError = ref<string | null>(null)
+const previewConnected = ref(false)
+const previewScrollEl = ref<HTMLElement | null>(null)
+let previewSource: EventSource | null = null
+
+const previewStatusLabel = computed(() => {
+  if (previewError.value) return 'Disconnected'
+  if (previewConnected.value) return 'Live'
+  return 'Connecting...'
+})
+
+const formatEventTime = (ts: number) => {
+  try {
+    return new Date(ts).toLocaleTimeString()
+  } catch {
+    return ''
+  }
+}
+
+const formatEventBody = (ev: { type: string; data: unknown }) => {
+  const d = ev.data as Record<string, unknown> | null | undefined
+  if (!d || typeof d !== 'object') return ''
+  // Surface common interesting fields verbatim
+  if (typeof (d as { deltaContent?: string }).deltaContent === 'string') {
+    return (d as { deltaContent: string }).deltaContent
+  }
+  if (typeof (d as { content?: string }).content === 'string') {
+    return (d as { content: string }).content
+  }
+  if (typeof (d as { text?: string }).text === 'string') {
+    return (d as { text: string }).text
+  }
+  try {
+    return JSON.stringify(d, null, 2)
+  } catch {
+    return String(d)
+  }
+}
+
+const scrollPreviewToBottom = () => {
+  nextTick(() => {
+    const el = previewScrollEl.value
+    if (el) el.scrollTop = el.scrollHeight
+  })
+}
+
+const openPreview = (agent: SquadAgent) => {
+  if (!agent.currentTaskId) return
+  closePreview()
+  previewAgent.value = agent
+  previewEvents.value = []
+  previewError.value = null
+  previewConnected.value = false
+
+  const url = authenticatedUrl(`/api/tasks/${encodeURIComponent(agent.currentTaskId)}/events`)
+  const es = new EventSource(url)
+  previewSource = es
+
+  es.onopen = () => { previewConnected.value = true }
+  es.onmessage = (e) => {
+    try {
+      const ev = JSON.parse(e.data) as { ts: number; type: string; data: unknown }
+      previewEvents.value.push(ev)
+      // Auto-scroll for streaming deltas
+      scrollPreviewToBottom()
+    } catch {
+      // ignore parse errors
+    }
+  }
+  es.onerror = () => {
+    previewConnected.value = false
+    // EventSource will auto-retry; surface a soft warning only if we never connected
+    if (previewEvents.value.length === 0) {
+      previewError.value = 'Connection error. Retrying...'
+    }
+  }
+}
+
+const closePreview = () => {
+  if (previewSource) {
+    try { previewSource.close() } catch { /* ignore */ }
+    previewSource = null
+  }
+  previewAgent.value = null
+  previewEvents.value = []
+  previewError.value = null
+  previewConnected.value = false
+}
+
+onBeforeUnmount(() => {
+  closePreview()
+})
 
 const stopAgentTask = async (squadSlug: string, taskId: string) => {
   if (stoppingTaskIds.value.has(taskId)) return
