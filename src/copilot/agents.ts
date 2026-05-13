@@ -22,6 +22,7 @@ import {
   getSquad,
   updateSquadSession,
   updateSquadStatus,
+  getDecisions,
   getDecisionsSummary,
   logDecision,
   listSquadAgents,
@@ -174,6 +175,54 @@ export function subscribeToTaskEvents(
   return () => taskEventEmitter.off(taskId, listener);
 }
 
+// ---------------------------------------------------------------------------
+// Task prompt envelope (issue #54)
+//
+// Before sending a task to an agent we prepend a short "Recent squad
+// decisions" preamble and append a tail that asks the agent to call
+// squad_log_decision if their work involved a non-trivial architectural
+// choice. This is the lowest-friction nudge we can give: agents see what
+// they're augmenting AND a reminder to capture institutional knowledge.
+// ---------------------------------------------------------------------------
+
+const RECENT_DECISIONS_LIMIT = 5;
+
+function buildTaskPromptEnvelope(squadSlug: string, task: string): string {
+  const recent = getDecisions(squadSlug, RECENT_DECISIONS_LIMIT);
+  const preamble = recent.length === 0
+    ? `## Recent squad decisions
+_(None recorded yet — be the first to log one with \`squad_log_decision\` if your work involves a real architectural choice.)_`
+    : `## Recent squad decisions (last ${recent.length})
+You should treat these as load-bearing context. Reverse them only with a clear reason and a new \`squad_log_decision\` entry.
+
+${recent
+        .slice()
+        .reverse()
+        .map((d) => {
+          const ctx = d.context ? ` — _${d.context}_` : "";
+          return `- [${d.created_at}] **${d.decision}**${ctx}`;
+        })
+        .join("\n")}`;
+
+  const tail = `## Capturing institutional knowledge
+When you finish this task, if your work involved a non-trivial architectural choice (a strategy, a tradeoff, an interface decision, a workaround with a clear reason), call \`squad_log_decision\` with **one sentence** summarizing the choice and **a short context** explaining why. Examples:
+- decision: "Use idle-reset timeout instead of wall-clock for agent tasks" / context: "Wall-clock killed 2/3 long-running tasks mid-progress (#42, #45)."
+- decision: "Veto power expanded to lead + QA + test engineers" / context: "Single-reviewer veto was too narrow when test engineer wasn't designated QA."
+
+If your work was a routine implementation that didn't make a real choice (e.g. small docs edit, mechanical refactor, one-line fix), skip the call — don't log noise.`;
+
+  return `${preamble}
+
+---
+
+## Task
+${task}
+
+---
+
+${tail}`;
+}
+
 export async function delegateToAgent(
   squadSlug: string,
   task: string,
@@ -240,7 +289,8 @@ export async function delegateToAgent(
   // Run the task in the background — return taskId immediately
   void (async () => {
     try {
-      const response = await session.sendAndWait({ prompt: task }, 600_000);
+      const envelopedTask = buildTaskPromptEnvelope(squadSlug, task);
+      const response = await session.sendAndWait({ prompt: envelopedTask }, 600_000);
       const result = response?.data?.content ?? "Task completed (no output)";
       completeTask(taskId, result);
       updateSquadStatus(squadSlug, "idle");
@@ -701,7 +751,8 @@ function buildAgentTools(squadSlug: string, isLead = false) {
               teammateAgent,
               task,
             );
-            const response = await session.sendAndWait({ prompt: task }, 300_000);
+            const envelopedTask = buildTaskPromptEnvelope(squadSlug, task);
+            const response = await session.sendAndWait({ prompt: envelopedTask }, 300_000);
             const result =
               response?.data?.content ?? "(teammate returned no output)";
             updateAgentStatus(squadSlug, teammateAgent.character_name, "idle");
