@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-05-13
+
+### Added
+
+- **IO-level scheduler** (#59) — schedule recurring tasks for IO itself, no squad required. New `schedule_create`/`_list`/`_pause`/`_resume`/`_delete`/`_run_now` tools mirror the squad scheduler. Background daemon dispatches at the configured cron time even when no human is connected. Manual `run_now` preserves `last_run_at`/`next_run_at` so testing a schedule never disturbs its regular cadence (the same fix was applied to `squad_schedule_run_now`).
+
+### Fixed
+
+- **Agent error-state recovery** (#57, closes #50 #55) — `getOrCreateAgentSession` now re-reads the agent row and drops the cached Copilot session when the persisted status is `error`, so agents recover on the next task instead of being permanently stuck. Daemon startup runs `reconcileAgentStatuses` and `reconcileSquadStatuses` to clear stale rows from a crashed previous run.
+- **Backfill misparsed peer-review verdicts** (#57) — surgical, idempotent backfill on daemon startup flips review rows where the comment unambiguously starts with `APPROVED` but the recorded verdict was `REJECTED`. Only ever flips `0 → 1`, never the reverse.
+
 ## [0.3.0] - 2026-05-13
 
 ### Added
