@@ -31,8 +31,10 @@ export interface ToolDeps {
   getTask: (taskId: string) => { task_id: string; agent_slug: string; description: string; status: string; result: string | null } | undefined;
   getActiveAgentTasks: () => Array<{ taskId: string; agentSlug: string; description: string; status: string }>;
   addSquadAgent: (squadSlug: string, roleTitle: string, charter: string, modelTier?: string) => { character_name: string; role_title: string; personality: string | null; model_tier: string };
-  listSquadAgents: (squadSlug: string) => Array<{ character_name: string; role_title: string; charter: string | null; model_tier: string; personality: string | null; status: string }>;
+  listSquadAgents: (squadSlug: string) => Array<{ character_name: string; role_title: string; charter: string | null; model_tier: string; personality: string | null; status: string; is_lead?: number }>;
   removeSquadAgent: (squadSlug: string, characterName: string) => boolean;
+  setSquadLead: (squadSlug: string, characterName: string) => void;
+  getSquadLead: (squadSlug: string) => { character_name: string; role_title: string } | undefined;
   listSkills: () => Array<{ name: string; slug: string; description: string; path: string }>;
   installSkill: (repoUrl: string) => Promise<{ name: string; slug: string; description: string; path: string }>;
   removeSkill: (slug: string) => boolean;
@@ -139,10 +141,14 @@ export function createTools(deps: ToolDeps) {
             ? UNIVERSES.find((u) => u.id === s.universe)?.name ?? s.universe
             : "none";
           const agents = deps.listSquadAgents(s.slug);
+          const lead = deps.getSquadLead(s.slug);
+          const leadLine = lead
+            ? `\n  ⭐ Team Lead: ${lead.character_name} (${lead.role_title})`
+            : "";
           const agentList = agents.length > 0
             ? "\n  Agents: " + agents.map((a) => `${a.character_name} (${a.role_title})`).join(", ")
             : "\n  Agents: none — use squad_add_agent to build the team";
-          return `- **${s.name}** (\`${s.slug}\`) — ${s.status} — 🎬 ${universeName}${agentList}\n  📁 ${s.projectPath}`;
+          return `- **${s.name}** (\`${s.slug}\`) — ${s.status} — 🎬 ${universeName}${leadLine}${agentList}\n  📁 ${s.projectPath}`;
         })
         .join("\n");
     },
@@ -416,9 +422,10 @@ export function createTools(deps: ToolDeps) {
         ? UNIVERSES.find((u) => u.id === squad.universe)?.name ?? squad.universe
         : "none";
 
-      const lines = agents.map((a) =>
-        `- **${a.character_name}** — ${a.role_title} (${a.model_tier}) — ${a.status}${a.personality ? `\n  _${a.personality}_` : ""}`,
-      );
+      const lines = agents.map((a) => {
+        const leadBadge = a.is_lead === 1 ? " ⭐ [LEAD]" : "";
+        return `- **${a.character_name}**${leadBadge} — ${a.role_title} (${a.model_tier}) — ${a.status}${a.personality ? `\n  _${a.personality}_` : ""}`;
+      });
 
       return `**${squad.name}** — 🎬 ${universeName}\n\n${lines.join("\n")}`;
     },
@@ -996,7 +1003,34 @@ export function createTools(deps: ToolDeps) {
     },
   });
 
-  return [wikiRead, wikiWrite, wikiSearch, wikiDelete, wikiList, squadCreate, squadRecall, squadStatus, squadLogDecision, squadDelegate, squadTaskStatus, squadDelete, squadAnalyze, squadAddAgent, squadAgents, squadRemoveAgent, skillList, skillInstall, skillRemove, skillSearch, configUpdate, checkUpdate, shell, fileOps, bash, readFile, viewTool, grepTool, strReplaceEditor, github];
+  const squadSetLead = defineTool("squad_set_lead", {
+    description:
+      "Designate an agent as the team lead for their squad. The lead receives delegated tasks (when no specific agent is targeted) and orchestrates the team by divvying subtasks to teammates.",
+    skipPermission: true,
+    parameters: z.object({
+      slug: z.string().describe("Squad slug"),
+      character_name: z
+        .string()
+        .describe("Character name of the agent to make team lead"),
+    }),
+    handler: async ({ slug, character_name }) => {
+      try {
+        const squad = deps.getSquad(slug);
+        if (!squad) return `Squad not found: ${slug}`;
+        const agents = deps.listSquadAgents(slug);
+        const target = agents.find((a) => a.character_name === character_name);
+        if (!target) {
+          return `Agent "${character_name}" not found in squad "${slug}". Use squad_agents to list the roster.`;
+        }
+        deps.setSquadLead(slug, character_name);
+        return `⭐ ${character_name} (${target.role_title}) is now the team lead for squad "${squad.name}".`;
+      } catch (err) {
+        return `Error: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    },
+  });
+
+  return [wikiRead, wikiWrite, wikiSearch, wikiDelete, wikiList, squadCreate, squadRecall, squadStatus, squadLogDecision, squadDelegate, squadTaskStatus, squadDelete, squadAnalyze, squadAddAgent, squadAgents, squadRemoveAgent, squadSetLead, skillList, skillInstall, skillRemove, skillSearch, configUpdate, checkUpdate, shell, fileOps, bash, readFile, viewTool, grepTool, strReplaceEditor, github];
 }
 
 function walkDirectory(dir: string, maxDepth = 3, depth = 0): string[] {

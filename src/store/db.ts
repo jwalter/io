@@ -77,6 +77,7 @@ export function getDb(): BetterSqlite3.Database {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(squad_slug, character_name)
     )`,
+    `ALTER TABLE squad_agents ADD COLUMN is_lead INTEGER NOT NULL DEFAULT 0`,
   ];
 
   for (const migration of migrations) {

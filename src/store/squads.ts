@@ -25,6 +25,7 @@ export interface SquadAgent {
   personality: string | null;
   copilot_session_id: string | null;
   status: string;
+  is_lead: number;
   created_at: string;
 }
 
@@ -235,4 +236,26 @@ export function getDecisionsSummary(squadSlug: string): string {
       return `- [${d.created_at}] ${d.decision}${ctx}`;
     })
     .join("\n");
+}
+
+
+export function setSquadLead(squadSlug: string, characterName: string): void {
+  const db = getDb();
+  const tx = db.transaction(() => {
+    db.prepare(
+      "UPDATE squad_agents SET is_lead = 0 WHERE squad_slug = ?",
+    ).run(squadSlug);
+    db.prepare(
+      "UPDATE squad_agents SET is_lead = 1 WHERE squad_slug = ? AND character_name = ?",
+    ).run(squadSlug, characterName);
+  });
+  tx();
+}
+
+export function getSquadLead(squadSlug: string): SquadAgent | undefined {
+  return getDb()
+    .prepare(
+      "SELECT * FROM squad_agents WHERE squad_slug = ? AND is_lead = 1 LIMIT 1",
+    )
+    .get(squadSlug) as SquadAgent | undefined;
 }
