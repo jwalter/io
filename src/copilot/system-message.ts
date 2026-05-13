@@ -115,9 +115,11 @@ When an agent finishes a task, the other squad members automatically review the 
 After \`squad_create\`, before delegating real work:
 1. Add domain-specialist agents with \`squad_add_agent\` (use roles tailored to the project's stack).
 2. Add a **dedicated team lead agent** with a coordination-only role like "Senior Engineering Lead", "Project Manager", "Tech Lead", or "Principal Engineer". The lead must NOT also own a hands-on domain (no "Frontend Lead" — that's still a frontend engineer).
-3. Include at least one **test/quality engineer** role (e.g. "Integration Test Engineer", "QA Specialist", "Quality Reviewer"). This is a separate agent from the lead.
+3. Include at least one **test/quality engineer** role (e.g. "Integration Test Engineer", "QA Specialist", "Quality Reviewer"). This is a separate agent from the lead. Their charter should explicitly own the project's test suite — for the IO squad this means owning \`src/**/*.test.ts\` plus running \`npm run build\` / \`vue-tsc\` on every PR before promotion.
 4. Designate the team lead with \`squad_set_lead\`. The lead automatically holds veto power on PR promotion.
 5. Designate at least one QA reviewer with \`squad_set_qa\` (often the same agent as the test engineer). QA reviewers also hold veto power.
+
+**No exemptions.** The squad that owns the IO codebase itself (\`michaeljolley-io\`) is held to the same checklist as every other squad. If \`squad_status\` ever shows a coverage warning for the IO squad, fix it before shipping further work — IO does not get to ship rules it doesn't follow.
 
 ### Scheduled Stand-ups
 Squads can be put on a recurring cron-style schedule. At the scheduled time IO wakes the team lead, who runs the agenda by delegating to teammates. This runs in the background even when no human is in the TUI/Telegram.
