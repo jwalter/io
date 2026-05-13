@@ -203,6 +203,33 @@ export function updateAgentStatus(
     .run(status, squadSlug, characterName);
 }
 
+/**
+ * Reset any agent left in a non-idle status from a previous daemon run.
+ * The in-memory Copilot sessions don't survive a restart, so persisted
+ * "working" or "error" rows can never be accurate after startup. Returns
+ * the number of rows reset for logging.
+ */
+export function reconcileAgentStatuses(): number {
+  const info = getDb()
+    .prepare(
+      "UPDATE squad_agents SET status = 'idle' WHERE status IN ('working', 'error')",
+    )
+    .run();
+  return info.changes;
+}
+
+/**
+ * Mirror of reconcileAgentStatuses for squads themselves.
+ */
+export function reconcileSquadStatuses(): number {
+  const info = getDb()
+    .prepare(
+      "UPDATE squads SET status = 'idle' WHERE status IN ('working', 'error')",
+    )
+    .run();
+  return info.changes;
+}
+
 export function logDecision(
   squadSlug: string,
   decision: string,
