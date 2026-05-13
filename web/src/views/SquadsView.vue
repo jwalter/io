@@ -131,6 +131,8 @@
               >
                 <div class="flex-1 min-w-0">
                   <span class="text-sm font-medium text-gray-100">{{ agent.character_name }}</span>
+                  <span v-if="agent.is_lead" title="Team Lead" class="text-xs">👑</span>
+                  <span v-if="agent.is_qa" title="QA / Veto Power" class="text-xs">🛡️</span>
                   <span class="text-xs text-gray-500 ml-2">{{ agent.role_title }}</span>
                 </div>
                 <span :class="[
@@ -283,6 +285,8 @@ interface SquadAgent {
   status: string
   currentTaskId?: string | null
   currentTask?: string | null
+  is_lead?: number
+  is_qa?: number
 }
 
 /** Mirrors the ActivityEntry shape emitted by src/copilot/event-summary.ts */
