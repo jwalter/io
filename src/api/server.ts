@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { existsSync, readFileSync } from "node:fs";
 import express, { type Request, type Response } from "express";
 import { config } from "../config.js";
-import { listSkills, installSkill } from "../copilot/skills.js";
+import { listSkills, installSkill, installSkillFromContent } from "../copilot/skills.js";
 import { listSquads, createSquad, listSquadAgents } from "../store/squads.js";
 import { getAgentInfo, cancelAgentTask, getTaskEvents, subscribeToTaskEvents } from "../copilot/agents.js";
 import { summarize, summarizeEvent } from "../copilot/event-summary.js";
@@ -133,6 +133,25 @@ export async function startApiServer(): Promise<void> {
     }
   });
 
+  // Install a skill from pasted SKILL.md content (issue #117)
+  api.post("/skills/paste", (req: Request, res: Response) => {
+    const { content: skillContent, slug } = req.body as { content?: unknown; slug?: unknown };
+    if (!skillContent || typeof skillContent !== "string" || skillContent.trim() === "") {
+      res.status(400).json({ error: "Missing or empty required field: content" });
+      return;
+    }
+    if (!slug || typeof slug !== "string" || slug.trim() === "") {
+      res.status(400).json({ error: "Missing or empty required field: slug" });
+      return;
+    }
+    try {
+      const skill = installSkillFromContent(skillContent, slug.trim());
+      res.status(201).json({ skill });
+    } catch (e) {
+      res.status(400).json({ error: e instanceof Error ? e.message : String(e) });
+    }
+  });
+
   // Install a skill from a git repo URL (mirrors the skill_install tool)
   api.post("/skills", async (req: Request, res: Response) => {
     const { repoUrl } = req.body as { repoUrl?: unknown };
@@ -158,8 +177,9 @@ export async function startApiServer(): Promise<void> {
     }
 
     try {
-      const skill = await installSkill(trimmed);
-      res.status(201).json({ skill });
+      const result = await installSkill(trimmed);
+      const skills = Array.isArray(result) ? result : [result];
+      res.status(201).json({ skill: skills[0], skills });
     } catch (e) {
       console.error("Error installing skill:", e);
       res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
