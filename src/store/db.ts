@@ -169,7 +169,7 @@ GROUP BY agent_slug`,
     )`,
     `CREATE TABLE IF NOT EXISTS unified_feed (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      type TEXT NOT NULL CHECK(type IN ('deliverable', 'notification')),
+      type TEXT NOT NULL CHECK(type IN ('inbox', 'notification')),
       title TEXT NOT NULL,
       body TEXT NOT NULL,
       source_type TEXT,
@@ -200,6 +200,26 @@ GROUP BY agent_slug`,
     )`,
     `ALTER TABLE agent_tasks ADD COLUMN instance_id TEXT`,
     `CREATE INDEX IF NOT EXISTS idx_instance_decisions_instance ON instance_decisions(instance_id, merged_to_master)`,
+    `ALTER TABLE unified_feed RENAME TO unified_feed_old`,
+    `CREATE TABLE unified_feed (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  type TEXT NOT NULL CHECK(type IN ('inbox', 'notification')),
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  source_type TEXT,
+  source_ref TEXT,
+  squad_slug TEXT,
+  instance_id TEXT,
+  task_id TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  read_at DATETIME
+)`,
+    `INSERT INTO unified_feed (id, type, title, body, source_type, source_ref, created_at, read_at)
+  SELECT id, CASE WHEN type='deliverable' THEN 'inbox' ELSE type END, title, body, source_type, source_ref, created_at, read_at
+  FROM unified_feed_old`,
+    `DROP TABLE unified_feed_old`,
+    `CREATE INDEX IF NOT EXISTS idx_unified_feed_type ON unified_feed(type, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_unified_feed_unread ON unified_feed(read_at, created_at)`,
   ];
 
   for (const migration of migrations) {
