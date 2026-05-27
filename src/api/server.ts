@@ -21,6 +21,7 @@ import { listServers, toggleMcpServer, addMcpServer, removeMcpServer } from "../
 import { listSkills, addSkill, createSkill, removeSkill, getSkillContent, updateSkillContent } from "../copilot/skills.js";
 import { readPage, writePage, deletePage, listPages, listTemplates, readTemplate, writeTemplate, deleteTemplate } from "../wiki/fs.js";
 import { searchPages } from "../wiki/search.js";
+import { getBacklinks } from "../wiki/backlinks.js";
 import {
   saveMessage,
   getConversation,
@@ -305,6 +306,13 @@ export async function startApiServer(config: Config): Promise<void> {
     }
     const results = await searchPages(query);
     res.json(results);
+  });
+
+  app.get("/api/wiki/backlinks/*path", async (req, res) => {
+    const raw = (req.params as any).path;
+    const pagePath = Array.isArray(raw) ? raw.join("/") : raw;
+    const backlinks = await getBacklinks(pagePath);
+    res.json(backlinks);
   });
 
   // --- Wiki Templates ---
