@@ -195,7 +195,8 @@ export async function startApiServer(config: Config): Promise<void> {
 
   app.get("/api/wiki/page/*path", async (req, res) => {
     try {
-      const pagePath = (req.params as any).path;
+      const raw = (req.params as any).path;
+      const pagePath = Array.isArray(raw) ? raw.join("/") : raw;
       const content = await readPage(pagePath);
       res.json({ path: pagePath, content });
     } catch (err: any) {
@@ -204,7 +205,8 @@ export async function startApiServer(config: Config): Promise<void> {
   });
 
   app.put("/api/wiki/page/*path", async (req, res) => {
-    const pagePath = (req.params as any).path;
+    const raw = (req.params as any).path;
+    const pagePath = Array.isArray(raw) ? raw.join("/") : raw;
     const { content } = req.body;
     await writePage(pagePath, content);
     res.json({ ok: true });
@@ -212,7 +214,8 @@ export async function startApiServer(config: Config): Promise<void> {
 
   app.delete("/api/wiki/page/*path", async (req, res) => {
     try {
-      const pagePath = (req.params as any).path;
+      const raw = (req.params as any).path;
+      const pagePath = Array.isArray(raw) ? raw.join("/") : raw;
       await deletePage(pagePath);
       res.json({ ok: true });
     } catch (err: any) {
