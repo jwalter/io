@@ -2,6 +2,7 @@
 import { ref, onMounted } from "vue";
 import { apiGet, apiPut, apiDelete } from "@/lib/api";
 import { BookOpen, Search, Plus, Pencil, Trash2, Save, X } from "lucide-vue-next";
+import MarkdownContent from "@/components/MarkdownContent.vue";
 
 const pages = ref<string[]>([]);
 const selectedPage = ref<string | null>(null);
@@ -173,9 +174,7 @@ const filteredPages = () => {
             v-model="editContent"
             class="w-full h-full min-h-[400px] font-mono text-sm bg-background border border-input rounded-md p-3 focus:outline-none focus:ring-1 focus:ring-ring resize-none"
           ></textarea>
-          <div v-else class="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
-            {{ pageContent }}
-          </div>
+          <MarkdownContent v-else :content="pageContent" />
         </div>
       </template>
     </div>

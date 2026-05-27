@@ -2,6 +2,7 @@
 import { ref, onMounted } from "vue";
 import { apiGet, apiPost, apiDelete } from "@/lib/api";
 import { Inbox, Check, Trash2 } from "lucide-vue-next";
+import MarkdownContent from "@/components/MarkdownContent.vue";
 
 interface FeedItem {
   id: string;
@@ -116,9 +117,7 @@ onMounted(loadFeed);
           </div>
         </div>
         <div v-if="expandedId === item.id" class="px-4 pb-3 border-t border-border pt-3">
-          <div class="prose prose-sm dark:prose-invert max-w-none text-sm whitespace-pre-wrap">
-            {{ item.content }}
-          </div>
+          <MarkdownContent :content="item.content" />
         </div>
       </div>
     </div>

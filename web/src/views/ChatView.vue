@@ -2,6 +2,7 @@
 import { ref, nextTick, onMounted } from "vue";
 import { useChatStore } from "@/stores/chat";
 import { Send, Square } from "lucide-vue-next";
+import MarkdownContent from "@/components/MarkdownContent.vue";
 
 const chat = useChatStore();
 const input = ref("");
@@ -58,7 +59,8 @@ onMounted(() => scrollToBottom());
               : 'bg-muted text-foreground'
           "
         >
-          <div class="whitespace-pre-wrap break-words" v-html="msg.content || '...'"></div>
+          <MarkdownContent v-if="msg.content" :content="msg.content" />
+          <span v-else class="text-muted-foreground">...</span>
           <div
             v-if="msg.streaming"
             class="inline-block w-2 h-4 bg-current animate-pulse ml-1"
