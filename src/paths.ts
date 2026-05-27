@@ -12,4 +12,5 @@ export const PATHS = {
   skills: join(IO_HOME, "skills"),
   mcpConfig: join(IO_HOME, "mcp.json"),
   sessions: join(IO_HOME, "sessions"),
+  source: join(IO_HOME, "source"),
 } as const;

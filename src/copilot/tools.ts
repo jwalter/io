@@ -79,29 +79,29 @@ export function createTools(): Tool<any>[] {
 
         if (repo_url) {
           const { execSync } = await import("node:child_process");
-          const { homedir } = await import("node:os");
           const { existsSync, mkdirSync } = await import("node:fs");
           const { join } = await import("node:path");
+          const { PATHS } = await import("../paths.js");
 
           // Extract owner/repo from URL (supports https and git@ formats)
           const match = repo_url.match(/[/:]([^/]+)\/([^/.]+?)(?:\.git)?$/);
           if (match) {
             const [, owner, repo] = match;
-            const sourceDir = join(homedir(), "source", owner, repo);
+            const sourceDir = join(PATHS.source, owner, repo);
             if (!existsSync(sourceDir)) {
-              const parentDir = join(homedir(), "source", owner);
+              const parentDir = join(PATHS.source, owner);
               if (!existsSync(parentDir)) mkdirSync(parentDir, { recursive: true });
               try {
                 execSync(`git clone ${repo_url} ${sourceDir}`, {
                   encoding: "utf-8",
                   timeout: 120_000,
                 });
-                cloneMsg = ` Repo cloned to ~/source/${owner}/${repo}.`;
+                cloneMsg = ` Repo cloned to ~/.io/source/${owner}/${repo}.`;
               } catch (err: any) {
                 cloneMsg = ` (Clone failed: ${err.stderr?.trim() || err.message})`;
               }
             } else {
-              cloneMsg = ` Repo already exists at ~/source/${owner}/${repo}.`;
+              cloneMsg = ` Repo already exists at ~/.io/source/${owner}/${repo}.`;
             }
           }
         }
