@@ -71,7 +71,7 @@ onMounted(() => scrollToBottom());
           class="max-w-[75%] rounded-lg px-4 py-2 text-sm"
           :class="
             msg.role === 'user'
-              ? 'bg-blue-600 text-white'
+              ? 'bg-primary text-primary-foreground'
               : 'bg-muted text-foreground'
           "
         >

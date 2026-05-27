@@ -221,6 +221,7 @@ async function createTemplate() {
             :selected-page="selectedPage"
             :search-query="searchQuery"
             @select="selectPage($event)"
+            @add-file="showNewForm = true; newPagePath = $event + '/'"
           />
         </div>
       </div>

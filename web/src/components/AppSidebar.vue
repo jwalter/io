@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { ref, computed } from "vue";
 import { useRoute } from "vue-router";
-import { useAuthStore } from "@/stores/auth";
-import { useRouter } from "vue-router";
 import LogoIcon from "@/components/LogoIcon.vue";
 import {
   MessageSquare,
@@ -15,35 +13,44 @@ import {
   BookOpen,
   History,
   Settings,
-  LogOut,
   BarChart3,
   ClipboardList,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Github,
 } from "lucide-vue-next";
 
 const route = useRoute();
-const router = useRouter();
-const auth = useAuthStore();
+
+const collapsed = ref(false);
 
 const navItems = [
   { name: "Chat", icon: MessageSquare, path: "/" },
   { name: "History", icon: History, path: "/history" },
   { name: "Squads", icon: Users, path: "/squads" },
   { name: "Health", icon: Activity, path: "/squads/health" },
-  { name: "Feed", icon: Inbox, path: "/feed" },
   { name: "Usage", icon: BarChart3, path: "/usage" },
   { name: "Audit Log", icon: ClipboardList, path: "/audit-log" },
   { name: "Skills", icon: Puzzle, path: "/skills" },
   { name: "MCP Servers", icon: Server, path: "/mcp" },
   { name: "Schedules", icon: Clock, path: "/schedules" },
   { name: "Wiki", icon: BookOpen, path: "/wiki" },
+];
+
+const footerItems = [
+  { name: "Chat", icon: MessageSquare, path: "/" },
+  { name: "Feed", icon: Inbox, path: "/feed" },
   { name: "Settings", icon: Settings, path: "/settings" },
 ];
 
+const APP_VERSION = __APP_VERSION__;
+const REPO_URL = "https://github.com/michaeljolley/io";
+
 // Find the best (longest prefix) matching nav path for the current route.
-// This ensures /squads/health activates "Health" rather than "Squads".
 const activeNavPath = computed(() => {
   let bestPath = "";
-  for (const item of navItems) {
+  const allItems = [...navItems, ...footerItems];
+  for (const item of allItems) {
     const p = item.path;
     const matches =
       p === "/"
@@ -56,22 +63,43 @@ const activeNavPath = computed(() => {
   return bestPath;
 });
 
-async function logout() {
-  await auth.logout();
-  router.push("/login");
+function toggleCollapse() {
+  collapsed.value = !collapsed.value;
 }
 </script>
 
 <template>
-  <aside class="w-64 border-r border-border bg-card flex flex-col h-full shrink-0">
-    <!-- Logo -->
-    <div class="p-4 border-b border-border flex items-center gap-3">
-      <LogoIcon :size="28" />
-      <div>
-        <h1 class="text-lg font-bold tracking-tight bg-gradient-brand bg-clip-text text-transparent">IO</h1>
-        <p class="text-[10px] text-muted-foreground leading-none">Personal AI Assistant</p>
-      </div>
+  <aside
+    :class="[
+      'border-r border-border bg-sidebar flex flex-col h-full shrink-0 transition-all duration-200',
+      collapsed ? 'w-16' : 'w-56',
+    ]"
+  >
+    <!-- Logo + Collapse toggle -->
+    <div class="p-3 border-b border-border flex items-center" :class="collapsed ? 'justify-center' : 'justify-between'">
+      <router-link to="/" class="flex items-center gap-2" :class="collapsed ? 'justify-center' : ''">
+        <LogoIcon :size="24" />
+        <h1 v-if="!collapsed" class="text-base font-bold tracking-tight bg-gradient-brand bg-clip-text text-transparent">IO</h1>
+      </router-link>
+      <button
+        @click="toggleCollapse"
+        class="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+        :title="collapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+        v-if="!collapsed"
+      >
+        <PanelLeftClose class="w-4 h-4" />
+      </button>
     </div>
+
+    <!-- Expand button when collapsed -->
+    <button
+      v-if="collapsed"
+      @click="toggleCollapse"
+      class="mx-auto mt-2 p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+      title="Expand sidebar"
+    >
+      <PanelLeftOpen class="w-4 h-4" />
+    </button>
 
     <!-- Navigation -->
     <nav class="flex-1 p-2 space-y-0.5 overflow-y-auto">
@@ -79,29 +107,61 @@ async function logout() {
         v-for="item in navItems"
         :key="item.path"
         :to="item.path"
-        class="flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors"
+        class="flex items-center gap-3 rounded-md text-sm transition-colors"
         :class="[
+          collapsed ? 'justify-center px-2 py-2' : 'px-3 py-2',
           activeNavPath === item.path
             ? 'bg-primary/10 text-primary font-medium'
             : 'text-muted-foreground hover:bg-accent hover:text-foreground',
         ]"
+        :title="collapsed ? item.name : undefined"
       >
-        <component :is="item.icon" class="w-4 h-4" />
-        {{ item.name }}
+        <component :is="item.icon" class="w-4 h-4 shrink-0" />
+        <span v-if="!collapsed">{{ item.name }}</span>
       </router-link>
     </nav>
 
-    <!-- User section -->
-    <div class="p-3 border-t border-border">
-      <div class="flex items-center justify-between">
-        <span class="text-xs text-muted-foreground truncate">{{ auth.email }}</span>
-        <button
-          @click="logout"
-          class="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-          title="Sign out"
+    <!-- Footer -->
+    <div class="border-t border-border p-2 space-y-0.5">
+      <router-link
+        v-for="item in footerItems"
+        :key="item.path"
+        :to="item.path"
+        class="flex items-center gap-3 rounded-md text-sm transition-colors"
+        :class="[
+          collapsed ? 'justify-center px-2 py-2' : 'px-3 py-2',
+          activeNavPath === item.path
+            ? 'bg-primary/10 text-primary font-medium'
+            : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+        ]"
+        :title="collapsed ? item.name : undefined"
+      >
+        <component :is="item.icon" class="w-4 h-4 shrink-0" />
+        <span v-if="!collapsed">{{ item.name }}</span>
+      </router-link>
+
+      <!-- Version + GitHub -->
+      <div
+        class="flex items-center pt-2 mt-2 border-t border-border"
+        :class="collapsed ? 'justify-center' : 'justify-between px-3'"
+      >
+        <a
+          v-if="!collapsed"
+          :href="`${REPO_URL}/releases/tag/v${APP_VERSION}`"
+          target="_blank"
+          class="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+          title="Release notes"
         >
-          <LogOut class="w-4 h-4" />
-        </button>
+          v{{ APP_VERSION }}
+        </a>
+        <a
+          :href="REPO_URL"
+          target="_blank"
+          class="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+          title="GitHub repository"
+        >
+          <Github class="w-3.5 h-3.5" />
+        </a>
       </div>
     </div>
   </aside>
