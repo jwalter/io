@@ -2,75 +2,59 @@
 
 ## Prerequisites
 
-- Node.js 22+
-- GitHub CLI (`gh`) — used for authentication with the Copilot SDK
-- A GitHub account with Copilot access
+- **Node.js** >= 22
+- **GitHub Copilot subscription** — IO uses the Copilot SDK, which requires an active Copilot license
+- **GitHub CLI** (`gh`) — required for the GitHub tool. Install from [cli.github.com](https://cli.github.com/) and authenticate with `gh auth login`
 
-## Installation
+## Install
 
 ```bash
 npm install -g heyio
 ```
 
-## Initial Setup
+## Setup
 
-Run the interactive setup wizard:
+Run the setup wizard to configure authentication and integrations:
 
 ```bash
 io setup
 ```
 
-This will guide you through:
-
-1. GitHub authentication (Copilot SDK handles this automatically via `gh` CLI)
-2. Telegram bot token (optional)
-3. Telegram authorized user ID (optional)
+This will prompt you for:
+- **Supabase credentials** (required for web/API authentication)
+- **Telegram bot token** (optional, for Telegram interface)
 
 Configuration is saved to `~/.io/config.json`.
 
-## Quick Start
-
-Start the TUI (interactive chat):
+## Run
 
 ```bash
-io
-```
-
-Start as a background daemon:
-
-```bash
+# Start the daemon (Telegram + HTTP API + Web Dashboard)
 io --daemon
+
+# Start with self-edit permission (allows IO to modify its own source)
+io --daemon --self-edit
 ```
 
-## Configuration File
+## Access the Web Dashboard
 
-IO stores config at `~/.io/config.json`:
+Once running, open `http://localhost:3170` in your browser. Sign in with the email configured in your Supabase auth.
 
-```jsonc
-{
-  "telegramBotToken": "123456:ABC-DEF...",
-  "authorizedUserId": 123456789,
-  "telegramEnabled": true,
-  "defaultModel": "claude-sonnet-4.6",
-  "port": 3170
-}
-```
+## Headless Server (systemd)
 
-The web frontend is available at `http://your-server:PORT/` (default: `http://localhost:3170/`).
+To run IO as a background service:
 
-## Running as a systemd Service (Linux)
-
-Create `/etc/systemd/system/io.service`:
+1. Authenticate: `copilot login` and `gh auth login`
+2. Create a service file at `/etc/systemd/system/io.service`:
 
 ```ini
 [Unit]
-Description=IO AI Assistant Daemon
+Description=IO Personal Assistant
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=your-user
 ExecStart=/usr/bin/env io --daemon
 Restart=always
 RestartSec=10
@@ -80,15 +64,4 @@ Environment=NODE_ENV=production
 WantedBy=multi-user.target
 ```
 
-Then enable:
-
-```bash
-sudo systemctl enable --now io
-```
-
-## Next Steps
-
-- [Configuration](./configuration.md) — Full config reference
-- [Web Frontend](./web-frontend.md) — Web dashboard guide
-- [Telegram Setup](./telegram.md) — Detailed Telegram integration guide
-- [Skills](./skills.md) — Extend IO with custom skills
+3. Enable and start: `systemctl enable --now io`

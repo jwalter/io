@@ -1,93 +1,129 @@
-import { config } from "../config.js";
+import { loadConfig } from "../config.js";
+import { getClient } from "./client.js";
 
-export type Tier = "high" | "medium" | "low";
+export type TaskComplexity = "high" | "medium" | "low";
 
-const DEFAULT_TIERS: Record<Tier, string[]> = {
-  high: ["claude-opus-4.7", "claude-opus-4.6"],
-  medium: ["claude-sonnet-4.6", "gpt-5.5", "claude-opus-4.5"],
-  low: ["claude-haiku-4.5", "gpt-5.4-mini"],
+interface ScoredModel {
+  id: string;
+  score: number;
+}
+
+// Cache discovered models so we don't call listModels() on every task
+let discoveredModels: ScoredModel[] | undefined;
+
+/**
+ * Built-in model capability hints. Used as fallback when billing info
+ * isn't available from the SDK. Higher = more capable.
+ */
+const MODEL_CAPABILITY_HINTS: Record<string, number> = {
+  "claude-opus-4.7": 90,
+  "claude-opus-4.6": 88,
+  "claude-opus-4.5": 85,
+  "gpt-5.5": 87,
+  "gpt-5.4": 84,
+  "gpt-5.3-codex": 83,
+  "gpt-5.2-codex": 82,
+  "gpt-5.2": 80,
+  "claude-sonnet-4.6": 70,
+  "claude-sonnet-4.5": 68,
+  "gpt-4.1": 65,
+  "claude-haiku-4.5": 40,
+  "gpt-5.4-mini": 42,
+  "gpt-5-mini": 38,
 };
 
-// Resolved model for each tier (populated at startup)
-let resolvedTiers: Record<Tier, string> | null = null;
-
-const HIGH_KEYWORDS = [
-  "architect", "refactor", "redesign", "debug", "design",
-  "complex", "migration", "security", "performance", "optimize",
-  "rewrite", "overhaul", "investigate", "diagnose", "plan",
-];
-
-const LOW_KEYWORDS = [
-  "read", "list", "format", "lookup", "check", "status",
-  "simple", "rename", "typo", "log", "print", "echo",
-  "delete file", "remove file", "copy file", "move file",
-];
-
 /**
- * Resolve each tier to the first available model from its preference list.
- * Call once at startup with the result of `client.listModels()`.
+ * Discover available models from the Copilot SDK and score them.
+ * Uses billing multiplier as primary capability signal, falls back to
+ * built-in hints for unknown models.
  */
-export function resolveModelTiers(availableModelIds: string[]): Record<Tier, string> {
-  const available = new Set(availableModelIds);
-  const tiers = config.modelTiers ?? {};
-  const result = {} as Record<Tier, string>;
+export async function discoverModels(): Promise<ScoredModel[]> {
+  if (discoveredModels) return discoveredModels;
 
-  for (const tier of ["high", "medium", "low"] as Tier[]) {
-    const candidates = tiers[tier] ?? DEFAULT_TIERS[tier];
-    const match = candidates.find((m) => available.has(m));
-    if (match) {
-      result[tier] = match;
-    } else {
-      // Fallback: use defaultModel, then first candidate regardless of availability
-      result[tier] = config.defaultModel || candidates[0];
-    }
-    console.error(`[io] Model tier "${tier}" resolved to: ${result[tier]}`);
+  try {
+    const client = await getClient();
+    const models = await client.listModels();
+
+    discoveredModels = models
+      .filter((m) => !m.policy || m.policy.state === "enabled")
+      .map((m) => ({
+        id: m.id,
+        // Use billing multiplier as capability proxy (higher cost = more capable)
+        // Fall back to built-in hints, then default of 50
+        score: m.billing
+          ? Math.min(m.billing.multiplier * 10, 100)
+          : (MODEL_CAPABILITY_HINTS[m.id] ?? 50),
+      }))
+      .sort((a, b) => b.score - a.score);
+  } catch {
+    // SDK discovery failed — fall back to defaultModel only
+    const config = loadConfig();
+    discoveredModels = [{ id: config.defaultModel, score: 65 }];
   }
 
-  resolvedTiers = result;
-  return result;
+  return discoveredModels;
+}
+
+/** Reset cached models (e.g. after client reconnect) */
+export function resetModelCache(): void {
+  discoveredModels = undefined;
 }
 
 /**
- * Classify a task description into a complexity tier.
+ * Select the best available model for a given task complexity.
+ * Discovers models from the Copilot SDK and picks based on capability —
+ * zero configuration required.
  */
-export function classifyComplexity(taskDescription: string): Tier {
-  const lower = taskDescription.toLowerCase();
+export async function selectModel(complexity: TaskComplexity): Promise<string> {
+  const config = loadConfig();
+  const scored = await discoverModels();
 
-  const highScore = HIGH_KEYWORDS.filter((kw) => lower.includes(kw)).length;
-  const lowScore = LOW_KEYWORDS.filter((kw) => lower.includes(kw)).length;
+  if (scored.length === 0) return config.defaultModel;
 
-  // Strong signals
-  if (highScore >= 2) return "high";
-  if (lowScore >= 2) return "low";
+  if (complexity === "high") {
+    // Most capable model
+    return scored[0].id;
+  }
 
-  // Weak signals
-  if (highScore > lowScore) return "high";
-  if (lowScore > highScore) return "low";
+  if (complexity === "low") {
+    // Cheapest model
+    return scored[scored.length - 1].id;
+  }
 
-  // Default to medium for ambiguous tasks
+  // Medium — pick a model around the middle of the ranked list
+  const midIdx = Math.floor(scored.length / 2);
+  return scored[midIdx].id;
+}
+
+export function classifyComplexity(task: string): TaskComplexity {
+  const lower = task.toLowerCase();
+
+  const highPatterns = [
+    "architect",
+    "design system",
+    "refactor",
+    "security audit",
+    "performance optimization",
+    "migration",
+    "complex",
+    "deep analysis",
+    "debug",
+    "race condition",
+  ];
+  if (highPatterns.some((p) => lower.includes(p))) return "high";
+
+  const lowPatterns = [
+    "format",
+    "rename",
+    "typo",
+    "simple",
+    "lookup",
+    "list",
+    "read",
+    "status",
+    "check",
+  ];
+  if (lowPatterns.some((p) => lower.includes(p))) return "low";
+
   return "medium";
-}
-
-/**
- * Get the resolved model for a tier.
- */
-export function getModelForTier(tier: Tier): string {
-  if (!resolvedTiers) {
-    console.error("[io] Warning: model tiers not yet resolved, using defaults");
-    return config.defaultModel || DEFAULT_TIERS[tier][0];
-  }
-  return resolvedTiers[tier];
-}
-
-/**
- * Get the best model for a task based on its description.
- * If squadModel is provided, it always takes priority.
- */
-export function getModelForTask(taskDescription: string, squadModel?: string | null): string {
-  if (squadModel) return squadModel;
-  const tier = classifyComplexity(taskDescription);
-  const model = getModelForTier(tier);
-  console.error(`[io] Task classified as "${tier}" → model: ${model}`);
-  return model;
 }

@@ -20,6 +20,9 @@ jobs:
       - name: Install
         run: npm ci && npm ci --prefix web
 
+      - name: Type check (backend)
+        run: npx tsc --noEmit
+
       - name: Type check (Vue)
         run: npx vue-tsc --noEmit -p web/tsconfig.json
 
@@ -27,4 +30,4 @@ jobs:
         run: npm test
 
       - name: Build
-        run: npm run build
+        run: npm run build:all
