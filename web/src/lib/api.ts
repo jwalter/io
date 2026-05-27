@@ -3,9 +3,25 @@ import { router } from "@/router";
 
 const BASE_URL = "/api";
 
+function isTokenExpired(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    // Consider expired if within 60 seconds of expiry
+    return payload.exp * 1000 <= Date.now() + 60_000;
+  } catch {
+    return true;
+  }
+}
+
 async function getHeaders(): Promise<HeadersInit> {
   const auth = useAuthStore();
   const headers: HeadersInit = { "Content-Type": "application/json" };
+
+  // Proactively refresh if token is expired or about to expire
+  if (auth.token && isTokenExpired(auth.token)) {
+    await auth.refreshToken();
+  }
+
   if (auth.token) {
     headers["Authorization"] = `Bearer ${auth.token}`;
   }

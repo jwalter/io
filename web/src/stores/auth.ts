@@ -60,7 +60,12 @@ export const useAuthStore = defineStore("auth", () => {
     const supabase = getSupabase();
     if (!supabase) return;
     const { data, error } = await supabase.auth.refreshSession();
-    if (error || !data.session) return;
+    if (error || !data.session) {
+      // Clear stale token so downstream code knows auth is gone
+      token.value = null;
+      localStorage.removeItem("io_token");
+      return;
+    }
     token.value = data.session.access_token;
     localStorage.setItem("io_token", data.session.access_token);
   }

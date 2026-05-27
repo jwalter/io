@@ -16,6 +16,11 @@ async function bootstrap() {
   const auth = useAuthStore();
   auth.initAuthListener();
 
+  // Proactively refresh token on startup to avoid stale JWT from localStorage
+  if (auth.token) {
+    await auth.refreshToken();
+  }
+
   app.mount("#app");
 }
 
