@@ -9,7 +9,20 @@ export interface SearchResult {
 }
 
 export async function searchPages(query: string): Promise<SearchResult[]> {
-  if (!existsSync(PATHS.wikiPages)) return [];
+  return searchInDirectory(PATHS.wikiPages, query);
+}
+
+/**
+ * Search wiki pages within a specific subfolder (e.g., "squads/my-squad").
+ * Results have paths relative to the subfolder.
+ */
+export async function searchSquadPages(query: string, subdir: string): Promise<SearchResult[]> {
+  const root = join(PATHS.wikiPages, subdir);
+  return searchInDirectory(root, query);
+}
+
+function searchInDirectory(root: string, query: string): SearchResult[] {
+  if (!existsSync(root)) return [];
 
   const results: SearchResult[] = [];
   const lower = query.toLowerCase();
@@ -39,6 +52,6 @@ export async function searchPages(query: string): Promise<SearchResult[]> {
     }
   };
 
-  walk(PATHS.wikiPages, "");
+  walk(root, "");
   return results;
 }

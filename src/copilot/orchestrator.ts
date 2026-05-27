@@ -6,6 +6,7 @@ import { loadConfig } from "../config.js";
 import { buildSystemMessage } from "./system-message.js";
 import { createTools } from "./tools.js";
 import { loadSkillDirectories } from "./skills.js";
+import { getMcpServersForSession } from "../mcp/registry.js";
 import { resetClient } from "./client.js";
 import { addAuditEntry } from "../store/audit-log.js";
 
@@ -73,6 +74,7 @@ async function createOrResumeSession(
     systemMessage: { content: systemMessage },
     tools,
     skillDirectories: skillDirs,
+    mcpServers: getMcpServersForSession(),
     onPermissionRequest: approveAll,
     infiniteSessions: {
       enabled: true,

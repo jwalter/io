@@ -11,6 +11,9 @@ import { attachTokenTracker } from "./token-tracker.js";
 import { addAuditEntry } from "../store/audit-log.js";
 import { addAgentEvent } from "../store/agent-events.js";
 import { PATHS } from "../paths.js";
+import { createSquadTools } from "./squad-tools.js";
+import { loadSkillDirectories } from "./skills.js";
+import { getMcpServersForSession } from "../mcp/registry.js";
 
 // Registry of active agent sessions keyed by task ID
 const activeSessions = new Map<string, CopilotSession>();
@@ -48,6 +51,8 @@ export async function delegateTask(
     throw new Error("Squad has no team lead. Add a lead agent first.");
   }
 
+  const squad = getSquad(squadId);
+  const squadSlug = squad?.slug ?? squadId;
   const agents = getAgentsForSquad(squadId);
   const taskRecord = createTask(squadId, task, instanceId, lead.id);
 
@@ -110,11 +115,19 @@ ${lead.persona ? `## Personality:\n${lead.persona}` : ""}
 
   let result: string;
   try {
+    // Load squad-scoped tools, skills, and MCP servers
+    const squadTools = createSquadTools(squadSlug, squadId);
+    const skillDirs = await loadSkillDirectories();
+    const mcpServers = getMcpServersForSession();
+
     const session = await client.createSession({
       model,
       streaming: true,
       workingDirectory: process.cwd(),
       systemMessage: { content: systemMessage },
+      tools: squadTools,
+      skillDirectories: skillDirs,
+      mcpServers,
       onPermissionRequest: approveAll,
       infiniteSessions: {
         enabled: true,
@@ -213,8 +226,7 @@ ${lead.persona ? `## Personality:\n${lead.persona}` : ""}
   });
 
   // Post to feed
-  const squad = getSquad(squadId);
-  const squadSource = squad ? `squad-${squad.slug}` : `squad-${squadId}`;
+  const squadSource = `squad-${squadSlug}`;
   postFeedItem(
     squadSource,
     `Task completed by ${lead.character_name}`,
