@@ -19,7 +19,7 @@ import {
 } from "../store/feed.js";
 import { listSchedules, createSchedule, deleteSchedule, toggleSchedule } from "../store/schedules.js";
 import { listServers, toggleMcpServer, addMcpServer, removeMcpServer } from "../mcp/index.js";
-import { listSkills, addSkill, createSkill, removeSkill, getSkillContent, updateSkillContent } from "../copilot/skills.js";
+import { listSkills, addSkill, createSkill, removeSkill, getSkillContent, updateSkillContent, discoverSkills, installFromSource, fetchRemoteSkillPreview } from "../copilot/skills.js";
 import { readPage, writePage, deletePage, listPages, listTemplates, readTemplate, writeTemplate, deleteTemplate } from "../wiki/fs.js";
 import { searchPages } from "../wiki/search.js";
 import { getBacklinks } from "../wiki/backlinks.js";
@@ -292,17 +292,57 @@ export async function startApiServer(config: Config): Promise<void> {
     res.json(skills);
   });
 
+  app.get("/api/skills/discover", async (req, res) => {
+    const source = req.query.source as string;
+    if (source !== "awesome-copilot" && source !== "skillssh") {
+      res.status(400).json({ error: "source must be 'awesome-copilot' or 'skillssh'" });
+      return;
+    }
+    const q = req.query.q as string | undefined;
+    try {
+      const skills = await discoverSkills(source, q);
+      res.json(skills);
+    } catch (err: any) {
+      res.status(502).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/skills/preview", async (req, res) => {
+    const source = req.query.source as string;
+    const slug = req.query.slug as string;
+    if (source !== "awesome-copilot" && source !== "skillssh") {
+      res.status(400).json({ error: "source must be 'awesome-copilot' or 'skillssh'" });
+      return;
+    }
+    if (!slug) {
+      res.status(400).json({ error: "slug is required" });
+      return;
+    }
+    try {
+      const content = await fetchRemoteSkillPreview(source, slug);
+      res.json({ content });
+    } catch (err: any) {
+      res.status(502).json({ error: err.message });
+    }
+  });
+
   app.post("/api/skills", async (req, res) => {
     try {
-      const { url, slug, content } = req.body;
-      if (url && typeof url === "string") {
+      const { url, source, slug, content } = req.body;
+      if (source && slug) {
+        if (source !== "awesome-copilot" && source !== "skillssh") {
+          res.status(400).json({ error: "source must be 'awesome-copilot' or 'skillssh'" });
+          return;
+        }
+        await installFromSource(source, slug);
+      } else if (url && typeof url === "string") {
         // Git-clone method
         await addSkill(url);
       } else if (slug && typeof slug === "string" && content && typeof content === "string") {
         // Direct-creation method
         await createSkill(slug, content);
       } else {
-        res.status(400).json({ error: "Provide either 'url' (git clone) or 'slug' + 'content' (direct create)" });
+        res.status(400).json({ error: "Provide 'url' (git clone), 'source' + 'slug' (community install), or 'slug' + 'content' (direct create)" });
         return;
       }
       res.status(201).json({ ok: true });
