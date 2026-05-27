@@ -37,6 +37,11 @@ Every squad MUST have:
 ## GitHub Self-Review Limitation
 All squad agents share the repo owner's gh identity. GitHub blocks self-approval. Veto reviewers use --comment with "LGTM" instead of --approve. Merge criteria: all veto-capable members have posted approving comments + CI passes + no conflicts.
 ${selfEditBlock}
+## Source Code Convention
+- All repositories are cloned to ~/source/{owner}/{repo}
+- When creating a squad with a repo_url, the repo is automatically cloned there
+- When working with a squad's code, always use ~/source/{owner}/{repo} as the working directory
+
 ## Environment
 - OS: ${process.platform}
 - Working directory: ${process.cwd()}

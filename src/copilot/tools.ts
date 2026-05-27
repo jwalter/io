@@ -75,7 +75,38 @@ export function createTools(): Tool<any>[] {
       handler: async ({ name, universe, repo_url }) => {
         const { createSquad } = await import("../store/squads.js");
         const squad = createSquad(name, universe, repo_url);
-        return `Squad "${name}" created with universe "${universe}". ID: ${squad.id}, Slug: ${squad.slug}. Wiki path: ~/.io/wiki/squads/${squad.slug}/`;
+        let cloneMsg = "";
+
+        if (repo_url) {
+          const { execSync } = await import("node:child_process");
+          const { homedir } = await import("node:os");
+          const { existsSync, mkdirSync } = await import("node:fs");
+          const { join } = await import("node:path");
+
+          // Extract owner/repo from URL (supports https and git@ formats)
+          const match = repo_url.match(/[/:]([^/]+)\/([^/.]+?)(?:\.git)?$/);
+          if (match) {
+            const [, owner, repo] = match;
+            const sourceDir = join(homedir(), "source", owner, repo);
+            if (!existsSync(sourceDir)) {
+              const parentDir = join(homedir(), "source", owner);
+              if (!existsSync(parentDir)) mkdirSync(parentDir, { recursive: true });
+              try {
+                execSync(`git clone ${repo_url} ${sourceDir}`, {
+                  encoding: "utf-8",
+                  timeout: 120_000,
+                });
+                cloneMsg = ` Repo cloned to ~/source/${owner}/${repo}.`;
+              } catch (err: any) {
+                cloneMsg = ` (Clone failed: ${err.stderr?.trim() || err.message})`;
+              }
+            } else {
+              cloneMsg = ` Repo already exists at ~/source/${owner}/${repo}.`;
+            }
+          }
+        }
+
+        return `Squad "${name}" created with universe "${universe}". ID: ${squad.id}, Slug: ${squad.slug}. Wiki path: ~/.io/wiki/squads/${squad.slug}/${cloneMsg}`;
       },
     }),
 
@@ -314,60 +345,7 @@ export function createTools(): Tool<any>[] {
     }),
 
     // --- Web Tools ---
-    defineTool("web_search", {
-      description:
-        "Search the web for information. Returns relevant results with titles, URLs, and snippets.",
-      parameters: z.object({
-        query: z.string().describe("Search query"),
-      }),
-      handler: async ({ query }) => {
-        const { execSync } = await import("node:child_process");
-        try {
-          // Use ddgr (DuckDuckGo CLI) if available, otherwise fall back to a curl-based approach
-          const output = execSync(
-            `ddgr --json --num 5 ${JSON.stringify(query)}`,
-            { encoding: "utf-8", timeout: 15_000 }
-          );
-          return output.trim();
-        } catch {
-          // Fallback: use DuckDuckGo HTML lite
-          try {
-            const encoded = encodeURIComponent(query);
-            const output = execSync(
-              `curl -sL "https://lite.duckduckgo.com/lite/?q=${encoded}" | grep -oP '(?<=<a rel="nofollow" href=")[^"]+' | head -10`,
-              { encoding: "utf-8", timeout: 15_000 }
-            );
-            return output.trim() || "No results found.";
-          } catch {
-            return "Web search unavailable. Try using shell_exec with curl to fetch a specific URL.";
-          }
-        }
-      },
-    }),
-
-    defineTool("web_fetch", {
-      description:
-        "Fetch the content of a web page or API endpoint. Returns the response body (truncated to 50KB).",
-      parameters: z.object({
-        url: z.string().describe("URL to fetch"),
-        headers: z.record(z.string(), z.string()).optional().describe("Optional HTTP headers"),
-      }),
-      handler: async ({ url, headers }) => {
-        try {
-          const headerArgs = headers
-            ? Object.entries(headers).map(([k, v]) => `-H "${k}: ${v}"`).join(" ")
-            : "";
-          const { execSync } = await import("node:child_process");
-          const output = execSync(
-            `curl -sL --max-time 30 ${headerArgs} ${JSON.stringify(url)}`,
-            { encoding: "utf-8", timeout: 35_000, maxBuffer: 1024 * 1024 }
-          );
-          // Truncate to 50KB
-          return output.length > 50_000 ? output.slice(0, 50_000) + "\n...(truncated)" : output;
-        } catch (err: any) {
-          return `Error fetching URL: ${err.message}`;
-        }
-      },
-    }),
+    // NOTE: web_search and web_fetch are provided by the Copilot SDK as built-in tools.
+    // Do not define them here to avoid conflicts.
   ];
 }
