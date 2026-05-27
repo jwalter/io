@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, nextTick, onMounted } from "vue";
+import { ref, nextTick, onMounted, watch } from "vue";
 import { useChatStore } from "@/stores/chat";
 import { Send, Square } from "lucide-vue-next";
 import MarkdownContent from "@/components/MarkdownContent.vue";
@@ -13,8 +13,6 @@ async function send() {
   if (!text || chat.isStreaming) return;
   input.value = "";
   await chat.sendMessage(text);
-  await nextTick();
-  scrollToBottom();
 }
 
 function scrollToBottom() {
@@ -29,6 +27,24 @@ function handleKeydown(e: KeyboardEvent) {
     send();
   }
 }
+
+// Auto-scroll whenever messages change (new message, streaming content updates)
+watch(
+  () => chat.messages.map((m) => m.content),
+  async () => {
+    await nextTick();
+    scrollToBottom();
+  },
+  { deep: true }
+);
+
+watch(
+  () => chat.messages.length,
+  async () => {
+    await nextTick();
+    scrollToBottom();
+  }
+);
 
 onMounted(() => scrollToBottom());
 </script>
