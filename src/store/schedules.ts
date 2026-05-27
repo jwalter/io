@@ -56,6 +56,26 @@ export function toggleSchedule(id: string, enabled: boolean): void {
   db.prepare("UPDATE schedules SET enabled = ? WHERE id = ?").run(enabled ? 1 : 0, id);
 }
 
+export function updateSchedule(
+  id: string,
+  input: { cron?: string; agenda?: string; prompt?: string; enabled?: boolean }
+): Schedule {
+  const db = getDb();
+  const fields: string[] = [];
+  const params: any[] = [];
+
+  if (input.cron !== undefined) { fields.push("cron = ?"); params.push(input.cron); }
+  if (input.agenda !== undefined) { fields.push("agenda = ?"); params.push(input.agenda); }
+  if (input.prompt !== undefined) { fields.push("prompt = ?"); params.push(input.prompt); }
+  if (input.enabled !== undefined) { fields.push("enabled = ?"); params.push(input.enabled ? 1 : 0); }
+
+  if (fields.length > 0) {
+    params.push(id);
+    db.prepare(`UPDATE schedules SET ${fields.join(", ")} WHERE id = ?`).run(...params);
+  }
+  return db.prepare("SELECT * FROM schedules WHERE id = ?").get(id) as Schedule;
+}
+
 export function deleteSchedule(id: string): void {
   const db = getDb();
   db.prepare("DELETE FROM schedules WHERE id = ?").run(id);

@@ -269,6 +269,22 @@ export function createTools(): Tool<any>[] {
       },
     }),
 
+    defineTool("schedule_update", {
+      description: "Update an existing schedule's cron, agenda, prompt, or enabled status",
+      parameters: z.object({
+        id: z.string().describe("Schedule ID to update"),
+        cron: z.string().optional().describe("New cron expression"),
+        agenda: z.string().optional().describe("New agenda text"),
+        prompt: z.string().optional().describe("New prompt text"),
+        enabled: z.boolean().optional().describe("Enable or disable the schedule"),
+      }),
+      handler: async ({ id, cron, agenda, prompt, enabled }) => {
+        const { updateSchedule } = await import("../store/schedules.js");
+        const schedule = updateSchedule(id, { cron, agenda, prompt, enabled });
+        return `Schedule ${id} updated. Cron: ${schedule.cron}, Enabled: ${!!schedule.enabled}`;
+      },
+    }),
+
     // --- Shell Tool ---
     defineTool("shell_exec", {
       description:
