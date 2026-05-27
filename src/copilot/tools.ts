@@ -208,5 +208,33 @@ export function createTools(): Tool<any>[] {
         return `Schedule created: ${schedule.id}`;
       },
     }),
+
+    // --- Shell Tool ---
+    defineTool("shell_exec", {
+      description:
+        "Execute a shell command on the host machine. Use for git, gh CLI, file operations, etc. Commands run in the user's environment with their credentials.",
+      parameters: z.object({
+        command: z.string().describe("Shell command to execute"),
+        cwd: z.string().optional().describe("Working directory (defaults to home directory)"),
+      }),
+      handler: async ({ command, cwd }) => {
+        const { execSync } = await import("node:child_process");
+        const { homedir } = await import("node:os");
+        try {
+          const output = execSync(command, {
+            cwd: cwd ?? homedir(),
+            encoding: "utf-8",
+            timeout: 60_000,
+            maxBuffer: 1024 * 1024,
+            env: { ...process.env, GH_PROMPT_DISABLED: "1" },
+          });
+          return output.trim() || "(no output)";
+        } catch (err: any) {
+          const stderr = err.stderr?.toString().trim() ?? "";
+          const stdout = err.stdout?.toString().trim() ?? "";
+          return `Error (exit ${err.status}): ${stderr || stdout || err.message}`;
+        }
+      },
+    }),
   ];
 }
