@@ -55,11 +55,11 @@ onMounted(() => scrollToBottom());
           class="max-w-[75%] rounded-lg px-4 py-2 text-sm"
           :class="
             msg.role === 'user'
-              ? 'bg-primary text-primary-foreground'
+              ? 'bg-blue-600 text-white'
               : 'bg-muted text-foreground'
           "
         >
-          <MarkdownContent v-if="msg.content" :content="msg.content" />
+          <MarkdownContent v-if="msg.content" :content="msg.content" :class="msg.role === 'user' ? 'prose-invert' : ''" />
           <span v-else class="text-muted-foreground">...</span>
           <div
             v-if="msg.streaming"
