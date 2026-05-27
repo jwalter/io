@@ -9,6 +9,25 @@ export const useAuthStore = defineStore("auth", () => {
 
   const isAuthenticated = computed(() => !!token.value);
 
+  // Listen for Supabase auth state changes (handles automatic token refresh)
+  function initAuthListener(): void {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        token.value = session.access_token;
+        email.value = session.user?.email ?? null;
+        localStorage.setItem("io_token", session.access_token);
+        if (session.user?.email) localStorage.setItem("io_email", session.user.email);
+      } else {
+        token.value = null;
+        email.value = null;
+        localStorage.removeItem("io_token");
+        localStorage.removeItem("io_email");
+      }
+    });
+  }
+
   async function login(emailInput: string, password: string): Promise<void> {
     const supabase = getSupabase();
     if (!supabase) throw new Error("Auth not configured");
@@ -40,12 +59,11 @@ export const useAuthStore = defineStore("auth", () => {
   async function refreshToken(): Promise<void> {
     const supabase = getSupabase();
     if (!supabase) return;
-    const { data } = await supabase.auth.getSession();
-    if (data.session) {
-      token.value = data.session.access_token;
-      localStorage.setItem("io_token", data.session.access_token);
-    }
+    const { data, error } = await supabase.auth.refreshSession();
+    if (error || !data.session) return;
+    token.value = data.session.access_token;
+    localStorage.setItem("io_token", data.session.access_token);
   }
 
-  return { token, email, loading, isAuthenticated, login, logout, refreshToken };
+  return { token, email, loading, isAuthenticated, login, logout, refreshToken, initAuthListener };
 });

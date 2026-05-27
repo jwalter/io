@@ -10,6 +10,12 @@ async function bootstrap() {
   const app = createApp(App);
   app.use(createPinia());
   app.use(router);
+
+  // Start listening for auth state changes (token refresh, etc.)
+  const { useAuthStore } = await import("./stores/auth");
+  const auth = useAuthStore();
+  auth.initAuthListener();
+
   app.mount("#app");
 }
 

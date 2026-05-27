@@ -1,4 +1,5 @@
 import { useAuthStore } from "@/stores/auth";
+import { router } from "@/router";
 
 const BASE_URL = "/api";
 
@@ -11,37 +12,66 @@ async function getHeaders(): Promise<HeadersInit> {
   return headers;
 }
 
+async function handleResponse(res: Response, retryFn: () => Promise<Response>): Promise<Response> {
+  if (res.status === 401) {
+    const auth = useAuthStore();
+    try {
+      await auth.refreshToken();
+      if (auth.token) {
+        // Retry the request with the new token
+        const retryRes = await retryFn();
+        if (retryRes.status === 401) {
+          auth.logout();
+          router.push("/login");
+          throw new Error("Session expired");
+        }
+        return retryRes;
+      }
+    } catch {
+      // Refresh failed
+    }
+    auth.logout();
+    router.push("/login");
+    throw new Error("Session expired");
+  }
+  return res;
+}
+
 export async function apiGet<T = any>(path: string): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, { headers: await getHeaders() });
+  const res = await handleResponse(
+    await fetch(`${BASE_URL}${path}`, { headers: await getHeaders() }),
+    async () => fetch(`${BASE_URL}${path}`, { headers: await getHeaders() })
+  );
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
 
 export async function apiPost<T = any>(path: string, body?: any): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    method: "POST",
-    headers: await getHeaders(),
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  const opts = { method: "POST", headers: await getHeaders(), body: body ? JSON.stringify(body) : undefined };
+  const res = await handleResponse(
+    await fetch(`${BASE_URL}${path}`, opts),
+    async () => fetch(`${BASE_URL}${path}`, { ...opts, headers: await getHeaders() })
+  );
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
 
 export async function apiPut<T = any>(path: string, body?: any): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    method: "PUT",
-    headers: await getHeaders(),
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  const opts = { method: "PUT", headers: await getHeaders(), body: body ? JSON.stringify(body) : undefined };
+  const res = await handleResponse(
+    await fetch(`${BASE_URL}${path}`, opts),
+    async () => fetch(`${BASE_URL}${path}`, { ...opts, headers: await getHeaders() })
+  );
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
 
 export async function apiDelete<T = any>(path: string): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    method: "DELETE",
-    headers: await getHeaders(),
-  });
+  const opts = { method: "DELETE", headers: await getHeaders() };
+  const res = await handleResponse(
+    await fetch(`${BASE_URL}${path}`, opts),
+    async () => fetch(`${BASE_URL}${path}`, { ...opts, headers: await getHeaders() })
+  );
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
