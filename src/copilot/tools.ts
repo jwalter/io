@@ -75,7 +75,7 @@ export function createTools(): Tool<any>[] {
       handler: async ({ name, universe, repo_url }) => {
         const { createSquad } = await import("../store/squads.js");
         const squad = createSquad(name, universe, repo_url);
-        return `Squad "${name}" created with universe "${universe}". ID: ${squad.id}`;
+        return `Squad "${name}" created with universe "${universe}". ID: ${squad.id}, Slug: ${squad.slug}. Wiki path: ~/.io/wiki/squads/${squad.slug}/`;
       },
     }),
 

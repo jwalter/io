@@ -121,6 +121,20 @@ function runMigrations(db: Database.Database): void {
     `);
     setSchemaVersion(db, 1);
   }
+
+  if (version < 2) {
+    db.exec(`
+      ALTER TABLE squads ADD COLUMN slug TEXT;
+    `);
+    // Backfill slugs for existing squads
+    const squads = db.prepare("SELECT id, name FROM squads WHERE slug IS NULL").all() as { id: string; name: string }[];
+    const update = db.prepare("UPDATE squads SET slug = ? WHERE id = ?");
+    for (const s of squads) {
+      const slug = s.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      update.run(slug || s.id, s.id);
+    }
+    setSchemaVersion(db, 2);
+  }
 }
 
 function getSchemaVersion(db: Database.Database): number {

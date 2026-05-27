@@ -4,6 +4,7 @@ import { getDb } from "./db.js";
 export interface Squad {
   id: string;
   name: string;
+  slug: string;
   universe: string;
   repo_url: string | null;
   rules: string;
@@ -31,9 +32,10 @@ export function createSquad(
 ): Squad {
   const db = getDb();
   const id = randomUUID();
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   db.prepare(
-    "INSERT INTO squads (id, name, universe, repo_url) VALUES (?, ?, ?, ?)"
-  ).run(id, name, universe, repoUrl ?? null);
+    "INSERT INTO squads (id, name, slug, universe, repo_url) VALUES (?, ?, ?, ?, ?)"
+  ).run(id, name, slug, universe, repoUrl ?? null);
 
   return db.prepare("SELECT * FROM squads WHERE id = ?").get(id) as Squad;
 }
