@@ -7,6 +7,7 @@ import { createTask, updateTaskStatus } from "../store/tasks.js";
 import { touchInstanceActivity } from "../store/instances.js";
 import { selectModel, classifyComplexity } from "./model-router.js";
 import { postFeedItem } from "../store/feed.js";
+import { addAuditEntry } from "../store/audit-log.js";
 import { addAgentEvent } from "../store/agent-events.js";
 import { PATHS } from "../paths.js";
 
@@ -34,6 +35,14 @@ export async function delegateTask(
   // Select model based on task complexity
   const tier = classifyComplexity(task);
   const model = await selectModel(tier);
+
+  // Audit: task delegated
+  addAuditEntry(
+    "task_delegated",
+    `Task delegated to ${lead.character_name} (${lead.role_title})`,
+    { task: task.slice(0, 500), model },
+    { squad_id: squadId, agent_id: lead.id, task_id: taskRecord.id }
+  );
 
   // Create ephemeral agent session for the lead
   const client = await getClient();
@@ -137,12 +146,27 @@ ${lead.persona ? `## Personality:\n${lead.persona}` : ""}
     addAgentEvent(taskRecord.id, "status", `Task failed: ${errMsg}`, { error: errMsg });
     updateTaskStatus(taskRecord.id, "failed", errMsg);
     updateAgentStatus(lead.id, "idle");
+    // Audit: task failed
+    addAuditEntry(
+      "task_failed",
+      `Task failed: ${errMsg.slice(0, 200)}`,
+      { error: errMsg },
+      { squad_id: squadId, agent_id: lead.id, task_id: taskRecord.id }
+    );
     throw err;
   }
 
   // Update task and agent status
   updateTaskStatus(taskRecord.id, "done", result);
   updateAgentStatus(lead.id, "idle");
+
+  // Audit: task completed
+  addAuditEntry(
+    "task_completed",
+    `Task completed by ${lead.character_name}`,
+    { result: result.slice(0, 500) },
+    { squad_id: squadId, agent_id: lead.id, task_id: taskRecord.id }
+  );
 
   // Record completion event
   addAgentEvent(taskRecord.id, "status", `Task completed by ${lead.character_name}`, {
