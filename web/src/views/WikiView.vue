@@ -3,6 +3,7 @@ import { ref, onMounted } from "vue";
 import { apiGet, apiPut, apiDelete } from "@/lib/api";
 import { BookOpen, Search, Plus, Pencil, Trash2, Save, X } from "lucide-vue-next";
 import MarkdownContent from "@/components/MarkdownContent.vue";
+import WikiTree from "@/components/WikiTree.vue";
 
 const pages = ref<string[]>([]);
 const selectedPage = ref<string | null>(null);
@@ -69,11 +70,6 @@ async function createPage() {
   editMode.value = true;
 }
 
-const filteredPages = () => {
-  if (!searchQuery.value) return pages.value;
-  const q = searchQuery.value.toLowerCase();
-  return pages.value.filter((p) => p.toLowerCase().includes(q));
-};
 </script>
 
 <template>
@@ -122,15 +118,13 @@ const filteredPages = () => {
       </div>
       <div class="flex-1 overflow-y-auto p-2">
         <div v-if="loading" class="text-xs text-muted-foreground p-2">Loading...</div>
-        <button
-          v-for="page in filteredPages()"
-          :key="page"
-          @click="selectPage(page)"
-          class="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-accent truncate transition-colors"
-          :class="{ 'bg-accent font-medium': selectedPage === page }"
-        >
-          📄 {{ page }}
-        </button>
+        <WikiTree
+          v-else
+          :pages="pages"
+          :selected-page="selectedPage"
+          :search-query="searchQuery"
+          @select="selectPage($event)"
+        />
       </div>
     </div>
 
