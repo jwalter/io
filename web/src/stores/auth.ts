@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
-import { supabase } from "@/lib/supabase";
+import { getSupabase } from "@/lib/supabase";
 
 export const useAuthStore = defineStore("auth", () => {
   const token = ref<string | null>(localStorage.getItem("io_token"));
@@ -10,6 +10,7 @@ export const useAuthStore = defineStore("auth", () => {
   const isAuthenticated = computed(() => !!token.value);
 
   async function login(emailInput: string, password: string): Promise<void> {
+    const supabase = getSupabase();
     if (!supabase) throw new Error("Auth not configured");
     loading.value = true;
     try {
@@ -28,6 +29,7 @@ export const useAuthStore = defineStore("auth", () => {
   }
 
   async function logout(): Promise<void> {
+    const supabase = getSupabase();
     if (supabase) await supabase.auth.signOut();
     token.value = null;
     email.value = null;
@@ -36,6 +38,7 @@ export const useAuthStore = defineStore("auth", () => {
   }
 
   async function refreshToken(): Promise<void> {
+    const supabase = getSupabase();
     if (!supabase) return;
     const { data } = await supabase.auth.getSession();
     if (data.session) {

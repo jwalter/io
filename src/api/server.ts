@@ -48,6 +48,15 @@ export async function startApiServer(config: Config): Promise<void> {
 
   // Auth middleware for all API routes
   const auth = createAuthMiddleware(config);
+
+  // Public endpoint — serves Supabase config to the frontend (no auth required)
+  app.get("/api/auth/config", (_req, res) => {
+    res.json({
+      supabaseUrl: config.supabaseUrl ?? null,
+      supabaseAnonKey: config.supabaseAnonKey ?? null,
+    });
+  });
+
   app.use("/api", auth);
 
   // --- SSE Stream ---
