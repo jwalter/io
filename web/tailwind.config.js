@@ -34,11 +34,24 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        brand: {
+          red: "#D83333",
+          magenta: "#E43A9C",
+          violet: "#F041FF",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+      },
+      backgroundImage: {
+        "gradient-brand":
+          "linear-gradient(135deg, hsl(var(--gradient-start)), hsl(var(--gradient-mid)), hsl(var(--gradient-end)))",
+      },
+      boxShadow: {
+        glow: "0 0 20px hsl(var(--gradient-mid) / 0.2)",
+        "glow-lg": "0 0 40px hsl(var(--gradient-mid) / 0.3)",
       },
     },
   },

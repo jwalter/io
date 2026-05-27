@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { useRoute } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import { useRouter } from "vue-router";
+import LogoIcon from "@/components/LogoIcon.vue";
 import {
   MessageSquare,
   Users,
@@ -64,13 +65,16 @@ async function logout() {
 <template>
   <aside class="w-64 border-r border-border bg-card flex flex-col h-full shrink-0">
     <!-- Logo -->
-    <div class="p-4 border-b border-border">
-      <h1 class="text-xl font-bold tracking-tight">🤖 IO</h1>
-      <p class="text-xs text-muted-foreground mt-1">Personal AI Assistant</p>
+    <div class="p-4 border-b border-border flex items-center gap-3">
+      <LogoIcon :size="28" />
+      <div>
+        <h1 class="text-lg font-bold tracking-tight bg-gradient-brand bg-clip-text text-transparent">IO</h1>
+        <p class="text-[10px] text-muted-foreground leading-none">Personal AI Assistant</p>
+      </div>
     </div>
 
     <!-- Navigation -->
-    <nav class="flex-1 p-2 space-y-1 overflow-y-auto">
+    <nav class="flex-1 p-2 space-y-0.5 overflow-y-auto">
       <router-link
         v-for="item in navItems"
         :key="item.path"
@@ -78,8 +82,8 @@ async function logout() {
         class="flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors"
         :class="[
           activeNavPath === item.path
-            ? 'bg-accent text-accent-foreground font-medium'
-            : 'text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground',
+            ? 'bg-primary/10 text-primary font-medium'
+            : 'text-muted-foreground hover:bg-accent hover:text-foreground',
         ]"
       >
         <component :is="item.icon" class="w-4 h-4" />
