@@ -65,6 +65,23 @@ export async function removeSkill(slug: string): Promise<void> {
   rmSync(dest, { recursive: true, force: true });
 }
 
+export async function getSkillContent(slug: string): Promise<string> {
+  const skillMd = join(PATHS.skills, slug, "SKILL.md");
+  if (!existsSync(skillMd)) {
+    throw new Error(`Skill "${slug}" not found.`);
+  }
+  return readFileSync(skillMd, "utf-8");
+}
+
+export async function updateSkillContent(slug: string, content: string): Promise<void> {
+  const { writeFileSync } = await import("node:fs");
+  const skillMd = join(PATHS.skills, slug, "SKILL.md");
+  if (!existsSync(join(PATHS.skills, slug))) {
+    throw new Error(`Skill "${slug}" not found.`);
+  }
+  writeFileSync(skillMd, content);
+}
+
 export async function loadSkillDirectories(): Promise<string[]> {
   if (!existsSync(PATHS.skills)) return [];
 
