@@ -146,7 +146,7 @@ export function createTools(): Tool<any>[] {
 
     defineTool("squad_delegate", {
       description:
-        "Delegate a task to a squad's team lead. The lead will break it down and route to specialists.",
+        "Delegate a task to a squad's team lead. The lead will break it down and route to specialists. Use this for direct execution without a planning meeting.",
       parameters: z.object({
         squad_id: z.string().describe("Squad ID"),
         task: z.string().describe("Detailed task description"),
@@ -156,6 +156,22 @@ export function createTools(): Tool<any>[] {
         const { delegateTask } = await import("./agents.js");
         const result = await delegateTask(squad_id, task, instance_id);
         return result;
+      },
+    }),
+
+    defineTool("squad_meeting", {
+      description:
+        "Trigger a planning meeting for a squad. All relevant specialists provide input before work begins. Use this for complex multi-agent tasks where team input improves the plan. Set execute_after=true to start work immediately after planning, or false to post the plan to the feed for user review.",
+      parameters: z.object({
+        squad_id: z.string().describe("Squad ID"),
+        task: z.string().describe("Detailed task description for the team to plan"),
+        execute_after: z
+          .boolean()
+          .describe("If true, execute the plan immediately after the meeting. If false, post plan to feed and wait for user approval."),
+      }),
+      handler: async ({ squad_id, task, execute_after }) => {
+        const { squadMeeting } = await import("./ceremonies.js");
+        return await squadMeeting(squad_id, task, execute_after);
       },
     }),
 
