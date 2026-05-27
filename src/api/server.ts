@@ -183,9 +183,9 @@ export async function startApiServer(config: Config): Promise<void> {
     res.json(pages);
   });
 
-  app.get("/api/wiki/page/*", async (req, res) => {
+  app.get("/api/wiki/page/*path", async (req, res) => {
     try {
-      const pagePath = (req.params as any)[0];
+      const pagePath = (req.params as any).path;
       const content = await readPage(pagePath);
       res.json({ path: pagePath, content });
     } catch (err: any) {
@@ -193,16 +193,16 @@ export async function startApiServer(config: Config): Promise<void> {
     }
   });
 
-  app.put("/api/wiki/page/*", async (req, res) => {
-    const pagePath = (req.params as any)[0];
+  app.put("/api/wiki/page/*path", async (req, res) => {
+    const pagePath = (req.params as any).path;
     const { content } = req.body;
     await writePage(pagePath, content);
     res.json({ ok: true });
   });
 
-  app.delete("/api/wiki/page/*", async (req, res) => {
+  app.delete("/api/wiki/page/*path", async (req, res) => {
     try {
-      const pagePath = (req.params as any)[0];
+      const pagePath = (req.params as any).path;
       await deletePage(pagePath);
       res.json({ ok: true });
     } catch (err: any) {
@@ -250,7 +250,7 @@ export async function startApiServer(config: Config): Promise<void> {
   });
 
   // SPA fallback — serve index.html for non-API routes
-  app.get("*", (_req, res) => {
+  app.get("*splat", (_req, res) => {
     res.sendFile(join(webDistPath, "index.html"));
   });
 
