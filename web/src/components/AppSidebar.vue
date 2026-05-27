@@ -15,6 +15,7 @@ import {
   History,
   Settings,
   LogOut,
+  BarChart3,
   ClipboardList,
 } from "lucide-vue-next";
 
@@ -28,6 +29,7 @@ const navItems = [
   { name: "Squads", icon: Users, path: "/squads" },
   { name: "Health", icon: Activity, path: "/squads/health" },
   { name: "Feed", icon: Inbox, path: "/feed" },
+  { name: "Usage", icon: BarChart3, path: "/usage" },
   { name: "Audit Log", icon: ClipboardList, path: "/audit-log" },
   { name: "Skills", icon: Puzzle, path: "/skills" },
   { name: "MCP Servers", icon: Server, path: "/mcp" },

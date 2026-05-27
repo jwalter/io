@@ -59,6 +59,11 @@ const routes = [
     component: () => import("@/views/WikiView.vue"),
   },
   {
+    path: "/usage",
+    name: "usage",
+    component: () => import("@/views/UsageView.vue"),
+  },
+  {
     path: "/audit-log",
     name: "audit-log",
     component: () => import("@/views/AuditLogView.vue"),

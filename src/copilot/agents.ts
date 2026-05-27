@@ -7,6 +7,7 @@ import { createTask, updateTaskStatus } from "../store/tasks.js";
 import { touchInstanceActivity } from "../store/instances.js";
 import { selectModel, classifyComplexity } from "./model-router.js";
 import { postFeedItem } from "../store/feed.js";
+import { attachTokenTracker } from "./token-tracker.js";
 import { addAuditEntry } from "../store/audit-log.js";
 import { addAgentEvent } from "../store/agent-events.js";
 import { PATHS } from "../paths.js";
@@ -96,6 +97,12 @@ ${lead.persona ? `## Personality:\n${lead.persona}` : ""}
       },
     });
 
+    const flushTokens = attachTokenTracker(session, {
+      squadId,
+      agentId: lead.id,
+      taskId: taskRecord.id,
+    });
+
     try {
       // Mark task as in progress and record start event
       updateTaskStatus(taskRecord.id, "in_progress");
@@ -139,6 +146,7 @@ ${lead.persona ? `## Personality:\n${lead.persona}` : ""}
         unsubscribeDelta();
       }
     } finally {
+      flushTokens();
       await session.disconnect();
     }
   } catch (err) {
