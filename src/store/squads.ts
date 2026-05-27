@@ -111,3 +111,8 @@ export function updateAgentStatus(agentId: string, status: string): void {
   const db = getDb();
   db.prepare("UPDATE agents SET status = ? WHERE id = ?").run(status, agentId);
 }
+
+export function removeAgent(agentId: string): void {
+  const db = getDb();
+  db.prepare("DELETE FROM agents WHERE id = ?").run(agentId);
+}

@@ -164,6 +164,30 @@ export function createTools(): Tool<any>[] {
       },
     }),
 
+    defineTool("squad_remove_agent", {
+      description: "Remove an agent from a squad",
+      parameters: z.object({
+        agent_id: z.string().describe("Agent ID to remove"),
+      }),
+      handler: async ({ agent_id }) => {
+        const { removeAgent } = await import("../store/squads.js");
+        removeAgent(agent_id);
+        return `Agent ${agent_id} removed.`;
+      },
+    }),
+
+    defineTool("squad_delete", {
+      description: "Delete an entire squad and all its agents, tasks, and instances",
+      parameters: z.object({
+        squad_id: z.string().describe("Squad ID to delete"),
+      }),
+      handler: async ({ squad_id }) => {
+        const { deleteSquad } = await import("../store/squads.js");
+        deleteSquad(squad_id);
+        return `Squad ${squad_id} deleted.`;
+      },
+    }),
+
     // --- Feed Tools ---
     defineTool("feed_post", {
       description: "Post a deliverable to the unified feed/inbox",
@@ -176,6 +200,19 @@ export function createTools(): Tool<any>[] {
         const { postFeedItem } = await import("../store/feed.js");
         const item = postFeedItem(source, title, content);
         return `Posted to feed: "${title}" (ID: ${item.id})`;
+      },
+    }),
+
+    defineTool("feed_list", {
+      description: "List feed/inbox items. Can filter by unread or source.",
+      parameters: z.object({
+        unread_only: z.boolean().optional().describe("Only show unread items"),
+        source: z.string().optional().describe("Filter by source"),
+        limit: z.number().optional().describe("Max items to return (default 20)"),
+      }),
+      handler: async ({ unread_only, source, limit }) => {
+        const { getFeedItems } = await import("../store/feed.js");
+        return getFeedItems({ unreadOnly: unread_only, source, limit: limit ?? 20 });
       },
     }),
 
@@ -209,6 +246,29 @@ export function createTools(): Tool<any>[] {
       },
     }),
 
+    defineTool("schedule_list", {
+      description: "List all schedules, optionally filtered by type",
+      parameters: z.object({
+        type: z.enum(["squad", "io"]).optional().describe("Filter by schedule type"),
+      }),
+      handler: async ({ type }) => {
+        const { listSchedules } = await import("../store/schedules.js");
+        return listSchedules(type);
+      },
+    }),
+
+    defineTool("schedule_delete", {
+      description: "Delete a schedule by ID",
+      parameters: z.object({
+        id: z.string().describe("Schedule ID to delete"),
+      }),
+      handler: async ({ id }) => {
+        const { deleteSchedule } = await import("../store/schedules.js");
+        deleteSchedule(id);
+        return `Schedule ${id} deleted.`;
+      },
+    }),
+
     // --- Shell Tool ---
     defineTool("shell_exec", {
       description:
@@ -233,6 +293,63 @@ export function createTools(): Tool<any>[] {
           const stderr = err.stderr?.toString().trim() ?? "";
           const stdout = err.stdout?.toString().trim() ?? "";
           return `Error (exit ${err.status}): ${stderr || stdout || err.message}`;
+        }
+      },
+    }),
+
+    // --- Web Tools ---
+    defineTool("web_search", {
+      description:
+        "Search the web for information. Returns relevant results with titles, URLs, and snippets.",
+      parameters: z.object({
+        query: z.string().describe("Search query"),
+      }),
+      handler: async ({ query }) => {
+        const { execSync } = await import("node:child_process");
+        try {
+          // Use ddgr (DuckDuckGo CLI) if available, otherwise fall back to a curl-based approach
+          const output = execSync(
+            `ddgr --json --num 5 ${JSON.stringify(query)}`,
+            { encoding: "utf-8", timeout: 15_000 }
+          );
+          return output.trim();
+        } catch {
+          // Fallback: use DuckDuckGo HTML lite
+          try {
+            const encoded = encodeURIComponent(query);
+            const output = execSync(
+              `curl -sL "https://lite.duckduckgo.com/lite/?q=${encoded}" | grep -oP '(?<=<a rel="nofollow" href=")[^"]+' | head -10`,
+              { encoding: "utf-8", timeout: 15_000 }
+            );
+            return output.trim() || "No results found.";
+          } catch {
+            return "Web search unavailable. Try using shell_exec with curl to fetch a specific URL.";
+          }
+        }
+      },
+    }),
+
+    defineTool("web_fetch", {
+      description:
+        "Fetch the content of a web page or API endpoint. Returns the response body (truncated to 50KB).",
+      parameters: z.object({
+        url: z.string().describe("URL to fetch"),
+        headers: z.record(z.string(), z.string()).optional().describe("Optional HTTP headers"),
+      }),
+      handler: async ({ url, headers }) => {
+        try {
+          const headerArgs = headers
+            ? Object.entries(headers).map(([k, v]) => `-H "${k}: ${v}"`).join(" ")
+            : "";
+          const { execSync } = await import("node:child_process");
+          const output = execSync(
+            `curl -sL --max-time 30 ${headerArgs} ${JSON.stringify(url)}`,
+            { encoding: "utf-8", timeout: 35_000, maxBuffer: 1024 * 1024 }
+          );
+          // Truncate to 50KB
+          return output.length > 50_000 ? output.slice(0, 50_000) + "\n...(truncated)" : output;
+        } catch (err: any) {
+          return `Error fetching URL: ${err.message}`;
         }
       },
     }),
