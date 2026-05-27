@@ -3,7 +3,13 @@ import type { Config } from "../config.js";
 
 export function createAuthMiddleware(config: Config) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    // All API routes require authentication
+    // Public endpoints that don't require auth
+    if (req.path === "/auth/config") {
+      next();
+      return;
+    }
+
+    // All other API routes require authentication
     const authHeader = req.headers.authorization;
 
     if (!authHeader?.startsWith("Bearer ")) {

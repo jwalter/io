@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import type { Config } from "../config.js";
+import { loadConfig, saveConfig } from "../config.js";
 import { createAuthMiddleware } from "./auth.js";
 import { sendToOrchestrator } from "../copilot/orchestrator.js";
 import { listSquads, getSquad, getAgentsForSquad } from "../store/squads.js";
@@ -250,6 +251,48 @@ export async function startApiServer(config: Config): Promise<void> {
 
   app.delete("/api/schedules/:id", (req, res) => {
     deleteSchedule(req.params.id);
+    res.json({ ok: true });
+  });
+
+  // --- Settings ---
+  app.get("/api/settings", (_req, res) => {
+    const current = loadConfig();
+    // Don't expose full Supabase key — mask it
+    res.json({
+      defaultModel: current.defaultModel,
+      port: current.port,
+      telegramEnabled: current.telegramEnabled,
+      telegramBotToken: current.telegramBotToken ? "••••••••" : "",
+      authorizedUserId: current.authorizedUserId ?? null,
+      supabaseUrl: current.supabaseUrl ?? "",
+      supabaseAnonKey: current.supabaseAnonKey ? "••••••••" : "",
+      authorizedEmail: current.authorizedEmail ?? "",
+      backgroundNotifyMode: current.backgroundNotifyMode,
+      backgroundNotifyTelegram: current.backgroundNotifyTelegram,
+      selfEditEnabled: current.selfEditEnabled,
+      watchdogEnabled: current.watchdogEnabled,
+    });
+  });
+
+  app.put("/api/settings", (req, res) => {
+    const updates: Partial<Config> = {};
+    const body = req.body;
+
+    // Only apply fields that are explicitly provided and not masked
+    if (body.defaultModel !== undefined) updates.defaultModel = body.defaultModel;
+    if (body.port !== undefined) updates.port = body.port;
+    if (body.telegramEnabled !== undefined) updates.telegramEnabled = body.telegramEnabled;
+    if (body.telegramBotToken && body.telegramBotToken !== "••••••••") updates.telegramBotToken = body.telegramBotToken;
+    if (body.authorizedUserId !== undefined) updates.authorizedUserId = body.authorizedUserId;
+    if (body.supabaseUrl !== undefined) updates.supabaseUrl = body.supabaseUrl;
+    if (body.supabaseAnonKey && body.supabaseAnonKey !== "••••••••") updates.supabaseAnonKey = body.supabaseAnonKey;
+    if (body.authorizedEmail !== undefined) updates.authorizedEmail = body.authorizedEmail;
+    if (body.backgroundNotifyMode !== undefined) updates.backgroundNotifyMode = body.backgroundNotifyMode;
+    if (body.backgroundNotifyTelegram !== undefined) updates.backgroundNotifyTelegram = body.backgroundNotifyTelegram;
+    if (body.selfEditEnabled !== undefined) updates.selfEditEnabled = body.selfEditEnabled;
+    if (body.watchdogEnabled !== undefined) updates.watchdogEnabled = body.watchdogEnabled;
+
+    saveConfig(updates);
     res.json({ ok: true });
   });
 
