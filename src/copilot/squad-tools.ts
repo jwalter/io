@@ -153,11 +153,28 @@ export function createSquadTools(squadSlug: string, squadId: string, repoUrl?: s
         }
 
         try {
+          // Ensure GitHub CLI auth is available — prefer GH_TOKEN from env,
+          // fall back to extracting from gh auth if available
+          const shellEnv: Record<string, string | undefined> = { ...process.env, GH_PROMPT_DISABLED: "1" };
+          if (!shellEnv.GH_TOKEN && !shellEnv.GITHUB_TOKEN) {
+            try {
+              const { stdout: token } = await execAsync("gh auth token", {
+                timeout: 5_000,
+                env: process.env,
+              });
+              if (token.trim()) {
+                shellEnv.GH_TOKEN = token.trim();
+              }
+            } catch {
+              // gh auth not available — agents won't be able to push
+            }
+          }
+
           const { stdout } = await execAsync(command, {
             cwd: workDir,
             timeout: 120_000,
             maxBuffer: 2 * 1024 * 1024,
-            env: { ...process.env, GH_PROMPT_DISABLED: "1" },
+            env: shellEnv,
           });
           return stdout.trim() || "(no output)";
         } catch (err: any) {
