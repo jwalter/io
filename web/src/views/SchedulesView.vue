@@ -26,7 +26,7 @@ const squads = ref<Squad[]>([]);
 const loading = ref(true);
 const tab = ref<"squad" | "io">("squad");
 const showAdd = ref(false);
-const newSchedule = ref({ type: "squad" as "squad" | "io", cron: "", squad_id: "", agenda: "triage", prompt: "" });
+const newSchedule = ref({ type: "squad" as "squad" | "io", cron: "", squad_id: "", prompt: "" });
 const triggeredId = ref<string | null>(null);
 
 onMounted(async () => {
@@ -50,12 +50,9 @@ async function addSchedule() {
     cron: newSchedule.value.cron,
     squad_id: newSchedule.value.squad_id,
   };
-  if (newSchedule.value.type === "squad") {
-    if (!newSchedule.value.squad_id) return;
-    body.agenda = newSchedule.value.agenda;
-  } else {
-    body.prompt = newSchedule.value.prompt;
-  }
+  if (!newSchedule.value.squad_id) return;
+  if (!newSchedule.value.prompt.trim()) return;
+  body.prompt = newSchedule.value.prompt;
   const schedule = await apiPost("/schedules", body);
   schedules.value.push(schedule);
   showAdd.value = false;
@@ -154,21 +151,13 @@ function getSquadName(squadId: string | null): string {
           </option>
         </select>
       </div>
-      <div v-if="newSchedule.type === 'squad'">
-        <label class="text-sm font-medium">Agenda</label>
-        <select v-model="newSchedule.agenda" class="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-          <option value="triage">Triage</option>
-          <option value="prioritize">Prioritize</option>
-          <option value="ideation">Ideation</option>
-        </select>
-      </div>
-      <div v-else>
+      <div>
         <label class="text-sm font-medium">Prompt</label>
-        <textarea v-model="newSchedule.prompt" rows="2" class="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"></textarea>
+        <textarea v-model="newSchedule.prompt" rows="3" placeholder="e.g. Triage issues, review PRs, ideate on features" class="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"></textarea>
       </div>
       <button
         @click="addSchedule"
-        :disabled="!newSchedule.squad_id"
+        :disabled="!newSchedule.squad_id || !newSchedule.prompt.trim()"
         class="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         Save
@@ -192,7 +181,7 @@ function getSquadName(squadId: string | null): string {
             </span>
           </div>
           <div class="text-xs text-muted-foreground mt-0.5">
-            {{ schedule.type === 'squad' ? `Agenda: ${schedule.agenda}` : schedule.prompt.slice(0, 60) }}
+            {{ schedule.prompt ? schedule.prompt.slice(0, 80) : '(no prompt)' }}
           </div>
           <div class="text-xs text-muted-foreground mt-0.5">
             Squad: {{ getSquadName(schedule.squad_id) }}
