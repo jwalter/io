@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { execSync } from "node:child_process";
+import { exec } from "node:child_process";
+import { promisify } from "node:util";
 import { getDb } from "./db.js";
+
+const execAsync = promisify(exec);
 
 export interface Instance {
   id: string;
@@ -43,17 +46,12 @@ export async function createInstance(
   const worktreePath = `/tmp/io-worktrees/${squadId}/${branch}`;
 
   // Create git worktree
+  const repoCwd = squad.repo_url.startsWith("/") ? squad.repo_url : process.cwd();
   try {
-    execSync(`git worktree add ${worktreePath} -b ${branch}`, {
-      cwd: squad.repo_url.startsWith("/") ? squad.repo_url : process.cwd(),
-      stdio: "pipe",
-    });
-  } catch (err) {
+    await execAsync(`git worktree add ${worktreePath} -b ${branch}`, { cwd: repoCwd });
+  } catch {
     // Branch may already exist
-    execSync(`git worktree add ${worktreePath} ${branch}`, {
-      cwd: squad.repo_url.startsWith("/") ? squad.repo_url : process.cwd(),
-      stdio: "pipe",
-    });
+    await execAsync(`git worktree add ${worktreePath} ${branch}`, { cwd: repoCwd });
   }
 
   db.prepare(
@@ -74,9 +72,7 @@ export async function destroyInstance(instanceId: string): Promise<void> {
 
   // Remove worktree
   try {
-    execSync(`git worktree remove ${instance.worktree_path} --force`, {
-      stdio: "pipe",
-    });
+    await execAsync(`git worktree remove ${instance.worktree_path} --force`);
   } catch {
     // Already removed or doesn't exist
   }

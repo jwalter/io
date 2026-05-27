@@ -78,10 +78,12 @@ export function createTools(): Tool<any>[] {
         let cloneMsg = "";
 
         if (repo_url) {
-          const { execSync } = await import("node:child_process");
+          const { exec } = await import("node:child_process");
+          const { promisify } = await import("node:util");
           const { existsSync, mkdirSync } = await import("node:fs");
           const { join } = await import("node:path");
           const { PATHS } = await import("../paths.js");
+          const execAsync = promisify(exec);
 
           // Extract owner/repo from URL (supports https and git@ formats)
           const match = repo_url.match(/[/:]([^/]+)\/([^/.]+?)(?:\.git)?$/);
@@ -92,8 +94,7 @@ export function createTools(): Tool<any>[] {
               const parentDir = join(PATHS.source, owner);
               if (!existsSync(parentDir)) mkdirSync(parentDir, { recursive: true });
               try {
-                execSync(`git clone ${repo_url} ${sourceDir}`, {
-                  encoding: "utf-8",
+                await execAsync(`git clone ${repo_url} ${sourceDir}`, {
                   timeout: 120_000,
                 });
                 cloneMsg = ` Repo cloned to ~/.io/source/${owner}/${repo}.`;
@@ -341,21 +342,22 @@ export function createTools(): Tool<any>[] {
         cwd: z.string().optional().describe("Working directory (defaults to home directory)"),
       }),
       handler: async ({ command, cwd }) => {
-        const { execSync } = await import("node:child_process");
+        const { exec } = await import("node:child_process");
+        const { promisify } = await import("node:util");
         const { homedir } = await import("node:os");
+        const execAsync = promisify(exec);
         try {
-          const output = execSync(command, {
+          const { stdout } = await execAsync(command, {
             cwd: cwd ?? homedir(),
-            encoding: "utf-8",
             timeout: 60_000,
             maxBuffer: 1024 * 1024,
             env: { ...process.env, GH_PROMPT_DISABLED: "1" },
           });
-          return output.trim() || "(no output)";
+          return stdout.trim() || "(no output)";
         } catch (err: any) {
           const stderr = err.stderr?.toString().trim() ?? "";
           const stdout = err.stdout?.toString().trim() ?? "";
-          return `Error (exit ${err.status}): ${stderr || stdout || err.message}`;
+          return `Error (exit ${err.code}): ${stderr || stdout || err.message}`;
         }
       },
     }),
