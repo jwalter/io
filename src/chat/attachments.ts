@@ -1,8 +1,20 @@
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { PATHS } from "../paths.js";
+
 export interface MessageAttachment {
   name: string;
   mimeType: string;
   size: number;
   content: string;
+}
+
+export interface SavedAttachment {
+  name: string;
+  mimeType: string;
+  size: number;
+  path: string;
 }
 
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
@@ -98,4 +110,39 @@ export function buildAttachmentSummary(attachments: MessageAttachment[]): string
       `- ${attachment.name} (${attachment.mimeType}, ${Math.round(attachment.size / 1024)}KB)`
   );
   return `\n\n[Attachments]\n${lines.join("\n")}`;
+}
+
+/**
+ * Save attachments to disk at ~/.io/attachments/{batchId}/{filename}
+ * Returns the saved paths so they can be referenced by the orchestrator and squads.
+ */
+export function saveAttachmentsToDisk(attachments: MessageAttachment[]): SavedAttachment[] {
+  if (attachments.length === 0) return [];
+
+  const batchId = randomUUID();
+  const batchDir = join(PATHS.attachments, batchId);
+  if (!existsSync(PATHS.attachments)) mkdirSync(PATHS.attachments, { recursive: true });
+  mkdirSync(batchDir, { recursive: true });
+
+  return attachments.map((attachment) => {
+    const filePath = join(batchDir, attachment.name);
+    writeFileSync(filePath, Buffer.from(attachment.content, "base64"));
+    return {
+      name: attachment.name,
+      mimeType: attachment.mimeType,
+      size: attachment.size,
+      path: filePath,
+    };
+  });
+}
+
+/**
+ * Build a summary that includes file paths on disk for tool access.
+ */
+export function buildAttachmentPathSummary(saved: SavedAttachment[]): string {
+  if (saved.length === 0) return "";
+  const lines = saved.map(
+    (s) => `- ${s.name} (${s.mimeType}, ${Math.round(s.size / 1024)}KB) → ${s.path}`
+  );
+  return `\n\n[Attached files saved to disk]\n${lines.join("\n")}`;
 }

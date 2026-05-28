@@ -14,4 +14,5 @@ export const PATHS = {
   mcpConfig: join(IO_HOME, "mcp.json"),
   sessions: join(IO_HOME, "sessions"),
   source: join(IO_HOME, "source"),
+  attachments: join(IO_HOME, "attachments"),
 } as const;

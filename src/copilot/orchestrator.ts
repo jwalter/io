@@ -10,6 +10,8 @@ import { resetClient } from "./client.js";
 import { addAuditEntry } from "../store/audit-log.js";
 import {
   buildAttachmentSummary,
+  buildAttachmentPathSummary,
+  saveAttachmentsToDisk,
   type MessageAttachment,
   toCopilotBlobAttachments,
 } from "../chat/attachments.js";
@@ -170,7 +172,11 @@ async function executeOnSession(msg: QueuedMessage): Promise<void> {
 
   activeMessageAttachments = msg.attachments;
 
-  const taggedPrompt = `[via ${msg.source}] ${msg.prompt}${buildAttachmentSummary(msg.attachments)}`;
+  // Save attachments to disk so orchestrator/squads can access them via filesystem tools
+  const savedAttachments = saveAttachmentsToDisk(msg.attachments);
+  const pathSummary = buildAttachmentPathSummary(savedAttachments);
+
+  const taggedPrompt = `[via ${msg.source}] ${msg.prompt}${pathSummary || buildAttachmentSummary(msg.attachments)}`;
   let accumulated = "";
 
   const unsubscribe = orchestratorSession.on("assistant.message_delta", (event: any) => {
