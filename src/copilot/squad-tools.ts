@@ -32,26 +32,30 @@ export function createSquadTools(squadSlug: string, squadId: string, repoUrl?: s
   return [
     // --- Wiki Tools (scoped to squads/{slug}/) ---
     defineTool("wiki_read", {
-      description: `Read a wiki page from the squad wiki (paths are relative to your squad's wiki folder)`,
+      description: `Read a wiki page from the squad wiki (paths are relative to your squad's wiki folder — do NOT include 'squads/${squadSlug}/' prefix)`,
       parameters: z.object({
         path: z.string().describe("Page path (e.g., 'decisions.md', 'notes/architecture.md')"),
       }),
       handler: async ({ path }) => {
         const { readPage } = await import("../wiki/fs.js");
-        return await readPage(`${wikiPrefix}/${path}`);
+        // Strip redundant prefix if agent accidentally includes it
+        const cleanPath = path.replace(new RegExp(`^(?:squads/${squadSlug}/)+`), "");
+        return await readPage(`${wikiPrefix}/${cleanPath}`);
       },
     }),
 
     defineTool("wiki_write", {
-      description: "Write or update a wiki page in the squad wiki",
+      description: "Write or update a wiki page in the squad wiki (paths are relative — do NOT include the squad prefix)",
       parameters: z.object({
         path: z.string().describe("Page path (e.g., 'decisions.md')"),
         content: z.string().describe("Markdown content to write"),
       }),
       handler: async ({ path, content }) => {
         const { writePage } = await import("../wiki/fs.js");
-        await writePage(`${wikiPrefix}/${path}`, content);
-        return `Page saved: ${path}`;
+        // Strip redundant prefix if agent accidentally includes it
+        const cleanPath = path.replace(new RegExp(`^(?:squads/${squadSlug}/)+`), "");
+        await writePage(`${wikiPrefix}/${cleanPath}`, content);
+        return `Page saved: ${cleanPath}`;
       },
     }),
 
@@ -82,8 +86,9 @@ export function createSquadTools(squadSlug: string, squadId: string, repoUrl?: s
       }),
       handler: async ({ path }) => {
         const { deletePage } = await import("../wiki/fs.js");
-        await deletePage(`${wikiPrefix}/${path}`);
-        return `Page deleted: ${path}`;
+        const cleanPath = path.replace(new RegExp(`^(?:squads/${squadSlug}/)+`), "");
+        await deletePage(`${wikiPrefix}/${cleanPath}`);
+        return `Page deleted: ${cleanPath}`;
       },
     }),
 
@@ -94,7 +99,8 @@ export function createSquadTools(squadSlug: string, squadId: string, repoUrl?: s
       }),
       handler: async ({ path }) => {
         const { getBacklinks } = await import("../wiki/backlinks.js");
-        const allBacklinks = await getBacklinks(`${wikiPrefix}/${path}`);
+        const cleanPath = path.replace(new RegExp(`^(?:squads/${squadSlug}/)+`), "");
+        const allBacklinks = await getBacklinks(`${wikiPrefix}/${cleanPath}`);
         // Filter to only show backlinks within squad wiki, strip prefix for display
         return allBacklinks
           .filter((bl) => bl.startsWith(`${wikiPrefix}/`))

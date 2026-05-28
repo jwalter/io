@@ -14,7 +14,7 @@ import { PATHS } from "../paths.js";
 import { createSquadTools } from "./squad-tools.js";
 import { loadSkillDirectories } from "./skills.js";
 import { getMcpServersForSession } from "../mcp/registry.js";
-import { buildAttachmentSummary, type MessageAttachment, toCopilotBlobAttachments } from "../chat/attachments.js";
+import { buildAttachmentPathSummary, saveAttachmentsToDisk, type MessageAttachment, toCopilotBlobAttachments } from "../chat/attachments.js";
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { exec } from "node:child_process";
@@ -253,9 +253,13 @@ ${lead.persona ? `## Personality:\n${lead.persona}` : ""}
       });
 
       try {
+        // Save attachments to disk so squad agents can access them via shell_exec
+        const savedAttachments = saveAttachmentsToDisk(attachments);
+        const attachmentPathInfo = buildAttachmentPathSummary(savedAttachments);
+
         const response = await session.sendAndWait(
           {
-            prompt: `Task delegated to you:\n\n${task}${buildAttachmentSummary(attachments)}`,
+            prompt: `Task delegated to you:\n\n${task}${attachmentPathInfo}`,
             attachments: toCopilotBlobAttachments(attachments),
           },
           600_000
