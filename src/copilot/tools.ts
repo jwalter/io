@@ -195,8 +195,12 @@ export function createTools(): Tool<any>[] {
           },
           { squad_id }
         );
-        const result = await delegateTask(squad_id, task, instance_id, attachments);
-        return result;
+        // Fire-and-forget: start delegation in background so the orchestrator can respond immediately
+        delegateTask(squad_id, task, instance_id, attachments).catch((err) => {
+          const errMsg = err instanceof Error ? err.message : "Unknown error";
+          addAuditEntry("task_delegation_error", `Background delegation failed: ${errMsg}`, { squad_id, error: errMsg }, { squad_id });
+        });
+        return `Task delegated to squad ${squad_id}. The squad is now working on it in the background. You will be notified via the inbox when work is complete.`;
       },
     }),
 
@@ -229,7 +233,12 @@ export function createTools(): Tool<any>[] {
           },
           { squad_id }
         );
-        return await squadMeeting(squad_id, task, execute_after, attachments);
+        // Fire-and-forget: start meeting in background so the orchestrator can respond immediately
+        squadMeeting(squad_id, task, execute_after, attachments).catch((err) => {
+          const errMsg = err instanceof Error ? err.message : "Unknown error";
+          addAuditEntry("squad_meeting_error", `Background meeting failed: ${errMsg}`, { squad_id, error: errMsg }, { squad_id });
+        });
+        return `Planning meeting started for squad ${squad_id}. The squad is discussing the task in the background.${execute_after ? " Work will begin automatically after planning." : " The plan will be posted to the feed for your review."}`;
       },
     }),
 
