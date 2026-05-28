@@ -132,6 +132,28 @@ export async function delegateTask(
     .map((a) => `- ${a.character_name} (${a.role_title})${a.is_lead ? " [LEAD]" : ""}${a.is_qa ? " [QA]" : ""}${a.is_test ? " [TEST]" : ""}`)
     .join("\n");
 
+  // Load squad wiki pages as immutable knowledge context
+  const { listPages, readPage } = await import("../wiki/fs.js");
+  const wikiPrefix = `squads/${squadSlug}`;
+  let wikiKnowledge = "";
+  try {
+    const pages = await listPages(wikiPrefix);
+    const pageContents: string[] = [];
+    for (const page of pages.slice(0, 20)) { // Cap at 20 pages to avoid token overload
+      try {
+        const content = await readPage(`${wikiPrefix}/${page}`);
+        pageContents.push(`### ${page}\n${content}`);
+      } catch {
+        // Skip unreadable pages
+      }
+    }
+    if (pageContents.length > 0) {
+      wikiKnowledge = `\n## Squad Knowledge Base\nThe following wiki pages contain important decisions, conventions, and context for this squad. Follow these as authoritative guidance:\n\n${pageContents.join("\n\n---\n\n")}\n`;
+    }
+  } catch {
+    // Wiki not available — proceed without
+  }
+
   const systemMessage = `# Squad Team Lead: ${lead.character_name}
 
 You are ${lead.character_name}, the team lead for this squad. Your role is STRICTLY coordination — you do NOT write code, tests, or implementation of any kind.
@@ -159,7 +181,9 @@ ${agentRoster}
 - Use \`--comment\` with "LGTM" for approvals (not \`--approve\`)
 - Always use the gh CLI for GitHub interactions
 - Merge criteria: all veto-capable members have posted approving comments + CI passes + no conflicts
-
+- When work is complete, ALWAYS notify the user via feed_post with a summary of what was done
+- Consult the squad wiki (wiki_read, wiki_search) for additional context beyond what's provided below
+${wikiKnowledge}
 ${lead.persona ? `## Personality:\n${lead.persona}` : ""}
 `;
 
