@@ -18,6 +18,7 @@ const ConfigSchema = z.object({
   supabaseUrl: z.string().optional(),
   supabaseAnonKey: z.string().optional(),
   authorizedEmail: z.string().optional(),
+  githubToken: z.string().optional(),
   backgroundNotifyMode: z
     .enum(["all", "meaningful", "off"])
     .default("meaningful"),

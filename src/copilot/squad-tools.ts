@@ -5,6 +5,7 @@ import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { join } from "node:path";
 import { PATHS } from "../paths.js";
+import { getGhToken } from "./gh-token.js";
 
 const execAsync = promisify(exec);
 
@@ -159,21 +160,11 @@ export function createSquadTools(squadSlug: string, squadId: string, repoUrl?: s
         }
 
         try {
-          // Ensure GitHub CLI auth is available — prefer GH_TOKEN from env,
-          // fall back to extracting from gh auth if available
+          // Inject cached GH token for GitHub CLI operations
           const shellEnv: Record<string, string | undefined> = { ...process.env, GH_PROMPT_DISABLED: "1" };
-          if (!shellEnv.GH_TOKEN && !shellEnv.GITHUB_TOKEN) {
-            try {
-              const { stdout: token } = await execAsync("gh auth token", {
-                timeout: 5_000,
-                env: process.env,
-              });
-              if (token.trim()) {
-                shellEnv.GH_TOKEN = token.trim();
-              }
-            } catch {
-              // gh auth not available — agents won't be able to push
-            }
+          const ghToken = getGhToken();
+          if (ghToken) {
+            shellEnv.GH_TOKEN = ghToken;
           }
 
           const { stdout } = await execAsync(command, {

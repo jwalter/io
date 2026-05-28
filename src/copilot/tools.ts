@@ -411,22 +411,14 @@ export function createTools(): Tool<any>[] {
         const { exec } = await import("node:child_process");
         const { promisify } = await import("node:util");
         const { homedir } = await import("node:os");
+        const { getGhToken } = await import("./gh-token.js");
         const execAsync = promisify(exec);
 
-        // Ensure GitHub CLI auth is available in the shell environment
+        // Inject cached GH token for GitHub CLI operations
         const shellEnv: Record<string, string | undefined> = { ...process.env, GH_PROMPT_DISABLED: "1" };
-        if (!shellEnv.GH_TOKEN && !shellEnv.GITHUB_TOKEN) {
-          try {
-            const { stdout: token } = await execAsync("gh auth token", {
-              timeout: 5_000,
-              env: process.env,
-            });
-            if (token.trim()) {
-              shellEnv.GH_TOKEN = token.trim();
-            }
-          } catch {
-            // gh auth not available
-          }
+        const ghToken = getGhToken();
+        if (ghToken) {
+          shellEnv.GH_TOKEN = ghToken;
         }
 
         try {
