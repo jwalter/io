@@ -70,11 +70,22 @@ A 30-second interval pings the Copilot client. On failure:
 ## System Message
 
 The system message is dynamically assembled at session creation time and includes:
+- **Critical security rule** (secret protection — see below)
 - IO identity and behavioral rules
 - Squad coverage requirements
 - GitHub self-review limitation workaround
 - Self-edit protection block (unless `--self-edit`)
 - Environment info (OS, working directory, paths)
+
+## Secret Protection Rule
+
+Both the orchestrator and all squad agents have a **hard, non-negotiable security rule** baked into their system prompts:
+
+> Agents must NEVER expose secrets, credentials, or sensitive values in any publicly visible location — GitHub issues, PRs, comments, commit messages, wiki pages, feed items, or any external-facing output.
+
+This covers: API keys, tokens, passwords, connection strings, environment variable values, config secrets, SSH keys, certificates, and webhook URLs.
+
+If an agent needs to reference a secret's existence, it must use `<REDACTED>` or `***` as a placeholder — never the actual value. Violation is treated as a hard failure.
 
 ## Background Agent Results
 
