@@ -31,11 +31,19 @@ const ConfigSchema = z.object({
 export type Config = z.infer<typeof ConfigSchema>;
 
 let cachedConfig: Config | undefined;
+let configWarning: string | undefined;
+
+/** Returns a warning message if config fell back to defaults on last load. */
+export function getConfigWarning(): string | undefined {
+  return configWarning;
+}
 
 export function loadConfig(): Config {
   if (cachedConfig) return cachedConfig;
 
   if (!existsSync(PATHS.config)) {
+    configWarning = `Config file not found at ${PATHS.config} — using defaults. Run "io setup" or create the file manually.`;
+    console.warn(`[io] ⚠️  ${configWarning}`);
     const defaults = ConfigSchema.parse({});
     cachedConfig = defaults;
     return defaults;
@@ -44,8 +52,9 @@ export function loadConfig(): Config {
   let raw: Record<string, unknown>;
   try {
     raw = JSON.parse(readFileSync(PATHS.config, "utf-8"));
-  } catch {
-    console.warn("[io] Warning: config.json is corrupted or unreadable, using defaults.");
+  } catch (err) {
+    configWarning = `Config file at ${PATHS.config} is corrupted or unreadable — using defaults. Please restore your config.`;
+    console.warn(`[io] ⚠️  ${configWarning}`);
     const defaults = ConfigSchema.parse({});
     cachedConfig = defaults;
     return defaults;
@@ -58,6 +67,7 @@ export function loadConfig(): Config {
     saveConfig(raw as any);
   }
 
+  configWarning = undefined;
   cachedConfig = ConfigSchema.parse(raw);
   return cachedConfig;
 }
