@@ -126,16 +126,17 @@ export async function startApiServer(config: Config): Promise<void> {
 
     // Keepalive: send a comment every 30s to keep Cloudflare happy
     const keepalive = setInterval(() => {
-      res.write(": keepalive\n\n");
+      if (!finished) res.write(": keepalive\n\n");
     }, 30_000);
 
-    let closed = false;
-    req.on("close", () => { closed = true; clearInterval(keepalive); });
+    let finished = false;
+    req.on("close", () => { finished = true; clearInterval(keepalive); });
 
     try {
       await sendToOrchestrator(prompt, "web", (content, done) => {
-        if (closed) return;
+        if (finished) return;
         if (done) {
+          finished = true;
           saveMessage(conversationId, "assistant", content, "web");
           res.write(`event: done\ndata: ${JSON.stringify({ content, conversationId })}\n\n`);
           clearInterval(keepalive);
@@ -147,7 +148,8 @@ export async function startApiServer(config: Config): Promise<void> {
         }
       }, attachments);
     } catch (err) {
-      if (!closed) {
+      if (!finished) {
+        finished = true;
         const message = err instanceof Error ? err.message : "Unknown error";
         res.write(`event: error\ndata: ${JSON.stringify({ error: message })}\n\n`);
         clearInterval(keepalive);
