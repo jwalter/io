@@ -672,7 +672,12 @@ export async function startApiServer(config: Config): Promise<void> {
 
   // --- Health (unauthenticated) ---
   app.get("/health", (_req, res) => {
-    res.json({ status: "ok", version: process.env.npm_package_version ?? "unknown" });
+    res.json({
+      status: "ok",
+      version: process.env.npm_package_version ?? "unknown",
+      webUi: existsSync(webIndexPath),
+      webDistPath,
+    });
   });
 
   // SPA fallback — serve index.html for non-API routes

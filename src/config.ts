@@ -41,13 +41,21 @@ export function loadConfig(): Config {
     return defaults;
   }
 
-  const raw = JSON.parse(readFileSync(PATHS.config, "utf-8"));
+  let raw: Record<string, unknown>;
+  try {
+    raw = JSON.parse(readFileSync(PATHS.config, "utf-8"));
+  } catch {
+    console.warn("[io] Warning: config.json is corrupted or unreadable, using defaults.");
+    const defaults = ConfigSchema.parse({});
+    cachedConfig = defaults;
+    return defaults;
+  }
 
   // Migrate old apiPort field
   if ("apiPort" in raw && !("port" in raw)) {
     raw.port = raw.apiPort;
     delete raw.apiPort;
-    saveConfig(raw);
+    saveConfig(raw as any);
   }
 
   cachedConfig = ConfigSchema.parse(raw);
@@ -58,9 +66,20 @@ export function saveConfig(config: Partial<Config>): void {
   const dir = dirname(PATHS.config);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
-  const current = existsSync(PATHS.config)
-    ? JSON.parse(readFileSync(PATHS.config, "utf-8"))
-    : {};
+  let current: Record<string, unknown> = {};
+  if (existsSync(PATHS.config)) {
+    try {
+      current = JSON.parse(readFileSync(PATHS.config, "utf-8"));
+    } catch {
+      // If file is corrupted, use cached config as baseline to avoid data loss
+      if (cachedConfig) {
+        current = JSON.parse(JSON.stringify(cachedConfig));
+      }
+    }
+  } else if (cachedConfig) {
+    // File doesn't exist but we have a cached config (from earlier load) — use it as baseline
+    current = JSON.parse(JSON.stringify(cachedConfig));
+  }
 
   const merged = { ...current, ...config };
   writeFileSync(PATHS.config, JSON.stringify(merged, null, 2) + "\n");
