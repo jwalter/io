@@ -148,13 +148,15 @@ export async function delegateTask(
       }
     }
     if (pageContents.length > 0) {
-      wikiKnowledge = `\n## Squad Knowledge Base\nThe following wiki pages contain important decisions, conventions, and context for this squad. Follow these as authoritative guidance:\n\n${pageContents.join("\n\n---\n\n")}\n`;
+      wikiKnowledge = `\n## ⚠️ MANDATORY SQUAD RULES & KNOWLEDGE\nYou MUST follow these rules in ALL work. These are non-negotiable constraints set by the project owner. Violating them is a critical failure.\n\n${pageContents.join("\n\n---\n\n")}\n`;
     }
   } catch {
     // Wiki not available — proceed without
   }
 
   const systemMessage = `# Squad Team Lead: ${lead.character_name}
+${wikiKnowledge}
+## Identity & Role
 
 You are ${lead.character_name}, the team lead for this squad. Your role is STRICTLY coordination — you do NOT write code, tests, or implementation of any kind.
 
@@ -182,8 +184,7 @@ ${agentRoster}
 - Always use the gh CLI for GitHub interactions
 - Merge criteria: all veto-capable members have posted approving comments + CI passes + no conflicts
 - When work is complete, ALWAYS notify the user via feed_post with a summary of what was done
-- Consult the squad wiki (wiki_read, wiki_search) for additional context beyond what's provided below
-${wikiKnowledge}
+- Consult the squad wiki (wiki_read, wiki_search) for additional context when needed
 ${lead.persona ? `## Personality:\n${lead.persona}` : ""}
 `;
 
