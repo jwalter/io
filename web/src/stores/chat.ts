@@ -1,11 +1,13 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
+import type { MessageAttachment } from "@/lib/attachments";
 import { useAuthStore } from "./auth";
 
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  attachments: MessageAttachment[];
   timestamp: Date;
   streaming?: boolean;
 }
@@ -29,25 +31,30 @@ export const useChatStore = defineStore("chat", () => {
   const eventSource = ref<EventSource | null>(null);
   const conversationId = ref<string>(crypto.randomUUID());
 
-  function addUserMessage(content: string): ChatMessage {
+  function addUserMessage(content: string, attachments: MessageAttachment[] = []): ChatMessage {
     const msg: ChatMessage = {
       id: crypto.randomUUID(),
       role: "user",
       content,
+      attachments,
       timestamp: new Date(),
     };
     messages.value.push(msg);
     return msg;
   }
 
-  async function sendMessage(content: string): Promise<void> {
-    addUserMessage(content);
+  async function sendMessage(
+    content: string,
+    attachments: MessageAttachment[] = []
+  ): Promise<void> {
+    addUserMessage(content, attachments);
     isStreaming.value = true;
 
     const assistantMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: "assistant",
       content: "",
+      attachments: [],
       timestamp: new Date(),
       streaming: true,
     };
@@ -73,6 +80,7 @@ export const useChatStore = defineStore("chat", () => {
         body: JSON.stringify({
           prompt: content,
           conversationId: conversationId.value,
+          attachments,
         }),
       });
 
@@ -117,6 +125,7 @@ export const useChatStore = defineStore("chat", () => {
                     id: crypto.randomUUID(),
                     role: "assistant",
                     content: parsed.content,
+                    attachments: [],
                     timestamp: new Date(),
                     streaming: true,
                   };
