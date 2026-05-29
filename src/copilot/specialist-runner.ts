@@ -168,8 +168,7 @@ export async function runSpecialistSession(request: SpecialistTaskRequest): Prom
     let result: string;
     try {
       const response = await session.sendAndWait(
-        { prompt: `You have been assigned the following sub-task by your team lead:\n\n${task}\n\nExecute this task fully. When done, provide a clear summary of what was accomplished.` },
-        600_000
+        { prompt: `You have been assigned the following sub-task by your team lead:\n\n${task}\n\nExecute this task fully. When done, provide a clear summary of what was accomplished.` }
       );
       result = response?.data?.content ?? "Task completed (no response content).";
     } finally {

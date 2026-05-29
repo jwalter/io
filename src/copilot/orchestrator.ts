@@ -196,8 +196,7 @@ async function executeOnSession(msg: QueuedMessage): Promise<void> {
         {
           prompt: taggedPrompt,
           attachments: toCopilotBlobAttachments(msg.attachments),
-        },
-        600_000
+        }
       );
       const finalContent = response?.data?.content ?? accumulated;
       msg.callback(finalContent, true);

@@ -294,8 +294,7 @@ ${lead.persona ? `## Personality:\n${lead.persona}` : ""}
           {
             prompt: `Task delegated to you:\n\n${task}${attachmentPathInfo}`,
             attachments: toCopilotBlobAttachments(attachments),
-          },
-          600_000
+          }
         );
         result = response?.data?.content ?? "Task completed (no response content).";
 
