@@ -1,6 +1,7 @@
 import { getSchedule, updateScheduleLastRun, type Schedule } from "../store/schedules.js";
 import { sendToOrchestrator } from "./orchestrator.js";
 import { buildSquadScopedPrompt } from "./io-scheduler.js";
+import { delegateTask } from "./agents.js";
 
 /**
  * Trigger a schedule immediately, bypassing cron timing.
@@ -13,12 +14,14 @@ export function triggerSchedule(id: string): Schedule | undefined {
   updateScheduleLastRun(schedule.id);
 
   if (schedule.type === "squad") {
-    const agenda = schedule.agenda || "triage";
-    const prompt = `[Squad Schedule] Run "${agenda}" stand-up for squad ${schedule.squad_id}. Agenda: ${agenda}`;
-    sendToOrchestrator(prompt, "scheduler", (_text, done) => {
-      if (done) {
-        console.log(`[trigger] Squad stand-up completed for ${schedule.squad_id}`);
-      }
+    if (!schedule.squad_id) return schedule;
+
+    const task = schedule.prompt || `Run "triage" stand-up. Agenda: triage`;
+
+    // Delegate directly to squad lead — same path as the cron scheduler
+    delegateTask(schedule.squad_id, task).catch((err) => {
+      const errMsg = err instanceof Error ? err.message : "Unknown error";
+      console.error(`[trigger] Delegation failed for squad ${schedule.squad_id}: ${errMsg}`);
     });
   } else {
     sendToOrchestrator(buildSquadScopedPrompt(schedule), "io-scheduler", (_text, done) => {
