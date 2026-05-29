@@ -1,5 +1,6 @@
 import { listSchedules, updateScheduleLastRun } from "../store/schedules.js";
-import { sendToOrchestrator } from "./orchestrator.js";
+import { delegateTask } from "./agents.js";
+import { addAuditEntry } from "../store/audit-log.js";
 
 let schedulerInterval: ReturnType<typeof setInterval> | undefined;
 
@@ -23,17 +24,32 @@ function checkSquadSchedules(): void {
       continue;
     }
 
+    const squadId = schedule.squad_id!;
+
     updateScheduleLastRun(schedule.id);
 
-    const prompt = schedule.prompt
-      ? `[Squad Schedule] Run for squad ${schedule.squad_id}. Prompt: ${schedule.prompt}`
-      : `[Squad Schedule] Run "triage" stand-up for squad ${schedule.squad_id}. Agenda: triage`;
+    const task = schedule.prompt || `Run "triage" stand-up. Agenda: triage`;
 
-    sendToOrchestrator(prompt, "scheduler", (_text, done) => {
-      if (done) {
-        console.log(`[scheduler] Squad stand-up completed for ${schedule.squad_id}`);
-      }
+    addAuditEntry(
+      "schedule_triggered",
+      `Schedule triggered for squad ${squadId}: ${task.slice(0, 200)}`,
+      { squad_id: squadId, schedule_id: schedule.id, task: task.slice(0, 1000) },
+      { squad_id: squadId }
+    );
+
+    // Delegate directly to the squad lead — bypasses orchestrator rephrasing
+    delegateTask(squadId, task).catch((err) => {
+      const errMsg = err instanceof Error ? err.message : "Unknown error";
+      console.error(`[scheduler] Delegation failed for squad ${squadId}: ${errMsg}`);
+      addAuditEntry(
+        "schedule_error",
+        `Scheduled delegation failed: ${errMsg}`,
+        { squad_id: squadId, error: errMsg },
+        { squad_id: squadId }
+      );
     });
+
+    console.log(`[scheduler] Task delegated to squad ${squadId}`);
   }
 }
 
