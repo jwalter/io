@@ -294,7 +294,8 @@ ${lead.persona ? `## Personality:\n${lead.persona}` : ""}
           {
             prompt: `Task delegated to you:\n\n${task}${attachmentPathInfo}`,
             attachments: toCopilotBlobAttachments(attachments),
-          }
+          },
+          7_200_000 // 2 hours — watchdog handles stale detection
         );
         result = response?.data?.content ?? "Task completed (no response content).";
 
