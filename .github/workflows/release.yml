@@ -46,5 +46,4 @@ jobs:
           generate_release_notes: true
 
       - name: Publish daemon to npm
-        working-directory: packages/daemon
-        run: npm publish --provenance --access public
+        run: npm publish --workspace=packages/daemon --provenance --access public
