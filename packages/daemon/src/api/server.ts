@@ -91,7 +91,7 @@ export function createApiServer(config: IOConfig): ApiServer {
 	if (existsSync(webDistPath)) {
 		app.use(express.static(webDistPath));
 		// SPA fallback: serve index.html for any non-API route
-		app.get('*', (_req, res) => {
+		app.get('/{*splat}', (_req, res) => {
 			res.sendFile(join(webDistPath, 'index.html'));
 		});
 		logger.info({ path: webDistPath }, 'Serving web frontend');
