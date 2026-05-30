@@ -87,7 +87,7 @@ export function createApiServer(config: IOConfig): ApiServer {
 
 	// Serve web frontend static files (production build)
 	const __dirname = fileURLToPath(new URL('.', import.meta.url));
-	const webDistPath = resolve(__dirname, '../../../web/dist');
+	const webDistPath = resolve(__dirname, '../public');
 	if (existsSync(webDistPath)) {
 		app.use(express.static(webDistPath));
 		// SPA fallback: serve index.html for any non-API route

@@ -1,15 +1,26 @@
+import { createRequire } from 'node:module';
 import pino from 'pino';
 import type { IOConfig } from '../config.js';
 
 let rootLogger: pino.Logger;
 
+function hasPinoPretty(): boolean {
+	try {
+		const require = createRequire(import.meta.url);
+		require.resolve('pino-pretty');
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 export function initLogger(config: IOConfig): pino.Logger {
+	const usePretty = process.env.NODE_ENV !== 'production' && hasPinoPretty();
 	rootLogger = pino({
 		level: config.logLevel,
-		transport:
-			process.env.NODE_ENV !== 'production'
-				? { target: 'pino-pretty', options: { colorize: true } }
-				: undefined,
+		transport: usePretty
+			? { target: 'pino-pretty', options: { colorize: true } }
+			: undefined,
 	});
 	return rootLogger;
 }
