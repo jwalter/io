@@ -10,7 +10,8 @@
 	"scripts": {
 		"build": "tsc",
 		"dev": "tsx --watch src/index.ts",
-		"start": "node dist/index.js"
+		"start": "node dist/index.js",
+		"prepack": "node -e \"const fs=require('fs');const p=require('path');const src=p.resolve(__dirname,'../shared');const dst=p.resolve(__dirname,'node_modules/@io/shared');fs.mkdirSync(p.dirname(dst),{recursive:true});fs.cpSync(src,dst,{recursive:true});\""
 	},
 	"engines": {
 		"node": ">=22"
@@ -43,6 +44,9 @@
 		"ws": "^8.18.0",
 		"zod": "^4.4.3"
 	},
+	"bundleDependencies": [
+		"@io/shared"
+	],
 	"devDependencies": {
 		"@types/express": "^5.0.0",
 		"@types/jsonwebtoken": "^9.0.10",
