@@ -11,7 +11,7 @@
 		"build": "tsc",
 		"dev": "tsx --watch src/index.ts",
 		"start": "node dist/index.js",
-		"prepack": "node -e \"const fs=require('fs');const p=require('path');const src=p.resolve(__dirname,'../shared');const dst=p.resolve(__dirname,'node_modules/@io/shared');fs.mkdirSync(p.dirname(dst),{recursive:true});fs.cpSync(src,dst,{recursive:true});\""
+		"prepack": "node -e \"const fs=require('fs');const p=require('path');const src=p.resolve(__dirname,'../shared');const dst=p.resolve(__dirname,'node_modules/@io/shared');fs.mkdirSync(p.dirname(dst),{recursive:true});fs.cpSync(src,dst,{recursive:true});fs.copyFileSync(p.resolve(__dirname,'../../README.md'),p.resolve(__dirname,'README.md'));\""
 	},
 	"engines": {
 		"node": ">=22"
