@@ -47,3 +47,5 @@ jobs:
 
       - name: Publish daemon to npm
         run: npm publish --workspace=packages/daemon --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
