@@ -29,7 +29,17 @@ initWiki(config.dataDir);
 
 // Initialize skills directory
 initSkills(config.dataDir);
-logger.info({ config: { ...config, dataDir: config.dataDir } }, 'IO daemon starting');
+logger.info(
+	{
+		config: {
+			apiPort: config.apiPort,
+			logLevel: config.logLevel,
+			defaultModel: config.defaultModel,
+			dataDir: config.dataDir,
+		},
+	},
+	'IO daemon starting',
+);
 
 // Create API server
 const apiServer = createApiServer(config);
