@@ -21,13 +21,14 @@ const config = loadConfig();
 // Ensure data directory exists
 mkdirSync(config.dataDir, { recursive: true });
 
+// Initialize logger first — other modules depend on it
+const logger = initLogger(config);
+
 // Initialize wiki directory structure
 initWiki(config.dataDir);
 
 // Initialize skills directory
 initSkills(config.dataDir);
-
-const logger = initLogger(config);
 logger.info({ config: { ...config, dataDir: config.dataDir } }, 'IO daemon starting');
 
 // Create API server
