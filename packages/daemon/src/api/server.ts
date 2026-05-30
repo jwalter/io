@@ -95,6 +95,8 @@ export function createApiServer(config: IOConfig): ApiServer {
 			res.sendFile(join(webDistPath, 'index.html'));
 		});
 		logger.info({ path: webDistPath }, 'Serving web frontend');
+	} else {
+		logger.warn({ path: webDistPath }, 'Web frontend not found');
 	}
 
 	const server = createServer(app);
