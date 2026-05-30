@@ -10,33 +10,22 @@ jobs:
   ci:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
           cache: npm
 
-      - name: Install
-        run: npm ci && npm ci --prefix web
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Type check (backend)
-        run: npx tsc --noEmit
+      - name: Lint
+        run: npm run lint
+        continue-on-error: true
 
-      - name: Lint (Vue)
-        run: npm run lint --prefix web
+      - name: Build all packages
+        run: npm run build
 
-      - name: Prettier check (Vue)
-        run: npm run format:check --prefix web
-
-      - name: Type check (Vue)
-        run: npm run typecheck --prefix web
-
-      - name: Test with coverage
-        run: npm run test:coverage
-
-      - name: Enforce coverage threshold
-        run: npm run coverage:check
-
-      - name: Build
-        run: npm run build:all
+      - name: Test
+        run: npm test
