@@ -5,10 +5,10 @@ import { createChildLogger } from '../../logging/logger.js';
 
 const logger = () => createChildLogger('auth');
 
-// Routes that don't require authentication
+// Routes that don't require authentication (paths relative to /api mount)
 const EXEMPT_ROUTES: Array<{ method: string; path: string }> = [
-	{ method: 'GET', path: '/api/health' },
-	{ method: 'GET', path: '/api/config' },
+	{ method: 'GET', path: '/health' },
+	{ method: 'GET', path: '/config' },
 ];
 
 function isExempt(method: string, path: string): boolean {
