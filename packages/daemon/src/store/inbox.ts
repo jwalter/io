@@ -4,12 +4,12 @@ import { getDatabase } from './db.js';
 
 const logger = () => createChildLogger('inbox');
 
-export type InboxKind = 'deliverable' | 'question';
+export type InboxKind = 'deliverable' | 'question' | 'note';
 export type InboxStatus = 'unread' | 'read' | 'resolved';
 
 export interface InboxEntry {
 	id: string;
-	squadId: string;
+	squadId: string | null;
 	instanceId: string | null;
 	kind: InboxKind;
 	title: string;
@@ -27,7 +27,7 @@ const pendingQuestions = new Map<string, (response: string) => void>();
  * Add a new inbox entry. For questions, returns a promise that resolves when the user responds.
  */
 export async function addInboxEntry(params: {
-	squadId: string;
+	squadId?: string;
 	instanceId?: string;
 	kind: InboxKind;
 	title: string;
@@ -41,7 +41,7 @@ export async function addInboxEntry(params: {
 		      VALUES (?, ?, ?, ?, ?, ?)`,
 		args: [
 			id,
-			params.squadId,
+			params.squadId ?? null,
 			params.instanceId ?? null,
 			params.kind,
 			params.title,
@@ -51,7 +51,7 @@ export async function addInboxEntry(params: {
 
 	const entry: InboxEntry = {
 		id,
-		squadId: params.squadId,
+		squadId: params.squadId ?? null,
 		instanceId: params.instanceId ?? null,
 		kind: params.kind,
 		title: params.title,

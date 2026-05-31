@@ -62,7 +62,7 @@ export interface MeetingEvent extends BaseEvent {
 
 export interface InboxEvent extends BaseEvent {
 	type: InboxEventType;
-	kind: 'deliverable' | 'question';
+	kind: 'deliverable' | 'question' | 'note';
 	title: string;
 	entryId: string;
 }

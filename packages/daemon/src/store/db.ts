@@ -112,7 +112,7 @@ const MIGRATIONS: { version: number; statements: string[] }[] = [
 		statements: [
 			`CREATE TABLE IF NOT EXISTS inbox_entries (
 				id TEXT PRIMARY KEY,
-				squad_id TEXT NOT NULL REFERENCES squads(id),
+				squad_id TEXT REFERENCES squads(id),
 				instance_id TEXT REFERENCES squad_instances(id),
 				kind TEXT NOT NULL,
 				title TEXT NOT NULL,
@@ -174,6 +174,30 @@ const MIGRATIONS: { version: number; statements: string[] }[] = [
 		statements: [
 			'ALTER TABLE squad_members ADD COLUMN persona TEXT',
 			'INSERT OR REPLACE INTO schema_version (version) VALUES (6)',
+		],
+	},
+	{
+		version: 7,
+		statements: [
+			// Make squad_id nullable on inbox_entries
+			`CREATE TABLE IF NOT EXISTS inbox_entries_new (
+				id TEXT PRIMARY KEY,
+				squad_id TEXT REFERENCES squads(id),
+				instance_id TEXT REFERENCES squad_instances(id),
+				kind TEXT NOT NULL,
+				title TEXT NOT NULL,
+				content TEXT NOT NULL,
+				status TEXT DEFAULT 'unread',
+				response TEXT,
+				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+				resolved_at DATETIME
+			)`,
+			`INSERT OR IGNORE INTO inbox_entries_new SELECT * FROM inbox_entries`,
+			'DROP TABLE IF EXISTS inbox_entries',
+			'ALTER TABLE inbox_entries_new RENAME TO inbox_entries',
+			'CREATE INDEX IF NOT EXISTS idx_inbox_status ON inbox_entries(status)',
+			'CREATE INDEX IF NOT EXISTS idx_inbox_squad ON inbox_entries(squad_id)',
+			'INSERT OR REPLACE INTO schema_version (version) VALUES (7)',
 		],
 	},
 ];

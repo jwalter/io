@@ -28,9 +28,15 @@ import {
 	renameMember,
 	rethemeSquad,
 } from '../squad/manager.js';
-import { listInboxEntries, resolveInboxEntry } from '../store/inbox.js';
-import { createSchedule, deleteSchedule, listSchedules } from '../store/schedules.js';
+import { addInboxEntry, listInboxEntries, resolveInboxEntry } from '../store/inbox.js';
 import {
+	createSchedule,
+	deleteSchedule,
+	listSchedules,
+	updateSchedule,
+} from '../store/schedules.js';
+import {
+	deleteWikiPage,
 	getOrchestratorScopes,
 	getPageListing,
 	listWikiPages,
@@ -38,6 +44,7 @@ import {
 	searchWiki,
 	writeWikiPage,
 } from '../wiki/index.js';
+import { queryActivity } from '../store/activity.js';
 
 export function createOrchestratorTools() {
 	return [
@@ -949,6 +956,150 @@ export function createOrchestratorTools() {
 					textResultForLlm: JSON.stringify({ removed: true, skillName: args.skillName }),
 					resultType: 'success' as const,
 				};
+			},
+		}),
+
+		defineTool('add_to_inbox', {
+			description:
+				"Create an inbox entry for the user. Use this to deliver results, leave notes, reminders, or ask the user a question that will block until they respond.",
+			parameters: z.object({
+				kind: z
+					.enum(['deliverable', 'question', 'note'])
+					.describe('Type of entry: deliverable (work product), question (blocks until answered), note (informational)'),
+				title: z.string().describe('Short title for the inbox entry'),
+				content: z.string().describe('Full content/body of the entry'),
+			}),
+			handler: async (args: { kind: 'deliverable' | 'question' | 'note'; title: string; content: string }) => {
+				try {
+					const { entry } = await addInboxEntry({
+						kind: args.kind,
+						title: args.title,
+						content: args.content,
+					});
+					return {
+						textResultForLlm: JSON.stringify({
+							created: true,
+							id: entry.id,
+							kind: entry.kind,
+							title: entry.title,
+						}),
+						resultType: 'success' as const,
+					};
+				} catch (err) {
+					return {
+						textResultForLlm: JSON.stringify({
+							error: `Failed to create inbox entry: ${err instanceof Error ? err.message : String(err)}`,
+						}),
+						resultType: 'success' as const,
+					};
+				}
+			},
+		}),
+
+		defineTool('delete_wiki', {
+			description: 'Delete a wiki page permanently.',
+			parameters: z.object({
+				scope: z.enum(['shared', 'io']).describe('Wiki scope'),
+				page: z.string().describe('Page name (without extension)'),
+			}),
+			handler: async (args: { scope: 'shared' | 'io'; page: string }) => {
+				try {
+					const deleted = deleteWikiPage(args.scope, args.page);
+					return {
+						textResultForLlm: JSON.stringify({
+							deleted,
+							scope: args.scope,
+							page: args.page,
+							message: deleted ? 'Page deleted.' : 'Page not found.',
+						}),
+						resultType: 'success' as const,
+					};
+				} catch (err) {
+					return {
+						textResultForLlm: JSON.stringify({
+							error: `Failed to delete wiki page: ${err instanceof Error ? err.message : String(err)}`,
+						}),
+						resultType: 'success' as const,
+					};
+				}
+			},
+		}),
+
+		defineTool('update_schedule', {
+			description: 'Update an existing schedule (name, cron expression, prompt, or enabled state).',
+			parameters: z.object({
+				id: z.string().describe('Schedule ID to update'),
+				name: z.string().optional().describe('New name for the schedule'),
+				cron: z.string().optional().describe('New cron expression'),
+				prompt: z.string().optional().describe('New prompt text'),
+				enabled: z.boolean().optional().describe('Enable or disable the schedule'),
+			}),
+			handler: async (args: {
+				id: string;
+				name?: string;
+				cron?: string;
+				prompt?: string;
+				enabled?: boolean;
+			}) => {
+				try {
+					const { id, ...updates } = args;
+					await updateSchedule(id, updates);
+					return {
+						textResultForLlm: JSON.stringify({
+							updated: true,
+							id,
+							changes: Object.keys(updates),
+						}),
+						resultType: 'success' as const,
+					};
+				} catch (err) {
+					return {
+						textResultForLlm: JSON.stringify({
+							error: `Failed to update schedule: ${err instanceof Error ? err.message : String(err)}`,
+						}),
+						resultType: 'success' as const,
+					};
+				}
+			},
+		}),
+
+		defineTool('query_activity', {
+			description:
+				'Query the activity log to understand what has happened recently. Useful for reviewing squad actions, system events, and task history.',
+			parameters: z.object({
+				activityType: z
+					.enum(['tool_call', 'message', 'meeting_contribution', 'task_start', 'task_complete', 'error'])
+					.optional()
+					.describe('Filter by activity type'),
+				squadId: z.string().optional().describe('Filter by squad ID'),
+				agentRole: z.string().optional().describe('Filter by agent role'),
+				limit: z.number().optional().describe('Max entries to return (default 20)'),
+			}),
+			handler: async (args: {
+				activityType?: string;
+				squadId?: string;
+				agentRole?: string;
+				limit?: number;
+			}) => {
+				try {
+					const entries = await queryActivity({
+						activityType: args.activityType as any,
+						squadId: args.squadId,
+						agentRole: args.agentRole,
+						limit: args.limit ?? 20,
+					});
+					return {
+						textResultForLlm: JSON.stringify({ entries, count: entries.length }),
+						resultType: 'success' as const,
+					};
+				} catch (err) {
+					return {
+						textResultForLlm: JSON.stringify({
+							error: `Failed to query activity: ${err instanceof Error ? err.message : String(err)}`,
+						}),
+						resultType: 'success' as const,
+					};
+				}
 			},
 		}),
 	];
