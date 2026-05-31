@@ -38,11 +38,6 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 export function App() {
 	return (
 		<AuthProvider>
-			{/* Floating orbs */}
-			<div className="orb orb-1" />
-			<div className="orb orb-2" />
-			<div className="orb orb-3" />
-
 			<AuthGate>
 				<Routes>
 					<Route element={<Layout />}>
