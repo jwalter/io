@@ -294,8 +294,10 @@ export function WikiView() {
 	}
 
 	async function createPage() {
-		const path = newPageName.trim().replace(/^\/+|\/+$/g, '');
+		let path = newPageName.trim().replace(/^\/+|\/+$/g, '');
 		if (!path) return;
+		// Strip .md extension if user included it (backend appends .md)
+		path = path.replace(/\.md$/i, '');
 
 		try {
 			const title = path.split('/').slice(-1)[0] ?? path;
