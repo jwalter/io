@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { createChildLogger } from '../logging/logger.js';
 
@@ -107,6 +107,17 @@ export function writeWikiPage(scope: WikiScope, pageName: string, content: strin
 	writeFileSync(filePath, content, 'utf-8');
 	logger().info({ scope, pageName }, 'Wiki page written');
 	return { scope, name: pageName, content };
+}
+
+/**
+ * Delete a wiki page.
+ */
+export function deleteWikiPage(scope: WikiScope, pageName: string): boolean {
+	const filePath = join(scopeDir(scope), `${pageName}.md`);
+	if (!existsSync(filePath)) return false;
+	unlinkSync(filePath);
+	logger().info({ scope, pageName }, 'Wiki page deleted');
+	return true;
 }
 
 /**

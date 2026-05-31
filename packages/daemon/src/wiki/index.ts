@@ -4,6 +4,7 @@ export {
 	listWikiPages,
 	readWikiPage,
 	writeWikiPage,
+	deleteWikiPage,
 	searchWiki,
 	getSquadScopes,
 	getOrchestratorScopes,
