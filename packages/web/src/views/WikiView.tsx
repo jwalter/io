@@ -1,5 +1,6 @@
+import { PrimaryBtn, SecondaryBtn } from '@/components/ui/shared';
 import { api } from '@/lib/api';
-import { BookOpen, FileText, Plus, Save } from 'lucide-react';
+import { BookOpen, FileText, Plus, Save, Search, Trash2 } from 'lucide-react';
 import { marked } from 'marked';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -18,6 +19,7 @@ export function WikiView() {
 	const [editContent, setEditContent] = useState('');
 	const [creating, setCreating] = useState(false);
 	const [newPageName, setNewPageName] = useState('');
+	const [search, setSearch] = useState('');
 
 	useEffect(() => {
 		loadPages();
@@ -53,6 +55,19 @@ export function WikiView() {
 		}
 	}
 
+	async function deletePage() {
+		if (!selectedPage) return;
+		try {
+			await api.delete(`/wiki/${scope}/${selectedPage}`);
+			toast.success('Page deleted');
+			setSelectedPage(null);
+			setContent('');
+			loadPages();
+		} catch {
+			toast.error('Failed to delete');
+		}
+	}
+
 	async function createPage() {
 		if (!newPageName.trim()) return;
 		try {
@@ -67,17 +82,36 @@ export function WikiView() {
 		}
 	}
 
+	const filteredPages = pages.filter(
+		(p) => !search || p.name.toLowerCase().includes(search.toLowerCase()),
+	);
+
 	return (
 		<div className="flex h-full">
-			{/* Sidebar */}
-			<div className="w-64 border-r border-[var(--color-border)] flex flex-col h-full">
-				<header className="h-14 flex items-center px-4 border-b border-[var(--color-border)] shrink-0">
-					<h1 className="text-lg font-semibold gradient-text">Wiki</h1>
-				</header>
+			{/* File tree sidebar */}
+			<div className="w-64 border-r border-white/[0.07] flex flex-col h-full bg-[#181818]">
+				<div className="p-3 border-b border-white/[0.07]">
+					<h2
+						className="text-lg tracking-wide text-zinc-100 mb-2"
+						style={{ fontFamily: "'Bebas Neue', sans-serif" }}
+					>
+						Wiki
+					</h2>
+					<div className="relative">
+						<Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-600" />
+						<input
+							type="text"
+							value={search}
+							onChange={(e) => setSearch(e.target.value)}
+							placeholder="Search pages..."
+							className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.07] text-[11px] font-mono text-zinc-300 placeholder:text-zinc-700 outline-none focus:border-[#E43A9C]/50"
+						/>
+					</div>
+				</div>
 
 				{/* Scope selector */}
-				<div className="flex gap-1 p-2 border-b border-[var(--color-border)]">
-					{['io', 'shared'].map((s) => (
+				<div className="flex gap-1 p-2 border-b border-white/[0.07]">
+					{['shared', 'io'].map((s) => (
 						<button
 							key={s}
 							type="button"
@@ -85,10 +119,10 @@ export function WikiView() {
 								setScope(s);
 								setSelectedPage(null);
 							}}
-							className={`px-2 py-1 rounded text-xs ${
+							className={`px-2.5 py-1 rounded-lg text-[11px] font-mono transition-colors ${
 								scope === s
-									? 'bg-white/10 text-[var(--color-foreground)]'
-									: 'text-[var(--color-muted-foreground)]'
+									? 'bg-white/10 text-zinc-200'
+									: 'text-zinc-600 hover:text-zinc-400'
 							}`}
 						>
 							{s}
@@ -97,24 +131,31 @@ export function WikiView() {
 				</div>
 
 				{/* Pages */}
-				<div className="flex-1 overflow-y-auto p-2">
-					{pages.map((page) => (
+				<div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+					{filteredPages.map((page) => (
 						<button
 							key={page.name}
 							type="button"
 							onClick={() => loadPage(page.name)}
-							className={`w-full text-left px-3 py-2 rounded-md text-sm flex items-center gap-2 transition-colors ${
-								selectedPage === page.name ? 'bg-white/10' : 'hover:bg-white/5'
+							className={`w-full text-left px-3 py-2 rounded-lg text-[11px] font-mono flex items-center gap-2 transition-colors ${
+								selectedPage === page.name
+									? 'bg-[#E43A9C]/10 text-[#E43A9C] border-l-2 border-[#E43A9C]'
+									: 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'
 							}`}
 						>
-							<FileText size={14} className="text-[var(--color-muted-foreground)]" />
+							<FileText size={13} className="flex-shrink-0" />
 							{page.name}
 						</button>
 					))}
+					{filteredPages.length === 0 && (
+						<p className="text-[11px] text-zinc-700 font-mono text-center py-4">
+							No pages found
+						</p>
+					)}
 				</div>
 
 				{/* Create page */}
-				<div className="p-2 border-t border-[var(--color-border)]">
+				<div className="p-2 border-t border-white/[0.07]">
 					{creating ? (
 						<div className="flex gap-1">
 							<input
@@ -122,13 +163,17 @@ export function WikiView() {
 								value={newPageName}
 								onChange={(e) => setNewPageName(e.target.value)}
 								placeholder="page-name"
-								className="flex-1 px-2 py-1 rounded text-xs bg-[var(--color-input)] border border-[var(--color-border)] outline-none"
-								onKeyDown={(e) => e.key === 'Enter' && createPage()}
+								className="flex-1 px-2.5 py-1.5 rounded-lg text-[11px] font-mono bg-white/[0.04] border border-white/[0.07] text-zinc-300 outline-none focus:border-[#E43A9C]/50"
+								onKeyDown={(e) => {
+									if (e.key === 'Enter') createPage();
+									if (e.key === 'Escape') setCreating(false);
+								}}
+								autoFocus
 							/>
 							<button
 								type="button"
 								onClick={createPage}
-								className="px-2 py-1 rounded text-xs bg-[var(--color-accent)] text-white"
+								className="px-2.5 py-1.5 rounded-lg text-[11px] bg-[#E43A9C] text-white"
 							>
 								OK
 							</button>
@@ -137,9 +182,9 @@ export function WikiView() {
 						<button
 							type="button"
 							onClick={() => setCreating(true)}
-							className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-xs text-[var(--color-muted-foreground)] hover:bg-white/5"
+							className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] font-mono text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.04] transition-colors"
 						>
-							<Plus size={14} /> New page
+							<Plus size={13} /> New page
 						</button>
 					)}
 				</div>
@@ -149,28 +194,40 @@ export function WikiView() {
 			<div className="flex-1 flex flex-col overflow-hidden">
 				{selectedPage ? (
 					<>
-						<div className="h-14 flex items-center px-6 border-b border-[var(--color-border)] justify-between shrink-0">
-							<h2 className="font-semibold">{selectedPage}</h2>
-							<div className="flex gap-2">
+						<div className="h-12 flex items-center px-6 border-b border-white/[0.07] justify-between shrink-0">
+							<h3 className="text-sm font-mono text-zinc-200">{selectedPage}</h3>
+							<div className="flex items-center gap-2">
 								{editing ? (
-									<button
-										type="button"
-										onClick={savePage}
-										className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-[var(--color-accent)] text-white text-xs"
-									>
-										<Save size={12} /> Save
-									</button>
+									<>
+										<PrimaryBtn onClick={savePage} className="px-3 py-1">
+											<Save size={12} /> Save
+										</PrimaryBtn>
+										<SecondaryBtn
+											onClick={() => setEditing(false)}
+											className="px-3 py-1"
+										>
+											Cancel
+										</SecondaryBtn>
+									</>
 								) : (
-									<button
-										type="button"
-										onClick={() => {
-											setEditing(true);
-											setEditContent(content);
-										}}
-										className="px-3 py-1.5 rounded-md bg-white/5 text-xs hover:bg-white/10"
-									>
-										Edit
-									</button>
+									<>
+										<SecondaryBtn
+											onClick={() => {
+												setEditing(true);
+												setEditContent(content);
+											}}
+											className="px-3 py-1"
+										>
+											Edit
+										</SecondaryBtn>
+										<button
+											type="button"
+											onClick={deletePage}
+											className="p-1.5 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+										>
+											<Trash2 size={13} />
+										</button>
+									</>
 								)}
 							</div>
 						</div>
@@ -179,7 +236,7 @@ export function WikiView() {
 								<textarea
 									value={editContent}
 									onChange={(e) => setEditContent(e.target.value)}
-									className="w-full h-full bg-transparent font-mono text-sm outline-none resize-none"
+									className="w-full h-full bg-transparent font-mono text-sm text-zinc-300 outline-none resize-none"
 								/>
 							) : (
 								<div
@@ -191,10 +248,12 @@ export function WikiView() {
 						</div>
 					</>
 				) : (
-					<div className="h-full flex items-center justify-center text-[var(--color-muted-foreground)]">
+					<div className="h-full flex items-center justify-center">
 						<div className="text-center">
-							<BookOpen size={48} className="mx-auto mb-3 opacity-30" />
-							<p>Select a page to view</p>
+							<BookOpen size={48} className="mx-auto mb-3 text-zinc-800" />
+							<p className="text-[11px] font-mono text-zinc-700">
+								Select a page to view
+							</p>
 						</div>
 					</div>
 				)}

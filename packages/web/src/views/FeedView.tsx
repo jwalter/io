@@ -1,5 +1,6 @@
+import { Chip } from '@/components/ui/shared';
 import { api } from '@/lib/api';
-import { Inbox } from 'lucide-react';
+import { Inbox, Mail, MailOpen } from 'lucide-react';
 import { marked } from 'marked';
 import { useEffect, useState } from 'react';
 
@@ -17,6 +18,7 @@ interface FeedItem {
 export function FeedView() {
 	const [items, setItems] = useState<FeedItem[]>([]);
 	const [selected, setSelected] = useState<FeedItem | null>(null);
+	const [filter, setFilter] = useState<'all' | 'unread'>('all');
 
 	useEffect(() => {
 		api
@@ -37,41 +39,82 @@ export function FeedView() {
 		}
 	}
 
+	const filtered = items.filter((i) => filter === 'all' || i.status === 'unread');
+	const unreadCount = items.filter((i) => i.status === 'unread').length;
+
 	return (
 		<div className="flex h-full">
 			{/* List */}
-			<div className="w-80 border-r border-[var(--color-border)] flex flex-col h-full">
-				<header className="h-14 flex items-center px-4 border-b border-[var(--color-border)] shrink-0">
-					<h1 className="text-lg font-semibold gradient-text">Feed</h1>
-				</header>
+			<div className="w-80 border-r border-white/[0.07] flex flex-col h-full bg-[#181818]">
+				<div className="p-3 border-b border-white/[0.07]">
+					<div className="flex items-center justify-between mb-2">
+						<h2
+							className="text-lg tracking-wide text-zinc-100"
+							style={{ fontFamily: "'Bebas Neue', sans-serif" }}
+						>
+							Feed
+						</h2>
+						{unreadCount > 0 && (
+							<Chip variant="default">{unreadCount}</Chip>
+						)}
+					</div>
+					<div className="flex gap-1 p-1 rounded-xl bg-white/[0.03] border border-white/[0.07]">
+						{(['all', 'unread'] as const).map((f) => (
+							<button
+								key={f}
+								type="button"
+								onClick={() => setFilter(f)}
+								className={`flex-1 px-2 py-1 rounded-lg text-[11px] font-mono transition-colors ${
+									filter === f
+										? 'bg-white/10 text-zinc-200'
+										: 'text-zinc-600 hover:text-zinc-400'
+								}`}
+							>
+								{f === 'all' ? 'All' : 'Unread'}
+							</button>
+						))}
+					</div>
+				</div>
 				<div className="flex-1 overflow-y-auto">
-					{items.map((item) => (
+					{filtered.map((item) => (
 						<button
 							key={item.id}
 							onClick={() => handleSelect(item)}
 							type="button"
-							className={`w-full text-left px-4 py-3 border-b border-[var(--color-border)] hover:bg-white/3 transition-colors ${
-								selected?.id === item.id ? 'bg-white/5' : ''
-							}`}
+							className={`w-full text-left px-4 py-3 border-b border-white/[0.05] transition-colors ${
+								selected?.id === item.id
+									? 'bg-white/[0.06]'
+									: 'hover:bg-white/[0.03]'
+							} ${item.status === 'unread' ? 'border-l-2 border-l-[#E43A9C]' : ''}`}
 						>
 							<div className="flex items-center gap-2">
-								{item.status === 'unread' && (
-									<span className="w-2 h-2 rounded-full bg-[var(--color-accent)] shrink-0" />
+								{item.status === 'unread' ? (
+									<Mail size={12} className="text-[#E43A9C] flex-shrink-0" />
+								) : (
+									<MailOpen size={12} className="text-zinc-700 flex-shrink-0" />
 								)}
-								<span className="text-xs text-[var(--color-muted-foreground)] uppercase">
+								<span className="text-[10px] text-zinc-600 font-mono uppercase">
 									{item.kind}
 								</span>
 							</div>
-							<p className="text-sm font-medium mt-1 truncate">{item.title}</p>
-							<p className="text-xs text-[var(--color-muted-foreground)] mt-0.5">
+							<p
+								className={`text-sm mt-1 truncate ${
+									item.status === 'unread' ? 'text-zinc-200 font-medium' : 'text-zinc-400'
+								}`}
+							>
+								{item.title}
+							</p>
+							<p className="text-[10px] text-zinc-700 font-mono mt-0.5">
 								{new Date(item.createdAt).toLocaleString()}
 							</p>
 						</button>
 					))}
-					{items.length === 0 && (
-						<div className="flex flex-col items-center justify-center py-12 text-[var(--color-muted-foreground)]">
-							<Inbox size={32} className="opacity-30 mb-2" />
-							<p className="text-sm">No items yet</p>
+					{filtered.length === 0 && (
+						<div className="flex flex-col items-center justify-center py-12">
+							<Inbox size={32} className="text-zinc-800 mb-2" />
+							<p className="text-[11px] font-mono text-zinc-700">
+								{filter === 'unread' ? 'All caught up' : 'No items yet'}
+							</p>
 						</div>
 					)}
 				</div>
@@ -81,8 +124,8 @@ export function FeedView() {
 			<div className="flex-1 overflow-y-auto p-6">
 				{selected ? (
 					<div>
-						<h2 className="text-xl font-semibold mb-1">{selected.title}</h2>
-						<p className="text-xs text-[var(--color-muted-foreground)] mb-4">
+						<h2 className="text-lg text-zinc-100 font-medium mb-1">{selected.title}</h2>
+						<p className="text-[11px] text-zinc-600 font-mono mb-5">
 							{selected.kind} · {new Date(selected.createdAt).toLocaleString()}
 						</p>
 						<div
@@ -92,8 +135,10 @@ export function FeedView() {
 						/>
 					</div>
 				) : (
-					<div className="h-full flex items-center justify-center text-[var(--color-muted-foreground)]">
-						Select an item to view details
+					<div className="h-full flex items-center justify-center">
+						<p className="text-[11px] font-mono text-zinc-700">
+							Select an item to view details
+						</p>
 					</div>
 				)}
 			</div>

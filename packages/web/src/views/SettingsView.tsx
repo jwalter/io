@@ -1,5 +1,6 @@
+import { PrimaryBtn } from '@/components/ui/shared';
 import { api } from '@/lib/api';
-import { Save } from 'lucide-react';
+import { Eye, EyeOff, Save } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -48,9 +49,7 @@ export function SettingsView() {
 
 	if (!config) {
 		return (
-			<div className="h-full flex items-center justify-center text-[var(--color-muted-foreground)]">
-				Loading...
-			</div>
+			<div className="h-full flex items-center justify-center text-zinc-600">Loading...</div>
 		);
 	}
 
@@ -63,36 +62,37 @@ export function SettingsView() {
 	];
 
 	return (
-		<div className="h-full overflow-y-auto p-6">
-			<header className="flex items-center justify-between mb-6">
+		<div className="flex-1 overflow-y-auto p-6">
+			<div className="flex items-center justify-between mb-6">
 				<div>
-					<h1 className="text-2xl font-bold gradient-text">Settings</h1>
-					<p className="text-sm text-[var(--color-muted-foreground)] mt-1">
+					<h2
+						className="text-2xl tracking-wide text-zinc-100"
+						style={{ fontFamily: "'Bebas Neue', sans-serif" }}
+					>
+						Settings
+					</h2>
+					<p className="text-[11px] text-zinc-600 font-mono mt-0.5">
 						Configure IO daemon behavior
 					</p>
 				</div>
 				{dirty && (
-					<button
-						type="button"
-						onClick={save}
-						className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-accent)] text-white text-sm hover:opacity-90"
-					>
-						<Save size={16} /> Save Changes
-					</button>
+					<PrimaryBtn onClick={save} className="px-3 py-1.5">
+						<Save className="w-3.5 h-3.5" /> Save Changes
+					</PrimaryBtn>
 				)}
-			</header>
+			</div>
 
 			{/* Tabs */}
-			<div className="flex gap-1 mb-6 p-1 rounded-lg bg-white/3 w-fit">
+			<div className="flex gap-1 mb-6 p-1 rounded-xl bg-white/[0.03] border border-white/[0.07] w-fit">
 				{TABS.map((t) => (
 					<button
 						key={t.id}
 						type="button"
 						onClick={() => setTab(t.id)}
-						className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+						className={`px-4 py-1.5 rounded-lg text-[11px] font-mono transition-colors ${
 							tab === t.id
-								? 'bg-white/10 text-[var(--color-foreground)]'
-								: 'text-[var(--color-muted-foreground)]'
+								? 'bg-white/10 text-zinc-200'
+								: 'text-zinc-600 hover:text-zinc-400'
 						}`}
 					>
 						{t.label}
@@ -101,14 +101,14 @@ export function SettingsView() {
 			</div>
 
 			{/* Content */}
-			<div className="glass-card p-6 max-w-2xl">
+			<div className="glass-card border border-white/[0.07] rounded-2xl p-6 max-w-2xl">
 				{tab === 'general' && (
-					<div className="space-y-4">
+					<div className="space-y-5">
 						<Field label="Log Level">
 							<select
 								value={config.logLevel}
 								onChange={(e) => update({ logLevel: e.target.value })}
-								className="w-full px-3 py-2 rounded-md bg-[var(--color-input)] border border-[var(--color-border)] text-sm outline-none"
+								className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.07] text-sm font-mono text-zinc-300 outline-none focus:border-[#E43A9C]/50"
 							>
 								{['trace', 'debug', 'info', 'warn', 'error', 'fatal'].map((l) => (
 									<option key={l} value={l}>
@@ -122,7 +122,7 @@ export function SettingsView() {
 								type="text"
 								value={config.defaultModel}
 								onChange={(e) => update({ defaultModel: e.target.value })}
-								className="w-full px-3 py-2 rounded-md bg-[var(--color-input)] border border-[var(--color-border)] text-sm outline-none focus:border-[var(--color-accent)]"
+								className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.07] text-sm font-mono text-zinc-300 outline-none focus:border-[#E43A9C]/50"
 							/>
 						</Field>
 						<Field label="Max Instances Per Squad">
@@ -130,7 +130,7 @@ export function SettingsView() {
 								type="number"
 								value={config.maxInstancesPerSquad}
 								onChange={(e) => update({ maxInstancesPerSquad: Number(e.target.value) })}
-								className="w-full px-3 py-2 rounded-md bg-[var(--color-input)] border border-[var(--color-border)] text-sm outline-none focus:border-[var(--color-accent)]"
+								className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.07] text-sm font-mono text-zinc-300 outline-none focus:border-[#E43A9C]/50"
 								min={1}
 								max={10}
 							/>
@@ -140,23 +140,21 @@ export function SettingsView() {
 								type="number"
 								value={config.apiPort}
 								onChange={(e) => update({ apiPort: Number(e.target.value) })}
-								className="w-full px-3 py-2 rounded-md bg-[var(--color-input)] border border-[var(--color-border)] text-sm outline-none focus:border-[var(--color-accent)]"
+								className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.07] text-sm font-mono text-zinc-300 outline-none focus:border-[#E43A9C]/50"
 							/>
 						</Field>
 					</div>
 				)}
 
 				{tab === 'telegram' && (
-					<div className="space-y-4">
+					<div className="space-y-5">
 						<Field label="Bot Token">
-							<input
-								type="password"
+							<MaskedInput
 								value={config.telegram.botToken ?? ''}
-								onChange={(e) =>
-									update({ telegram: { ...config.telegram, botToken: e.target.value || null } })
+								onChange={(v) =>
+									update({ telegram: { ...config.telegram, botToken: v || null } })
 								}
 								placeholder="Enter Telegram bot token"
-								className="w-full px-3 py-2 rounded-md bg-[var(--color-input)] border border-[var(--color-border)] text-sm outline-none focus:border-[var(--color-accent)]"
 							/>
 						</Field>
 						<Field label="Allowed Chat IDs (comma-separated)">
@@ -174,14 +172,14 @@ export function SettingsView() {
 										},
 									})
 								}
-								className="w-full px-3 py-2 rounded-md bg-[var(--color-input)] border border-[var(--color-border)] text-sm outline-none focus:border-[var(--color-accent)] font-mono"
+								className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.07] text-sm font-mono text-zinc-300 outline-none focus:border-[#E43A9C]/50"
 							/>
 						</Field>
 					</div>
 				)}
 
 				{tab === 'auth' && (
-					<div className="space-y-4">
+					<div className="space-y-5">
 						<Field label="Supabase Project URL">
 							<input
 								type="text"
@@ -190,32 +188,28 @@ export function SettingsView() {
 									update({ supabase: { ...config.supabase, projectUrl: e.target.value || null } })
 								}
 								placeholder="https://your-project.supabase.co"
-								className="w-full px-3 py-2 rounded-md bg-[var(--color-input)] border border-[var(--color-border)] text-sm outline-none focus:border-[var(--color-accent)] font-mono"
+								className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.07] text-sm font-mono text-zinc-300 outline-none focus:border-[#E43A9C]/50"
 							/>
 						</Field>
 						<Field label="Supabase Anon Key">
-							<input
-								type="password"
+							<MaskedInput
 								value={config.supabase.anonKey ?? ''}
-								onChange={(e) =>
-									update({ supabase: { ...config.supabase, anonKey: e.target.value || null } })
+								onChange={(v) =>
+									update({ supabase: { ...config.supabase, anonKey: v || null } })
 								}
 								placeholder="eyJhbGciOiJIUzI1NiIs..."
-								className="w-full px-3 py-2 rounded-md bg-[var(--color-input)] border border-[var(--color-border)] text-sm outline-none focus:border-[var(--color-accent)] font-mono"
 							/>
 						</Field>
 						<Field label="JWT Secret">
-							<input
-								type="password"
+							<MaskedInput
 								value={config.supabase.jwtSecret ?? ''}
-								onChange={(e) =>
-									update({ supabase: { ...config.supabase, jwtSecret: e.target.value || null } })
+								onChange={(v) =>
+									update({ supabase: { ...config.supabase, jwtSecret: v || null } })
 								}
 								placeholder="your-jwt-secret"
-								className="w-full px-3 py-2 rounded-md bg-[var(--color-input)] border border-[var(--color-border)] text-sm outline-none focus:border-[var(--color-accent)] font-mono"
 							/>
 						</Field>
-						<p className="text-xs text-[var(--color-muted-foreground)]">
+						<p className="text-[11px] text-zinc-600 font-mono leading-relaxed">
 							When configured, the web dashboard requires Supabase authentication to access. The JWT
 							Secret is used to verify tokens server-side — find it in Supabase project settings →
 							API → JWT Settings.
@@ -224,7 +218,7 @@ export function SettingsView() {
 				)}
 
 				{tab === 'models' && (
-					<div className="space-y-4">
+					<div className="space-y-5">
 						<Field label="Pricing Refresh Interval (hours)">
 							<input
 								type="number"
@@ -232,26 +226,26 @@ export function SettingsView() {
 								onChange={(e) =>
 									update({ pricing: { refreshIntervalHours: Number(e.target.value) } })
 								}
-								className="w-full px-3 py-2 rounded-md bg-[var(--color-input)] border border-[var(--color-border)] text-sm outline-none focus:border-[var(--color-accent)]"
+								className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.07] text-sm font-mono text-zinc-300 outline-none focus:border-[#E43A9C]/50"
 								min={1}
 							/>
 						</Field>
-						<p className="text-xs text-[var(--color-muted-foreground)]">
+						<p className="text-[11px] text-zinc-600 font-mono leading-relaxed">
 							Model pricing is auto-refreshed from GitHub docs at this interval.
 						</p>
 					</div>
 				)}
 
 				{tab === 'advanced' && (
-					<div className="space-y-4">
+					<div className="space-y-5">
 						<Field label="Data Directory">
 							<input
 								type="text"
 								value={config.dataDir}
 								disabled
-								className="w-full px-3 py-2 rounded-md bg-[var(--color-input)] border border-[var(--color-border)] text-sm outline-none opacity-60 cursor-not-allowed font-mono"
+								className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.07] text-sm font-mono text-zinc-500 outline-none cursor-not-allowed"
 							/>
-							<p className="text-xs text-[var(--color-muted-foreground)] mt-1">
+							<p className="text-[11px] text-zinc-700 font-mono mt-1">
 								Cannot be changed while daemon is running.
 							</p>
 						</Field>
@@ -265,10 +259,34 @@ export function SettingsView() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
 	return (
 		<div>
-			<label className="block text-sm font-medium text-[var(--color-foreground)] mb-1.5">
-				{label}
-			</label>
+			<label className="block text-[11px] font-mono text-zinc-400 mb-1.5">{label}</label>
 			{children}
+		</div>
+	);
+}
+
+function MaskedInput({
+	value,
+	onChange,
+	placeholder,
+}: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+	const [visible, setVisible] = useState(false);
+	return (
+		<div className="relative">
+			<input
+				type={visible ? 'text' : 'password'}
+				value={value}
+				onChange={(e) => onChange(e.target.value)}
+				placeholder={placeholder}
+				className="w-full px-3 py-2 pr-9 rounded-xl bg-white/[0.04] border border-white/[0.07] text-sm font-mono text-zinc-300 outline-none focus:border-[#E43A9C]/50"
+			/>
+			<button
+				type="button"
+				onClick={() => setVisible(!visible)}
+				className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors"
+			>
+				{visible ? <EyeOff size={14} /> : <Eye size={14} />}
+			</button>
 		</div>
 	);
 }

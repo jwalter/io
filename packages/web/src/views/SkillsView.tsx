@@ -1,5 +1,6 @@
+import { Chip, PrimaryBtn, SecondaryBtn } from '@/components/ui/shared';
 import { api } from '@/lib/api';
-import { Plus, Trash2, Zap } from 'lucide-react';
+import { Plus, Search, Trash2, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -14,6 +15,7 @@ export function SkillsView() {
 	const [showInstall, setShowInstall] = useState(false);
 	const [installUrl, setInstallUrl] = useState('');
 	const [installName, setInstallName] = useState('');
+	const [search, setSearch] = useState('');
 
 	useEffect(() => {
 		loadSkills();
@@ -50,96 +52,117 @@ export function SkillsView() {
 		}
 	}
 
+	const filtered = skills.filter(
+		(s) => !search || s.name.toLowerCase().includes(search.toLowerCase()),
+	);
+
 	return (
-		<div className="h-full overflow-y-auto p-6">
-			<header className="flex items-center justify-between mb-6">
+		<div className="flex-1 overflow-y-auto p-6">
+			<div className="flex items-center justify-between mb-6">
 				<div>
-					<h1 className="text-2xl font-bold gradient-text">Skills</h1>
-					<p className="text-sm text-[var(--color-muted-foreground)] mt-1">
-						Installed capabilities that extend IO
+					<h2
+						className="text-2xl tracking-wide text-zinc-100"
+						style={{ fontFamily: "'Bebas Neue', sans-serif" }}
+					>
+						Skills
+					</h2>
+					<p className="text-[11px] text-zinc-600 font-mono mt-0.5">
+						{skills.length} installed capabilities
 					</p>
 				</div>
-				<button
-					type="button"
-					onClick={() => setShowInstall(true)}
-					className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-accent)] text-white text-sm hover:opacity-90 transition-opacity"
-				>
-					<Plus size={16} /> Install
-				</button>
-			</header>
+				<PrimaryBtn onClick={() => setShowInstall(true)} className="px-3 py-1.5">
+					<Plus className="w-3.5 h-3.5" /> Install
+				</PrimaryBtn>
+			</div>
 
-			{/* Install modal */}
+			{/* Search */}
+			<div className="relative mb-4 max-w-sm">
+				<Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-600" />
+				<input
+					type="text"
+					value={search}
+					onChange={(e) => setSearch(e.target.value)}
+					placeholder="Search skills..."
+					className="w-full pl-9 pr-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.07] text-[11px] font-mono text-zinc-300 placeholder:text-zinc-700 outline-none focus:border-[#E43A9C]/50"
+				/>
+			</div>
+
+			{/* Install form */}
 			{showInstall && (
-				<div className="glass-card p-4 mb-6">
-					<h3 className="font-semibold mb-3">Install Skill</h3>
+				<div className="glass-card border border-white/[0.07] rounded-2xl p-5 mb-5">
+					<h3
+						className="text-base tracking-wide text-zinc-200 mb-3"
+						style={{ fontFamily: "'Bebas Neue', sans-serif" }}
+					>
+						Install Skill
+					</h3>
 					<div className="space-y-3">
 						<input
 							type="text"
 							placeholder="Skill name"
 							value={installName}
 							onChange={(e) => setInstallName(e.target.value)}
-							className="w-full px-3 py-2 rounded-md bg-[var(--color-input)] border border-[var(--color-border)] text-sm outline-none focus:border-[var(--color-accent)]"
+							className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.07] text-sm font-mono text-zinc-300 outline-none focus:border-[#E43A9C]/50"
 						/>
 						<input
 							type="text"
 							placeholder="URL to SKILL.md"
 							value={installUrl}
 							onChange={(e) => setInstallUrl(e.target.value)}
-							className="w-full px-3 py-2 rounded-md bg-[var(--color-input)] border border-[var(--color-border)] text-sm outline-none focus:border-[var(--color-accent)]"
+							className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.07] text-sm font-mono text-zinc-300 outline-none focus:border-[#E43A9C]/50"
 						/>
 						<div className="flex gap-2">
-							<button
-								type="button"
-								onClick={handleInstall}
-								className="px-3 py-1.5 rounded-md bg-[var(--color-accent)] text-white text-sm"
-							>
+							<PrimaryBtn onClick={handleInstall} className="px-3 py-1.5">
 								Install
-							</button>
-							<button
-								type="button"
-								onClick={() => setShowInstall(false)}
-								className="px-3 py-1.5 rounded-md bg-white/5 text-sm"
-							>
+							</PrimaryBtn>
+							<SecondaryBtn onClick={() => setShowInstall(false)} className="px-3 py-1.5">
 								Cancel
-							</button>
+							</SecondaryBtn>
 						</div>
 					</div>
 				</div>
 			)}
 
 			{/* Grid */}
-			<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-				{skills.map((skill) => (
-					<div key={skill.name} className="glass-card p-4">
+			<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+				{filtered.map((skill) => (
+					<div
+						key={skill.name}
+						className="glass-card border border-white/[0.07] rounded-2xl p-4 group"
+					>
 						<div className="flex items-start justify-between">
 							<div className="flex items-center gap-2">
-								<Zap size={16} className="text-[var(--color-accent)]" />
-								<h3 className="font-medium text-sm">{skill.name}</h3>
+								<div className="w-7 h-7 rounded-lg flex items-center justify-center bg-[#E43A9C]/10">
+									<Zap size={14} className="text-[#E43A9C]" />
+								</div>
+								<h3 className="text-sm font-mono text-zinc-200">{skill.name}</h3>
 							</div>
 							<button
 								type="button"
 								onClick={() => handleRemove(skill.name)}
-								className="text-[var(--color-muted-foreground)] hover:text-[var(--color-destructive)] transition-colors"
+								className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-red-400/10 transition-all"
 							>
-								<Trash2 size={14} />
+								<Trash2 size={13} />
 							</button>
 						</div>
-						<p className="text-xs text-[var(--color-muted-foreground)] mt-2 line-clamp-3">
+						<p className="text-[11px] text-zinc-600 font-mono mt-2.5 line-clamp-3 leading-relaxed">
 							{skill.preview}
 						</p>
 						{skill.activatedForOrchestrator && (
-							<span className="inline-block mt-2 text-xs px-2 py-0.5 rounded-full bg-[var(--color-success)]/10 text-[var(--color-success)]">
+							<Chip variant="success" className="mt-2.5">
 								Active
-							</span>
+							</Chip>
 						)}
 					</div>
 				))}
 			</div>
 
-			{skills.length === 0 && !showInstall && (
-				<div className="text-center py-12 text-[var(--color-muted-foreground)]">
-					<Zap size={48} className="mx-auto mb-3 opacity-30" />
-					<p>No skills installed. Click Install to add one.</p>
+			{filtered.length === 0 && !showInstall && (
+				<div className="text-center py-12">
+					<Zap size={48} className="mx-auto mb-3 text-zinc-800" />
+					<p className="text-[11px] font-mono text-zinc-700">
+						{search ? 'No skills match your search' : 'No skills installed. Click Install to add one.'}
+					</p>
 				</div>
 			)}
 		</div>

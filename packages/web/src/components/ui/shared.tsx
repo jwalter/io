@@ -28,7 +28,8 @@ export function StatusDot({ status }: { status: StatusKind }) {
 export function Chip({
 	children,
 	variant = 'muted',
-}: { children: React.ReactNode; variant?: BadgeVariant }) {
+	className = '',
+}: { children: React.ReactNode; variant?: BadgeVariant; className?: string }) {
 	const cls = {
 		default: 'bg-[#E43A9C]/15 text-[#F041FF] border-[#E43A9C]/20',
 		success: 'bg-green-500/15 text-green-400 border-green-500/20',
@@ -39,7 +40,7 @@ export function Chip({
 	}[variant];
 	return (
 		<span
-			className={`inline-flex items-center px-2 py-px rounded-full text-[10px] font-mono border ${cls}`}
+			className={`inline-flex items-center px-2 py-px rounded-full text-[10px] font-mono border ${cls} ${className}`}
 		>
 			{children}
 		</span>
