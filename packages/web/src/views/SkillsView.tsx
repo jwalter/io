@@ -51,6 +51,114 @@ function formatInstalls(installs?: number) {
 	return `${installs} installs`;
 }
 
+interface ParsedSkill {
+	frontMatter: Record<string, string | string[] | Record<string, string>>;
+	body: string;
+}
+
+function parseSkillContent(content: string): ParsedSkill {
+	const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/);
+	if (!fmMatch) {
+		return { frontMatter: {}, body: content };
+	}
+
+	const fmRaw = fmMatch[1] ?? '';
+	const body = fmMatch[2] ?? '';
+	const frontMatter: Record<string, string | string[] | Record<string, string>> = {};
+
+	let currentKey = '';
+	let currentArrayItems: string[] | null = null;
+
+	for (const line of fmRaw.split('\n')) {
+		const kvMatch = line.match(/^(\w[\w-]*)\s*:\s*(.*)$/);
+		if (kvMatch) {
+			if (currentKey && currentArrayItems) {
+				frontMatter[currentKey] = currentArrayItems;
+				currentArrayItems = null;
+			}
+			currentKey = kvMatch[1] ?? '';
+			const value = (kvMatch[2] ?? '').trim();
+			if (value === '' || value === '[]') {
+				currentArrayItems = [];
+			} else if (value.startsWith('[') && value.endsWith(']')) {
+				frontMatter[currentKey] = value.slice(1, -1).split(',').map((s) => s.trim().replace(/^["']|["']$/g, ''));
+			} else {
+				frontMatter[currentKey] = value.replace(/^["']|["']$/g, '');
+			}
+		} else if (line.match(/^\s+-\s+(.+)/) && currentKey) {
+			if (!currentArrayItems) currentArrayItems = [];
+			currentArrayItems.push(line.replace(/^\s+-\s+/, '').trim());
+		}
+	}
+	if (currentKey && currentArrayItems) {
+		frontMatter[currentKey] = currentArrayItems;
+	}
+
+	return { frontMatter, body };
+}
+
+const FM_DISPLAY_ORDER = [
+	'name', 'description', 'version', 'author', 'license',
+	'argument_hint', 'argument-hint', 'use_when', 'use-when',
+	'enhancements', 'metadata', 'tags',
+];
+
+function SkillContentView({ content }: { content: string }) {
+	const { frontMatter, body } = parseSkillContent(content);
+	const fmKeys = FM_DISPLAY_ORDER.filter((k) => frontMatter[k] !== undefined);
+	const extraKeys = Object.keys(frontMatter).filter((k) => !FM_DISPLAY_ORDER.includes(k));
+	const allKeys = [...fmKeys, ...extraKeys];
+
+	return (
+		<div>
+			{allKeys.length > 0 && (
+				<div className="border-b border-white/[0.05] pb-4 mb-4">
+					<p className="text-[10px] font-mono text-zinc-700 uppercase tracking-wider mb-3">Front Matter</p>
+					<div className="space-y-2">
+						{allKeys.map((key) => {
+							const val = frontMatter[key];
+							if (val === undefined || val === null) return null;
+							if (Array.isArray(val) && val.length === 0) return null;
+							return (
+								<div key={key} className="flex gap-3 items-start">
+									<span className="text-[10px] font-mono text-zinc-600 w-28 flex-shrink-0 pt-0.5">{key}</span>
+									<div className="flex-1 min-w-0">
+										{Array.isArray(val) ? (
+											<div className="flex flex-wrap gap-1">
+												{val.map((v, i) => <Chip key={i} variant="muted">{v}</Chip>)}
+											</div>
+										) : typeof val === 'object' ? (
+											<div className="space-y-0.5">
+												{Object.entries(val).map(([k, v]) => (
+													<p key={k} className="text-[11px] font-mono text-zinc-400">
+														<span className="text-zinc-600">{k}:</span> {v}
+													</p>
+												))}
+											</div>
+										) : key === 'use_when' || key === 'use-when' ? (
+											<p className="text-[11px] text-zinc-300 leading-relaxed">{val}</p>
+										) : key === 'argument_hint' || key === 'argument-hint' ? (
+											<code className="text-[11px] font-mono text-[#E43A9C] bg-[#2d1a24] px-1.5 py-0.5 rounded">{val}</code>
+										) : (
+											<span className="text-[11px] font-mono text-zinc-300">{val}</span>
+										)}
+									</div>
+								</div>
+							);
+						})}
+					</div>
+				</div>
+			)}
+			{body.trim() && (
+				<div>
+					<p className="text-[10px] font-mono text-zinc-700 uppercase tracking-wider mb-3">Body</p>
+					<MarkdownRenderer content={body} />
+				</div>
+			)}
+		</div>
+	);
+}
+
 export function SkillsView() {
 	const [sourceTab, setSourceTab] = useState<SkillSourceTab>('installed');
 	const [installedSkills, setInstalledSkills] = useState<InstalledSkillSummary[]>([]);
@@ -417,7 +525,7 @@ export function SkillsView() {
 										</div>
 									</div>
 								) : selectedInstalledSkill ? (
-									<MarkdownRenderer content={selectedInstalledSkill.content} />
+										<SkillContentView content={selectedInstalledSkill.content} />
 								) : (
 									<p className="font-mono text-[11px] text-zinc-500">Select an installed skill to inspect it.</p>
 								)}
