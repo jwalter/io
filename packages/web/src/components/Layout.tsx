@@ -1,9 +1,9 @@
 import { cn } from '@/lib/utils';
 import { IoMark } from '@/components/ui/io-mark';
 import { StatusDot } from '@/components/ui/shared';
+import { NotificationBell } from '@/components/NotificationPanel';
 import {
 	BarChart2,
-	Bell,
 	BookOpen,
 	Calendar,
 	ChevronLeft,
@@ -176,13 +176,8 @@ export function Layout() {
 						<span className="text-[11px] font-mono text-green-400">connected</span>
 					</div>
 					<div className="flex items-center gap-1.5">
-						{/* Notification bell */}
-						<NavLink
-							to="/feed"
-							className="relative p-2 rounded-xl hover:bg-white/[0.05] text-zinc-600 hover:text-zinc-300 transition-colors"
-						>
-							<Bell className="w-3.5 h-3.5" />
-						</NavLink>
+							{/* Notification bell */}
+							<NotificationBell />
 
 						{/* Logout */}
 						{supabase && (

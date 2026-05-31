@@ -1,4 +1,5 @@
 import { IoMark } from '@/components/ui/io-mark';
+import { pushNotification } from '@/components/NotificationPanel';
 import { type WsMessage, useWebSocket } from '@/hooks/use-websocket';
 import { api, getCurrentToken } from '@/lib/api';
 import { MessageCircle, Paperclip, Send, Square } from 'lucide-react';
@@ -82,7 +83,16 @@ export function ChatOverlay() {
 		]);
 	}, []);
 
-	const handleEvent = useCallback((_msg: WsMessage) => {}, []);
+	const handleEvent = useCallback((msg: WsMessage) => {
+		if (msg.notification) {
+			pushNotification({
+				id: msg.event?.id ?? crypto.randomUUID(),
+				message: msg.notification,
+				timestamp: msg.event?.timestamp ?? new Date().toISOString(),
+				eventType: msg.event?.type ?? 'unknown',
+			});
+		}
+	}, []);
 
 	const handleError = useCallback(() => {
 		setIsStreaming(false);
