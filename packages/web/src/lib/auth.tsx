@@ -28,11 +28,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 	const [loading, setLoading] = useState(true);
 	const sessionRef = useRef<Session | null>(null);
 
-	// Keep ref in sync for the token getter
-	useEffect(() => {
-		sessionRef.current = session;
-	}, [session]);
-
 	// Register token getter so api.ts can attach Bearer token
 	useEffect(() => {
 		setTokenGetter(() => sessionRef.current?.access_token ?? null);
@@ -51,6 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 					// Get existing session
 					client.auth.getSession().then(({ data }) => {
+						sessionRef.current = data.session;
 						setSession(data.session);
 						setLoading(false);
 					});
@@ -59,6 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 					const {
 						data: { subscription },
 					} = client.auth.onAuthStateChange((_event, sess) => {
+						sessionRef.current = sess;
 						setSession(sess);
 					});
 
@@ -81,6 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 	async function signOut() {
 		if (!supabase) return;
 		await supabase.auth.signOut();
+		sessionRef.current = null;
 		setSession(null);
 	}
 
