@@ -29,8 +29,9 @@ export function squadsRouter(): Router {
 						activeInstances: instances.filter(
 							(i) => i.status !== 'complete' && i.status !== 'failed',
 						).length,
-						createdAt: s.createdAt.toISOString(),
-					};
+							totalInstances: instances.length,
+							createdAt: s.createdAt.toISOString(),
+						};
 				}),
 			);
 			res.json({ squads: results });
