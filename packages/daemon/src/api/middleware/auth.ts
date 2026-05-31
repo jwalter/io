@@ -5,6 +5,9 @@ import { createChildLogger } from '../../logging/logger.js';
 
 const logger = () => createChildLogger('auth');
 
+// Accepted algorithms for symmetric (HMAC) JWT verification
+const ALLOWED_ALGORITHMS: jwt.Algorithm[] = ['HS256', 'HS384', 'HS512'];
+
 // Routes that don't require authentication (paths relative to /api mount)
 const EXEMPT_ROUTES: Array<{ method: string; path: string }> = [
 	{ method: 'GET', path: '/health' },
@@ -44,7 +47,7 @@ export function authMiddleware(config: IOConfig) {
 
 		try {
 			jwt.verify(token, config.supabase.jwtSecret, {
-				algorithms: ['HS256'],
+				algorithms: ALLOWED_ALGORITHMS,
 				clockTolerance: 30,
 			});
 			next();
@@ -71,7 +74,7 @@ export function verifyWsToken(config: IOConfig, token: string | null): boolean {
 
 	try {
 		jwt.verify(token, config.supabase.jwtSecret, {
-			algorithms: ['HS256'],
+			algorithms: ALLOWED_ALGORITHMS,
 			clockTolerance: 30,
 		});
 		return true;
