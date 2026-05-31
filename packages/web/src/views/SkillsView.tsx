@@ -55,7 +55,11 @@ export function SkillsView() {
 	const [sourceTab, setSourceTab] = useState<SkillSourceTab>('installed');
 	const [installedSkills, setInstalledSkills] = useState<InstalledSkillSummary[]>([]);
 	const [remoteSkills, setRemoteSkills] = useState<RemoteSkill[]>([]);
-	const [selectedName, setSelectedName] = useState<string | null>(null);
+	const [selectedKey, setSelectedKey] = useState<string | null>(null);
+
+	function getSkillKey(skill: { name: string; url?: string }): string {
+		return 'url' in skill && skill.url ? skill.url : skill.name;
+	}
 	const [selectedInstalledSkill, setSelectedInstalledSkill] = useState<InstalledSkillDetail | null>(null);
 	const [search, setSearch] = useState('');
 	const [loadingList, setLoadingList] = useState(false);
@@ -149,24 +153,25 @@ export function SkillsView() {
 	}, [installedSkills, search]);
 
 	const visibleSkills = sourceTab === 'installed' ? filteredInstalledSkills : remoteSkills;
-	const selectedInstalledSummary = filteredInstalledSkills.find((skill) => skill.name === selectedName) ?? null;
-	const selectedRemoteSkill = remoteSkills.find((skill) => skill.name === selectedName) ?? null;
+	const selectedInstalledSummary = filteredInstalledSkills.find((skill) => skill.name === selectedKey) ?? null;
+	const selectedRemoteSkill = remoteSkills.find((skill) => getSkillKey(skill) === selectedKey) ?? null;
+	const selectedName = selectedInstalledSummary?.name ?? selectedRemoteSkill?.name ?? null;
 
 	useEffect(() => {
 		setIsEditing(false);
 		if (!visibleSkills.length) {
-			setSelectedName(null);
+			setSelectedKey(null);
 			if (sourceTab !== 'installed') setSelectedInstalledSkill(null);
 			return;
 		}
 
-		if (!selectedName || !visibleSkills.some((skill) => skill.name === selectedName)) {
+		if (!selectedKey || !visibleSkills.some((skill) => getSkillKey(skill) === selectedKey)) {
 			const firstSkill = visibleSkills[0];
 			if (firstSkill) {
-				setSelectedName(firstSkill.name);
+				setSelectedKey(getSkillKey(firstSkill));
 			}
 		}
-	}, [selectedName, sourceTab, visibleSkills]);
+	}, [selectedKey, sourceTab, visibleSkills]);
 
 	useEffect(() => {
 		if (sourceTab !== 'installed' || !selectedName) {
@@ -293,16 +298,17 @@ export function SkillsView() {
 						) : null}
 
 						{visibleSkills.map((skill) => {
-							const isSelected = selectedName === skill.name;
+							const skillKey = getSkillKey(skill);
+							const isSelected = selectedKey === skillKey;
 							const description =
 								skill.description || ('preview' in skill ? skill.preview : 'No description available.');
 							return (
 								<button
-									key={`${sourceTab}:${skill.name}`}
+									key={`${sourceTab}:${skillKey}`}
 									type="button"
 									onClick={() => {
 										setIsEditing(false);
-										setSelectedName(skill.name);
+										setSelectedKey(skillKey);
 									}}
 									className={`w-full text-left px-3 py-2.5 border-b border-white/[0.03] transition-colors cursor-pointer ${
 										isSelected
@@ -453,7 +459,7 @@ export function SkillsView() {
 										<SecondaryBtn
 											onClick={() => {
 												setSourceTab('installed');
-												setSelectedName(selectedRemoteSkill.name);
+												setSelectedKey(selectedRemoteSkill.name);
 											}}
 											className="px-3 py-2"
 										>
