@@ -29,13 +29,13 @@ export function configRouter(): Router {
 				dataDir: config.dataDir,
 				pricing: config.pricing,
 				telegram: {
-					botToken: config.telegram.botToken ? '••••••••' : null,
+						botToken: config.telegram.botToken,
 					allowedChatIds: config.telegram.allowedChatIds,
 				},
 				supabase: {
 					projectUrl: config.supabase.projectUrl,
 					anonKey: config.supabase.anonKey,
-					jwtSecret: config.supabase.jwtSecret ? '••••••••' : null,
+						jwtSecret: config.supabase.jwtSecret,
 				},
 			};
 			res.json({ config: redacted });
@@ -96,13 +96,13 @@ export function configRouter(): Router {
 					dataDir: config.dataDir,
 					pricing: config.pricing,
 					telegram: {
-						botToken: config.telegram.botToken ? '••••••••' : null,
+							botToken: config.telegram.botToken,
 						allowedChatIds: config.telegram.allowedChatIds,
 					},
 					supabase: {
 						projectUrl: config.supabase.projectUrl,
 						anonKey: config.supabase.anonKey,
-						jwtSecret: config.supabase.jwtSecret ? '••••••••' : null,
+							jwtSecret: config.supabase.jwtSecret,
 					},
 				},
 			});
