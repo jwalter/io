@@ -15,12 +15,12 @@ function isExempt(method: string, path: string): boolean {
 	return EXEMPT_ROUTES.some((r) => r.method === method.toUpperCase() && path.startsWith(r.path));
 }
 
-// Cached JWKS fetcher (jose handles caching/rotation internally)
+// Cached JWKS fetcher
 let jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
 
 function getJwks(config: IOConfig): ReturnType<typeof createRemoteJWKSet> {
 	if (!jwks) {
-		const jwksUrl = new URL('/auth/v1/keys', config.supabase.projectUrl!);
+		const jwksUrl = new URL('/auth/v1/.well-known/jwks.json', config.supabase.projectUrl!);
 		jwks = createRemoteJWKSet(jwksUrl);
 	}
 	return jwks;
@@ -28,19 +28,24 @@ function getJwks(config: IOConfig): ReturnType<typeof createRemoteJWKSet> {
 
 /**
  * Verify a Supabase JWT token.
- * Uses JWKS (RS256) from the Supabase project URL if available,
- * otherwise falls back to the shared jwtSecret (HS256).
+ * Tries jwtSecret first (HS256 — most common Supabase setup),
+ * then falls back to JWKS (RS256) for projects using asymmetric signing.
  */
 async function verifyToken(config: IOConfig, token: string): Promise<boolean> {
-	if (config.supabase.projectUrl) {
-		const keySet = getJwks(config);
-		await jwtVerify(token, keySet, { clockTolerance: 30 });
+	// Try shared secret first (HS256 — default Supabase signing)
+	if (config.supabase.jwtSecret) {
+		const secret = new TextEncoder().encode(config.supabase.jwtSecret);
+		await jwtVerify(token, secret, {
+			algorithms: ['HS256', 'HS384', 'HS512'],
+			clockTolerance: 30,
+		});
 		return true;
 	}
 
-	if (config.supabase.jwtSecret) {
-		const secret = new TextEncoder().encode(config.supabase.jwtSecret);
-		await jwtVerify(token, secret, { clockTolerance: 30 });
+	// Fall back to JWKS (RS256) for asymmetric signing
+	if (config.supabase.projectUrl) {
+		const keySet = getJwks(config);
+		await jwtVerify(token, keySet, { clockTolerance: 30 });
 		return true;
 	}
 
