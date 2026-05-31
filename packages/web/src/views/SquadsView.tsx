@@ -1,4 +1,4 @@
-import { Chip, PrimaryBtn, statusToVariant } from '@/components/ui/shared';
+import { Chip, statusToVariant } from '@/components/ui/shared';
 import { api } from '@/lib/api';
 import {
 	Bot,
@@ -7,7 +7,6 @@ import {
 	Crown,
 	Cpu,
 	ExternalLink,
-	Plus,
 	ScrollText,
 	Users,
 } from 'lucide-react';
@@ -32,11 +31,15 @@ interface SquadSummary {
 	createdAt: string;
 }
 
+interface AppConfig {
+	maxInstancesPerSquad: number;
+}
+
 interface SquadMember {
 	id: string;
 	displayName: string;
 	role: string;
-	roleName: string;
+	roleName?: string;
 	persona: string | null;
 	veto: boolean;
 	status: string;
@@ -76,18 +79,24 @@ export function SquadsView() {
 
 function SquadListView() {
 	const [squads, setSquads] = useState<SquadSummary[]>([]);
+	const [maxInstancesPerSquad, setMaxInstancesPerSquad] = useState<number | null>(null);
 	const navigate = useNavigate();
 
 	useEffect(() => {
-		api
-			.get<{ squads: SquadSummary[] }>('/squads')
-			.then((d) => setSquads(d.squads))
+		Promise.all([
+			api.get<{ squads: SquadSummary[] }>('/squads'),
+			api.get<{ config: AppConfig }>('/config'),
+		])
+			.then(([squadsResponse, configResponse]) => {
+				setSquads(squadsResponse.squads);
+				setMaxInstancesPerSquad(configResponse.config.maxInstancesPerSquad);
+			})
 			.catch(() => {});
 	}, []);
 
 	return (
 		<div className="flex-1 overflow-y-auto p-6">
-			<div className="flex items-center justify-between mb-6">
+			<div className="mb-6">
 				<div>
 					<h2
 						className="text-2xl tracking-wide text-zinc-100"
@@ -100,10 +109,6 @@ function SquadListView() {
 						active instances
 					</p>
 				</div>
-				<PrimaryBtn className="px-3 py-1.5">
-					<Plus className="w-3.5 h-3.5" />
-					New Squad
-				</PrimaryBtn>
 			</div>
 
 			<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -114,7 +119,7 @@ function SquadListView() {
 							type="button"
 							key={squad.id}
 							onClick={() => navigate(`/squads/${squad.name}`)}
-							className="text-left rounded-2xl p-5 transition-all group"
+							className="text-left rounded-2xl p-5 transition-all group cursor-pointer"
 							style={{
 								border: `1px solid ${color}30`,
 								background: `${color}08`,
@@ -139,7 +144,7 @@ function SquadListView() {
 								<p className="text-[11px] text-zinc-600 font-mono">{squad.universe}</p>
 								<span className="text-[11px] text-zinc-600 font-mono flex items-center gap-1">
 									<Cpu className="w-3 h-3" />
-									{squad.activeInstances}/{squad.totalInstances || squad.memberCount}
+									{squad.activeInstances}/{maxInstancesPerSquad ?? (squad.totalInstances || squad.memberCount)}
 								</span>
 							</div>
 							{squad.repoUrl && (

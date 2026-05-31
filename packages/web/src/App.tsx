@@ -1,4 +1,5 @@
-import { Navigate, Route, Routes } from 'react-router';
+import { Navigate, Route, Routes, useLocation } from 'react-router';
+import { ChatOverlay } from './components/ChatOverlay';
 import { Layout } from './components/Layout';
 import { AuthProvider, useAuth } from './lib/auth';
 import { ChatView } from './views/ChatView';
@@ -35,24 +36,36 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 	return <>{children}</>;
 }
 
+function ProtectedApp() {
+	const { pathname } = useLocation();
+	const hideOverlay = pathname === '/' || pathname === '/chat' || pathname.startsWith('/chat/');
+
+	return (
+		<>
+			<Routes>
+				<Route element={<Layout />}>
+					<Route index element={<ChatView />} />
+					<Route path="squads" element={<SquadsView />} />
+					<Route path="squads/:name" element={<SquadsView />} />
+					<Route path="feed" element={<FeedView />} />
+					<Route path="skills" element={<SkillsView />} />
+					<Route path="schedules" element={<SchedulesView />} />
+					<Route path="wiki" element={<WikiView />} />
+					<Route path="settings" element={<SettingsView />} />
+					<Route path="usage" element={<UsageView />} />
+					<Route path="*" element={<Navigate to="/" replace />} />
+				</Route>
+			</Routes>
+			{!hideOverlay && <ChatOverlay />}
+		</>
+	);
+}
+
 export function App() {
 	return (
 		<AuthProvider>
 			<AuthGate>
-				<Routes>
-					<Route element={<Layout />}>
-						<Route index element={<ChatView />} />
-						<Route path="squads" element={<SquadsView />} />
-						<Route path="squads/:name" element={<SquadsView />} />
-						<Route path="feed" element={<FeedView />} />
-						<Route path="skills" element={<SkillsView />} />
-						<Route path="schedules" element={<SchedulesView />} />
-						<Route path="wiki" element={<WikiView />} />
-						<Route path="settings" element={<SettingsView />} />
-						<Route path="usage" element={<UsageView />} />
-						<Route path="*" element={<Navigate to="/" replace />} />
-					</Route>
-				</Routes>
+				<ProtectedApp />
 			</AuthGate>
 		</AuthProvider>
 	);

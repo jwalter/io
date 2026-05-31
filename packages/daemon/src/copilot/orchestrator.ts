@@ -3,6 +3,7 @@ import type { IOConfig } from '../config.js';
 import { createChildLogger } from '../logging/logger.js';
 import { getActiveSkillsContent } from '../skills/index.js';
 import { listSquads } from '../squad/manager.js';
+import { appendConversationMessage } from '../store/conversations.js';
 import { getDatabase } from '../store/db.js';
 import { getOrchestratorScopes, getPageListing } from '../wiki/index.js';
 import { getClient } from './client.js';
@@ -149,7 +150,14 @@ async function processMessage(msg: QueuedMessage): Promise<string> {
 		throw new Error('Orchestrator session not initialized');
 	}
 
+	await appendConversationMessage({
+		role: 'user',
+		content: msg.prompt,
+		source: msg.source,
+	});
+
 	let accumulated = '';
+	msg.onDelta('', false);
 
 	// Subscribe to streaming deltas
 	const unsubDelta = session.on('assistant.message_delta', (event) => {
@@ -163,11 +171,17 @@ async function processMessage(msg: QueuedMessage): Promise<string> {
 			600_000, // 10 minute timeout
 		);
 
-		const finalContent = result?.data?.content || accumulated || '(No response)';
-		msg.onDelta(finalContent, true);
+		const finalContent =
+			typeof result?.data?.content === 'string' && result.data.content.length > 0
+				? result.data.content
+				: accumulated || '(No response)';
 
-		// Persist conversation (fire-and-forget)
-		persistConversation(msg.prompt, finalContent, msg.source);
+		await appendConversationMessage({
+			role: 'assistant',
+			content: finalContent,
+			source: msg.source,
+		});
+		msg.onDelta(finalContent, true);
 
 		return finalContent;
 	} finally {
@@ -203,20 +217,3 @@ async function saveSessionId(id: string): Promise<void> {
 	});
 }
 
-function persistConversation(
-	userMessage: string,
-	assistantResponse: string,
-	source?: string,
-): void {
-	const db = getDatabase();
-	const now = new Date().toISOString();
-
-	db.execute({
-		sql: "INSERT INTO conversations (id, role, content, source, created_at) VALUES (?, 'user', ?, ?, ?)",
-		args: [crypto.randomUUID(), userMessage, source ?? null, now],
-	});
-	db.execute({
-		sql: "INSERT INTO conversations (id, role, content, source, created_at) VALUES (?, 'assistant', ?, ?, ?)",
-		args: [crypto.randomUUID(), assistantResponse, source ?? null, now],
-	});
-}

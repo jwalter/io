@@ -16,9 +16,10 @@ import {
 	Users,
 	Zap,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router';
 import { useAuth } from '@/lib/auth';
+import { api } from '@/lib/api';
 
 const NAV_TOP = [
 	{ to: '/squads', icon: Users, label: 'Squads' },
@@ -47,7 +48,7 @@ function NavBtn({
 			title={collapsed ? label : undefined}
 			className={({ isActive }) =>
 				cn(
-					'w-full flex items-center gap-2.5 px-2 py-2 rounded-xl text-[11px] font-mono transition-colors',
+					'w-full flex items-center gap-2.5 px-2 py-2 rounded-xl text-[11px] font-mono transition-colors cursor-pointer',
 					collapsed ? 'justify-center' : '',
 					isActive
 						? 'text-[#E43A9C]'
@@ -64,7 +65,29 @@ function NavBtn({
 
 export function Layout() {
 	const [collapsed, setCollapsed] = useState(false);
+	const [version, setVersion] = useState('...');
 	const { supabase } = useAuth();
+
+	useEffect(() => {
+		let active = true;
+
+		api
+			.get<{ version: string }>('/version')
+			.then(({ version }) => {
+				if (active) {
+					setVersion(version);
+				}
+			})
+			.catch(() => {
+				if (active) {
+					setVersion('unknown');
+				}
+			});
+
+		return () => {
+			active = false;
+		};
+	}, []);
 
 	return (
 		<div className="flex h-screen overflow-hidden bg-background relative">
@@ -118,19 +141,19 @@ export function Layout() {
 							rel="noreferrer"
 							title="GitHub"
 							className={cn(
-								'flex items-center gap-2.5 px-2 py-2 rounded-xl text-[11px] font-mono text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.04] transition-colors',
+								'flex items-center gap-2.5 px-2 py-2 rounded-xl text-[11px] font-mono text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.04] transition-colors cursor-pointer',
 								collapsed && 'justify-center',
 							)}
 						>
 							<Github className="w-3.5 h-3.5 flex-shrink-0" />
-							{!collapsed && <span className="text-zinc-700">v3.0.0</span>}
+							{!collapsed && <span className="text-zinc-700">v{version}</span>}
 						</a>
 						<button
 							type="button"
 							onClick={() => setCollapsed(!collapsed)}
 							title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
 							className={cn(
-								'w-full flex items-center gap-2.5 px-2 py-2 rounded-xl text-[11px] font-mono text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.04] transition-colors',
+								'w-full flex items-center gap-2.5 px-2 py-2 rounded-xl text-[11px] font-mono text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.04] transition-colors cursor-pointer',
 								collapsed && 'justify-center',
 							)}
 						>
@@ -166,7 +189,7 @@ export function Layout() {
 							<button
 								type="button"
 								onClick={() => supabase.auth.signOut()}
-								className="p-2 rounded-xl hover:bg-white/[0.05] text-zinc-600 hover:text-zinc-300 transition-colors"
+								className="p-2 rounded-xl hover:bg-white/[0.05] text-zinc-600 hover:text-zinc-300 transition-colors cursor-pointer"
 								title="Sign out"
 							>
 								<LogOut className="w-3.5 h-3.5" />

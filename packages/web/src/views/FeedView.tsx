@@ -52,7 +52,7 @@ export function FeedView() {
 							className="text-lg tracking-wide text-zinc-100"
 							style={{ fontFamily: "'Bebas Neue', sans-serif" }}
 						>
-							Feed
+							Inbox
 						</h2>
 						{unreadCount > 0 && (
 							<Chip variant="default">{unreadCount}</Chip>
@@ -66,7 +66,7 @@ export function FeedView() {
 								onClick={() => setFilter(f)}
 								className={`flex-1 px-2 py-1 rounded-lg text-[11px] font-mono transition-colors ${
 									filter === f
-										? 'bg-white/10 text-zinc-200'
+										? 'bg-[#E43A9C]/15 text-[#E43A9C]'
 										: 'text-zinc-600 hover:text-zinc-400'
 								}`}
 							>

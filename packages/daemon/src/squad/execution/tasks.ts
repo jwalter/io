@@ -19,7 +19,7 @@ export async function executeTasks(params: {
 
 	await transitionInstance(instance.id, 'working');
 
-	const teamLead = runtime.members.get('team-lead');
+	const teamLead = runtime.members.get('technical-pm');
 	if (!teamLead) throw new Error('No team lead for task execution');
 
 	for (const task of instance.tasks) {
@@ -85,10 +85,10 @@ export async function executeTasks(params: {
 	);
 
 	if (finalReview.toUpperCase().includes('READY_FOR_PR:')) {
-		instance.meetingLog.push(`[team-lead] Final review: ${finalReview}`);
+		instance.meetingLog.push(`[technical-pm] Final review: ${finalReview}`);
 	} else {
 		// Mark complete anyway — we don't loop indefinitely
-		instance.meetingLog.push(`[team-lead] Final review (issues noted): ${finalReview}`);
+		instance.meetingLog.push(`[technical-pm] Final review (issues noted): ${finalReview}`);
 	}
 }
 

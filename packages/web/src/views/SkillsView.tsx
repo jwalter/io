@@ -1,170 +1,528 @@
-import { Chip, PrimaryBtn, SecondaryBtn } from '@/components/ui/shared';
+import { MarkdownRenderer } from '@/components/ui/markdown';
+import { Chip, DangerBtn, PrimaryBtn, SecondaryBtn } from '@/components/ui/shared';
 import { api } from '@/lib/api';
-import { Plus, Search, Trash2, Zap } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Download, LoaderCircle, Pencil, Search, Sparkles, Trash2, Zap } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
-interface Skill {
+type SkillSourceTab = 'installed' | 'awesome-copilot' | 'skillssh';
+type RemoteSkillSource = Exclude<SkillSourceTab, 'installed'>;
+
+interface InstalledSkillSummary {
 	name: string;
 	activatedForOrchestrator: boolean;
 	preview: string;
+	description: string;
+	filePath: string;
+}
+
+interface InstalledSkillDetail {
+	name: string;
+	content: string;
+	filePath: string;
+}
+
+interface RemoteSkill {
+	name: string;
+	title: string;
+	description: string;
+	url: string;
+	source: RemoteSkillSource;
+	installed: boolean;
+	registrySource?: string;
+	skillId?: string;
+	installs?: number;
+}
+
+const SOURCE_TABS: Array<{ id: SkillSourceTab; label: string }> = [
+	{ id: 'installed', label: 'Installed' },
+	{ id: 'awesome-copilot', label: 'Awesome Copilot' },
+	{ id: 'skillssh', label: 'skills.sh' },
+];
+
+function formatSourceLabel(source: RemoteSkillSource) {
+	return source === 'awesome-copilot' ? 'Awesome Copilot' : 'skills.sh';
+}
+
+function formatInstalls(installs?: number) {
+	if (!installs) return null;
+	if (installs >= 1_000_000) return `${(installs / 1_000_000).toFixed(1).replace(/\.0$/, '')}M installs`;
+	if (installs >= 1_000) return `${(installs / 1_000).toFixed(1).replace(/\.0$/, '')}K installs`;
+	return `${installs} installs`;
 }
 
 export function SkillsView() {
-	const [skills, setSkills] = useState<Skill[]>([]);
-	const [showInstall, setShowInstall] = useState(false);
-	const [installUrl, setInstallUrl] = useState('');
-	const [installName, setInstallName] = useState('');
+	const [sourceTab, setSourceTab] = useState<SkillSourceTab>('installed');
+	const [installedSkills, setInstalledSkills] = useState<InstalledSkillSummary[]>([]);
+	const [remoteSkills, setRemoteSkills] = useState<RemoteSkill[]>([]);
+	const [selectedName, setSelectedName] = useState<string | null>(null);
+	const [selectedInstalledSkill, setSelectedInstalledSkill] = useState<InstalledSkillDetail | null>(null);
 	const [search, setSearch] = useState('');
+	const [loadingList, setLoadingList] = useState(false);
+	const [loadingDetail, setLoadingDetail] = useState(false);
+	const [isEditing, setIsEditing] = useState(false);
+	const [draftContent, setDraftContent] = useState('');
+	const [busySkillName, setBusySkillName] = useState<string | null>(null);
+	const [remoteError, setRemoteError] = useState<string | null>(null);
 
-	useEffect(() => {
-		loadSkills();
+	const loadInstalledSkills = useCallback(async () => {
+		try {
+			const data = await api.get<{ skills: InstalledSkillSummary[] }>('/skills');
+			const installedNames = new Set(data.skills.map((skill) => skill.name.toLowerCase()));
+			setInstalledSkills(data.skills);
+			setRemoteSkills((previous) =>
+				previous.map((skill) => ({
+					...skill,
+					installed: installedNames.has(skill.name.toLowerCase()),
+				})),
+			);
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Failed to load skills');
+		}
 	}, []);
 
-	function loadSkills() {
-		api
-			.get<{ skills: Skill[] }>('/skills')
-			.then((d) => setSkills(d.skills))
-			.catch(() => {});
-	}
-
-	async function handleInstall() {
-		if (!installName.trim() || !installUrl.trim()) return;
+	const loadInstalledSkillDetail = useCallback(async (name: string) => {
+		setLoadingDetail(true);
 		try {
-			await api.post('/skills/install', { name: installName, url: installUrl });
-			toast.success(`Skill "${installName}" installed`);
-			setShowInstall(false);
-			setInstallUrl('');
-			setInstallName('');
-			loadSkills();
-		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Install failed');
+			const skill = await api.get<InstalledSkillDetail>(`/skills/${encodeURIComponent(name)}`);
+			setSelectedInstalledSkill(skill);
+			setDraftContent(skill.content);
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Failed to load skill');
+			setSelectedInstalledSkill(null);
+		} finally {
+			setLoadingDetail(false);
+		}
+	}, []);
+
+	useEffect(() => {
+		loadInstalledSkills();
+	}, [loadInstalledSkills]);
+
+	useEffect(() => {
+		if (sourceTab === 'installed') {
+			setRemoteError(null);
+			return;
+		}
+
+		const query = search.trim();
+		if (sourceTab === 'skillssh' && !query) {
+			setRemoteSkills([]);
+			setRemoteError(null);
+			setLoadingList(false);
+			return;
+		}
+
+		let cancelled = false;
+		setLoadingList(true);
+		const timeoutId = window.setTimeout(async () => {
+			try {
+				const data = await api.get<{ skills: RemoteSkill[] }>(
+					`/skills/discover?source=${sourceTab}&q=${encodeURIComponent(query)}`,
+				);
+				if (cancelled) return;
+				setRemoteSkills(data.skills);
+				setRemoteError(null);
+			} catch (error) {
+				if (cancelled) return;
+				setRemoteSkills([]);
+				setRemoteError(error instanceof Error ? error.message : 'Discovery failed');
+			} finally {
+				if (!cancelled) setLoadingList(false);
+			}
+		}, 250);
+
+		return () => {
+			cancelled = true;
+			window.clearTimeout(timeoutId);
+		};
+	}, [search, sourceTab]);
+
+	const filteredInstalledSkills = useMemo(() => {
+		const needle = search.trim().toLowerCase();
+		if (!needle) return installedSkills;
+		return installedSkills.filter((skill) =>
+			[skill.name, skill.description, skill.preview].some((value) =>
+				value.toLowerCase().includes(needle),
+			),
+		);
+	}, [installedSkills, search]);
+
+	const visibleSkills = sourceTab === 'installed' ? filteredInstalledSkills : remoteSkills;
+	const selectedInstalledSummary = filteredInstalledSkills.find((skill) => skill.name === selectedName) ?? null;
+	const selectedRemoteSkill = remoteSkills.find((skill) => skill.name === selectedName) ?? null;
+
+	useEffect(() => {
+		setIsEditing(false);
+		if (!visibleSkills.length) {
+			setSelectedName(null);
+			if (sourceTab !== 'installed') setSelectedInstalledSkill(null);
+			return;
+		}
+
+		if (!selectedName || !visibleSkills.some((skill) => skill.name === selectedName)) {
+			const firstSkill = visibleSkills[0];
+			if (firstSkill) {
+				setSelectedName(firstSkill.name);
+			}
+		}
+	}, [selectedName, sourceTab, visibleSkills]);
+
+	useEffect(() => {
+		if (sourceTab !== 'installed' || !selectedName) {
+			setSelectedInstalledSkill(null);
+			return;
+		}
+
+		loadInstalledSkillDetail(selectedName);
+	}, [loadInstalledSkillDetail, selectedName, sourceTab]);
+
+	async function handleInstall(skill: RemoteSkill) {
+		if (!skill.url && !skill.registrySource) {
+			toast.error('Install source is not available for this skill yet');
+			return;
+		}
+
+		setBusySkillName(skill.name);
+		try {
+			await api.post('/skills/install', {
+				name: skill.name,
+				source: skill.source,
+				url: skill.url,
+				registrySource: skill.registrySource,
+				skillId: skill.skillId,
+			});
+			toast.success(`Installed ${skill.title || skill.name}`);
+			await loadInstalledSkills();
+			setRemoteSkills((previous) =>
+				previous.map((entry) =>
+					entry.name === skill.name ? { ...entry, installed: true } : entry,
+				),
+			);
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Install failed');
+		} finally {
+			setBusySkillName(null);
 		}
 	}
 
 	async function handleRemove(name: string) {
+		setBusySkillName(name);
 		try {
-			await api.delete(`/skills/${name}`);
-			toast.success(`Skill "${name}" removed`);
-			loadSkills();
-		} catch {
-			toast.error('Failed to remove skill');
+			await api.delete(`/skills/${encodeURIComponent(name)}`);
+			toast.success(`Removed ${name}`);
+			await loadInstalledSkills();
+			setRemoteSkills((previous) =>
+				previous.map((skill) =>
+					skill.name === name ? { ...skill, installed: false } : skill,
+				),
+			);
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Failed to remove skill');
+		} finally {
+			setBusySkillName(null);
 		}
 	}
 
-	const filtered = skills.filter(
-		(s) => !search || s.name.toLowerCase().includes(search.toLowerCase()),
-	);
+	async function handleSaveEdit() {
+		if (!selectedInstalledSkill) return;
+		setBusySkillName(selectedInstalledSkill.name);
+		try {
+			await api.put(`/skills/${encodeURIComponent(selectedInstalledSkill.name)}`, {
+				content: draftContent,
+			});
+			toast.success(`Updated ${selectedInstalledSkill.name}`);
+			setIsEditing(false);
+			await Promise.all([
+				loadInstalledSkills(),
+				loadInstalledSkillDetail(selectedInstalledSkill.name),
+			]);
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Failed to save skill');
+		} finally {
+			setBusySkillName(null);
+		}
+	}
+
+	const resultCountLabel =
+		sourceTab === 'installed'
+			? `${filteredInstalledSkills.length} of ${installedSkills.length} installed`
+			: `${remoteSkills.length} results`;
+
+	const selectedInstalledActive = Boolean(selectedInstalledSummary?.activatedForOrchestrator);
+	const selectedInstalledBusy = busySkillName === selectedInstalledSkill?.name;
+	const selectedRemoteBusy = busySkillName === selectedRemoteSkill?.name;
 
 	return (
-		<div className="flex-1 overflow-y-auto p-6">
-			<div className="flex items-center justify-between mb-6">
-				<div>
-					<h2
-						className="text-2xl tracking-wide text-zinc-100"
-						style={{ fontFamily: "'Bebas Neue', sans-serif" }}
-					>
-						Skills
-					</h2>
-					<p className="text-[11px] text-zinc-600 font-mono mt-0.5">
-						{skills.length} installed capabilities
-					</p>
-				</div>
-				<PrimaryBtn onClick={() => setShowInstall(true)} className="px-3 py-1.5">
-					<Plus className="w-3.5 h-3.5" /> Install
-				</PrimaryBtn>
-			</div>
-
-			{/* Search */}
-			<div className="relative mb-4 max-w-sm">
-				<Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-600" />
-				<input
-					type="text"
-					value={search}
-					onChange={(e) => setSearch(e.target.value)}
-					placeholder="Search skills..."
-					className="w-full pl-9 pr-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.07] text-[11px] font-mono text-zinc-300 placeholder:text-zinc-700 outline-none focus:border-[#E43A9C]/50"
-				/>
-			</div>
-
-			{/* Install form */}
-			{showInstall && (
-				<div className="glass-card border border-white/[0.07] rounded-2xl p-5 mb-5">
-					<h3
-						className="text-base tracking-wide text-zinc-200 mb-3"
-						style={{ fontFamily: "'Bebas Neue', sans-serif" }}
-					>
-						Install Skill
-					</h3>
-					<div className="space-y-3">
-						<input
-							type="text"
-							placeholder="Skill name"
-							value={installName}
-							onChange={(e) => setInstallName(e.target.value)}
-							className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.07] text-sm font-mono text-zinc-300 outline-none focus:border-[#E43A9C]/50"
-						/>
-						<input
-							type="text"
-							placeholder="URL to SKILL.md"
-							value={installUrl}
-							onChange={(e) => setInstallUrl(e.target.value)}
-							className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.07] text-sm font-mono text-zinc-300 outline-none focus:border-[#E43A9C]/50"
-						/>
-						<div className="flex gap-2">
-							<PrimaryBtn onClick={handleInstall} className="px-3 py-1.5">
-								Install
-							</PrimaryBtn>
-							<SecondaryBtn onClick={() => setShowInstall(false)} className="px-3 py-1.5">
-								Cancel
-							</SecondaryBtn>
-						</div>
+		<div className="flex-1 min-h-0 overflow-hidden p-6">
+			<div className="flex h-full gap-4">
+				<div className="glass-card flex h-full w-80 shrink-0 flex-col rounded-2xl border border-white/[0.08] p-4">
+					<div className="mb-4">
+						<h2
+							className="text-[30px] uppercase tracking-[0.08em] text-zinc-100"
+							style={{ fontFamily: "'Bebas Neue', sans-serif" }}
+						>
+							Skills
+						</h2>
+						<p className="mt-1 font-mono text-[11px] text-zinc-500">{resultCountLabel}</p>
 					</div>
-				</div>
-			)}
 
-			{/* Grid */}
-			<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-				{filtered.map((skill) => (
-					<div
-						key={skill.name}
-						className="glass-card border border-white/[0.07] rounded-2xl p-4 group"
-					>
-						<div className="flex items-start justify-between">
-							<div className="flex items-center gap-2">
-								<div className="w-7 h-7 rounded-lg flex items-center justify-center bg-[#E43A9C]/10">
-									<Zap size={14} className="text-[#E43A9C]" />
-								</div>
-								<h3 className="text-sm font-mono text-zinc-200">{skill.name}</h3>
-							</div>
+					<div className="relative mb-3">
+						<Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-600" />
+						<input
+							type="text"
+							value={search}
+							onChange={(event) => setSearch(event.target.value)}
+							placeholder={
+								sourceTab === 'installed'
+									? 'Search installed skills'
+									: `Search ${formatSourceLabel(sourceTab)} registry`
+							}
+							className="w-full rounded-2xl border border-white/[0.08] bg-white/[0.04] py-2.5 pl-9 pr-3 text-[11px] font-mono text-zinc-200 outline-none transition-colors placeholder:text-zinc-600 focus:border-[#E43A9C]/50"
+						/>
+					</div>
+
+					<div className="mb-4 flex rounded-2xl bg-white/[0.03] p-1">
+						{SOURCE_TABS.map((tab) => (
 							<button
+								key={tab.id}
 								type="button"
-								onClick={() => handleRemove(skill.name)}
-								className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-red-400/10 transition-all"
+								onClick={() => setSourceTab(tab.id)}
+								className={`flex-1 rounded-xl px-2 py-2 text-[11px] font-mono transition-colors ${
+									sourceTab === tab.id
+										? 'bg-[#E43A9C]/15 text-[#E43A9C]'
+										: 'text-zinc-500 hover:text-zinc-200'
+								}`}
 							>
-								<Trash2 size={13} />
+								{tab.label}
 							</button>
-						</div>
-						<p className="text-[11px] text-zinc-600 font-mono mt-2.5 line-clamp-3 leading-relaxed">
-							{skill.preview}
-						</p>
-						{skill.activatedForOrchestrator && (
-							<Chip variant="success" className="mt-2.5">
-								Active
-							</Chip>
-						)}
+						))}
 					</div>
-				))}
-			</div>
 
-			{filtered.length === 0 && !showInstall && (
-				<div className="text-center py-12">
-					<Zap size={48} className="mx-auto mb-3 text-zinc-800" />
-					<p className="text-[11px] font-mono text-zinc-700">
-						{search ? 'No skills match your search' : 'No skills installed. Click Install to add one.'}
-					</p>
+					<div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+						{loadingList && sourceTab !== 'installed' ? (
+							<div className="flex items-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.03] px-3 py-3 font-mono text-[11px] text-zinc-500">
+								<LoaderCircle className="h-3.5 w-3.5 animate-spin" /> Searching registry...
+							</div>
+						) : null}
+
+						{visibleSkills.map((skill) => {
+							const isSelected = selectedName === skill.name;
+							const description =
+								skill.description || ('preview' in skill ? skill.preview : 'No description available.');
+							return (
+								<button
+									key={`${sourceTab}:${skill.name}`}
+									type="button"
+									onClick={() => {
+										setIsEditing(false);
+										setSelectedName(skill.name);
+									}}
+									className={`w-full rounded-2xl border p-3 text-left transition-all ${
+										isSelected
+											? 'border-[#E43A9C]/40 bg-[#E43A9C]/10 shadow-[0_0_0_1px_rgba(228,58,156,0.15)]'
+											: 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.04]'
+									}`}
+								>
+									<div className="flex items-start justify-between gap-3">
+										<div className="min-w-0">
+											<div className="mb-1 flex items-center gap-2">
+												<span className="truncate font-mono text-[12px] text-zinc-100">{skill.name}</span>
+												{'installed' in skill && skill.installed ? <Chip variant="success">installed</Chip> : null}
+											</div>
+											<p className="line-clamp-2 font-mono text-[11px] leading-relaxed text-zinc-500">{description}</p>
+										</div>
+										<div className="mt-0.5 rounded-xl bg-[#E43A9C]/12 p-2 text-[#E43A9C]">
+											{sourceTab === 'installed' ? <Zap className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
+										</div>
+									</div>
+								</button>
+							);
+						})}
+
+						{!loadingList && visibleSkills.length === 0 ? (
+							<div className="rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.02] px-4 py-8 text-center">
+								<p className="font-mono text-[11px] leading-relaxed text-zinc-500">
+									{remoteError
+										? remoteError
+										: sourceTab === 'skillssh' && !search.trim()
+											? 'Start typing to search the skills.sh registry.'
+											: search.trim()
+												? 'No skills match your search.'
+												: 'No skills available in this source.'}
+								</p>
+							</div>
+						) : null}
+					</div>
 				</div>
-			)}
+
+				<div className="glass-card flex min-h-0 flex-1 flex-col rounded-2xl border border-white/[0.08] p-5">
+					{sourceTab === 'installed' && selectedInstalledSummary ? (
+						<>
+							<div className="mb-5 flex items-start justify-between gap-4 border-b border-white/[0.06] pb-5">
+								<div className="flex min-w-0 gap-4">
+									<div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#E43A9C]/12 text-[#E43A9C]">
+										<Zap className="h-6 w-6" />
+									</div>
+									<div className="min-w-0">
+										<h3
+											className="truncate text-[34px] uppercase tracking-[0.08em] text-zinc-100"
+											style={{ fontFamily: "'Bebas Neue', sans-serif" }}
+										>
+											{selectedInstalledSummary.name}
+										</h3>
+										<div className="mt-2 flex flex-wrap items-center gap-2">
+											<Chip variant="success">installed</Chip>
+											{selectedInstalledActive ? <Chip variant="warning">active</Chip> : <Chip variant="muted">inactive</Chip>}
+											<Chip variant="muted">local skill</Chip>
+										</div>
+										<div className="mt-3 space-y-1 font-mono text-[11px] text-zinc-500">
+											<p>path: {selectedInstalledSummary.filePath}</p>
+											<p>orchestrator: {selectedInstalledActive ? 'enabled' : 'disabled'}</p>
+										</div>
+									</div>
+								</div>
+
+								<div className="flex items-center gap-2">
+									{isEditing ? (
+										<PrimaryBtn
+											onClick={handleSaveEdit}
+											disabled={selectedInstalledBusy || draftContent === selectedInstalledSkill?.content}
+											className="px-3 py-2"
+										>
+											{selectedInstalledBusy ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Pencil className="h-3.5 w-3.5" />}
+											Save
+										</PrimaryBtn>
+									) : (
+										<SecondaryBtn onClick={() => setIsEditing(true)} className="px-3 py-2">
+											<Pencil className="h-3.5 w-3.5" /> Edit
+										</SecondaryBtn>
+									)}
+									<DangerBtn onClick={() => handleRemove(selectedInstalledSummary.name)} className="px-3 py-2">
+										{selectedInstalledBusy ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+										Remove
+									</DangerBtn>
+								</div>
+							</div>
+
+							<div className="min-h-0 flex-1 overflow-y-auto pr-1">
+								{loadingDetail && !selectedInstalledSkill ? (
+									<div className="flex items-center gap-2 font-mono text-[11px] text-zinc-500">
+										<LoaderCircle className="h-3.5 w-3.5 animate-spin" /> Loading skill...
+									</div>
+								) : isEditing ? (
+									<div className="space-y-3">
+										<textarea
+											value={draftContent}
+											onChange={(event) => setDraftContent(event.target.value)}
+											className="min-h-[440px] w-full rounded-2xl border border-white/[0.08] bg-black/30 p-4 font-mono text-[12px] leading-6 text-zinc-200 outline-none transition-colors focus:border-[#E43A9C]/50"
+										/>
+										<div className="flex items-center justify-between font-mono text-[11px] text-zinc-500">
+											<span>Editing raw SKILL.md</span>
+											<SecondaryBtn
+												onClick={() => {
+													setIsEditing(false);
+													setDraftContent(selectedInstalledSkill?.content ?? '');
+												}}
+												className="px-3 py-2"
+											>
+												Cancel
+											</SecondaryBtn>
+										</div>
+									</div>
+								) : selectedInstalledSkill ? (
+									<MarkdownRenderer content={selectedInstalledSkill.content} />
+								) : (
+									<p className="font-mono text-[11px] text-zinc-500">Select an installed skill to inspect it.</p>
+								)}
+							</div>
+						</>
+					) : sourceTab !== 'installed' && selectedRemoteSkill ? (
+						<>
+							<div className="mb-5 flex items-start justify-between gap-4 border-b border-white/[0.06] pb-5">
+								<div className="flex min-w-0 gap-4">
+									<div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#E43A9C]/12 text-[#E43A9C]">
+										<Sparkles className="h-6 w-6" />
+									</div>
+									<div className="min-w-0">
+										<h3
+											className="truncate text-[34px] uppercase tracking-[0.08em] text-zinc-100"
+											style={{ fontFamily: "'Bebas Neue', sans-serif" }}
+										>
+											{selectedRemoteSkill.title || selectedRemoteSkill.name}
+										</h3>
+										<div className="mt-2 flex flex-wrap items-center gap-2">
+											<Chip variant={selectedRemoteSkill.installed ? 'success' : 'default'}>
+												{selectedRemoteSkill.installed ? 'installed' : 'available'}
+											</Chip>
+											<Chip variant="muted">{formatSourceLabel(selectedRemoteSkill.source)}</Chip>
+											{formatInstalls(selectedRemoteSkill.installs) ? (
+												<Chip variant="info">{formatInstalls(selectedRemoteSkill.installs)}</Chip>
+											) : null}
+										</div>
+										<div className="mt-3 space-y-1 font-mono text-[11px] text-zinc-500">
+											<p>registry: {formatSourceLabel(selectedRemoteSkill.source)}</p>
+											{selectedRemoteSkill.registrySource ? <p>source: {selectedRemoteSkill.registrySource}</p> : null}
+											{selectedRemoteSkill.url ? <p>url: {selectedRemoteSkill.url}</p> : null}
+										</div>
+									</div>
+								</div>
+
+								<div className="flex items-center gap-2">
+									{selectedRemoteSkill.installed ? (
+										<SecondaryBtn
+											onClick={() => {
+												setSourceTab('installed');
+												setSelectedName(selectedRemoteSkill.name);
+											}}
+											className="px-3 py-2"
+										>
+											Open installed
+										</SecondaryBtn>
+									) : (
+										<PrimaryBtn
+											onClick={() => handleInstall(selectedRemoteSkill)}
+											disabled={selectedRemoteBusy || (!selectedRemoteSkill.url && !selectedRemoteSkill.registrySource)}
+											className="px-3 py-2"
+										>
+											{selectedRemoteBusy ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+											Install
+										</PrimaryBtn>
+									)}
+								</div>
+							</div>
+
+							<div className="min-h-0 flex-1 overflow-y-auto pr-1">
+								<div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
+									<p className="font-mono text-[12px] leading-7 text-zinc-300">
+										{selectedRemoteSkill.description || 'No registry description is available for this skill yet.'}
+									</p>
+								</div>
+								<div className="mt-4 rounded-2xl border border-dashed border-white/[0.08] bg-black/20 p-4 font-mono text-[11px] leading-6 text-zinc-500">
+									Install will fetch the skill definition from the selected registry source and add it to your local skills library.
+								</div>
+							</div>
+						</>
+					) : (
+						<div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.02] p-8 text-center">
+							<div>
+								<div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#E43A9C]/12 text-[#E43A9C]">
+									<Zap className="h-6 w-6" />
+								</div>
+								<h3
+									className="text-[28px] uppercase tracking-[0.08em] text-zinc-100"
+									style={{ fontFamily: "'Bebas Neue', sans-serif" }}
+								>
+									Select a Skill
+								</h3>
+								<p className="mt-2 font-mono text-[11px] leading-relaxed text-zinc-500">
+									Choose a skill from the left panel to inspect details, install registry entries, or edit local definitions.
+								</p>
+							</div>
+						</div>
+					)}
+				</div>
+			</div>
 		</div>
 	);
 }

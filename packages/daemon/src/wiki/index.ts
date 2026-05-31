@@ -9,4 +9,4 @@ export {
 	getOrchestratorScopes,
 	getPageListing,
 } from './store.js';
-export type { WikiScope, WikiPage, WikiSearchResult } from './store.js';
+export type { WikiScope, WikiPage, WikiPageSummary, WikiSearchResult } from './store.js';

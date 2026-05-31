@@ -3,6 +3,10 @@ import { getSquadInstances } from '../../squad/execution/instance.js';
 import { runInstance } from '../../squad/execution/runner.js';
 import { getSquadByName, getSquadMembers, listSquads } from '../../squad/manager.js';
 
+function isActiveInstance(status: string): boolean {
+	return status !== 'complete' && status !== 'failed';
+}
+
 export function squadsRouter(): Router {
 	const router = Router();
 
@@ -17,6 +21,7 @@ export function squadsRouter(): Router {
 				squads.map(async (s) => {
 					const members = await getSquadMembers(s.id);
 					const instances = getSquadInstances(s.id);
+					const activeInstances = instances.filter((i) => isActiveInstance(i.status)).length;
 					return {
 						id: s.id,
 						name: s.name,
@@ -24,14 +29,12 @@ export function squadsRouter(): Router {
 						repoUrl: s.repoUrl,
 						universe: s.universe,
 						autonomyTier: s.autonomyTier,
-						status: s.status,
+						status: activeInstances > 0 ? 'active' : 'idle',
 						memberCount: members.length,
-						activeInstances: instances.filter(
-							(i) => i.status !== 'complete' && i.status !== 'failed',
-						).length,
-							totalInstances: instances.length,
-							createdAt: s.createdAt.toISOString(),
-						};
+						activeInstances,
+						totalInstances: instances.length,
+						createdAt: s.createdAt.toISOString(),
+					};
 				}),
 			);
 			res.json({ squads: results });
@@ -54,15 +57,14 @@ export function squadsRouter(): Router {
 
 			const members = await getSquadMembers(squad.id);
 			const instances = getSquadInstances(squad.id);
+			const activeInstances = instances.filter((inst) => isActiveInstance(inst.status));
 
 			// Build a map of role -> current task (from active instances)
 			const currentTasks = new Map<string, string>();
-			for (const inst of instances) {
-				if (inst.status !== 'complete' && inst.status !== 'failed') {
-					for (const task of inst.tasks) {
-						if (task.status === 'in_progress') {
-							currentTasks.set(task.assignedTo, task.description);
-						}
+			for (const inst of activeInstances) {
+				for (const task of inst.tasks) {
+					if (task.status === 'in_progress') {
+						currentTasks.set(task.assignedTo, task.description);
 					}
 				}
 			}
@@ -76,19 +78,23 @@ export function squadsRouter(): Router {
 					universe: squad.universe,
 					autonomyTier: squad.autonomyTier,
 					autonomyConfig: squad.autonomyConfig,
-					status: squad.status,
+					status: activeInstances.length > 0 ? 'active' : 'idle',
 					createdAt: squad.createdAt.toISOString(),
 				},
-				members: members.map((m) => ({
-					id: m.id,
-					displayName: m.displayName,
-					role: m.roleName,
-					persona: m.persona,
-					veto: m.isVetoMember,
-					tools: m.toolsAllowed,
-					status: m.status,
-					currentTask: currentTasks.get(m.roleName) ?? null,
-				})),
+				members: members.map((m) => {
+					const currentTask = currentTasks.get(m.roleName) ?? null;
+					return {
+						id: m.id,
+						displayName: m.displayName,
+						role: m.roleName,
+						roleName: m.roleName,
+						persona: m.persona,
+						veto: m.isVetoMember,
+						tools: m.toolsAllowed,
+						status: currentTask ? 'working' : 'idle',
+						currentTask,
+					};
+				}),
 				instances: instances.map((i) => ({
 					id: i.id,
 					status: i.status,

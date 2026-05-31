@@ -424,7 +424,7 @@ export async function delegateToSquad(squadId: string, message: string): Promise
 		throw new Error(`Squad ${squadId} is not running`);
 	}
 
-	const teamLead = runtime.members.get('team-lead');
+	const teamLead = runtime.members.get('technical-pm');
 	if (!teamLead) {
 		throw new Error(`Squad ${squadId} has no team lead`);
 	}

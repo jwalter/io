@@ -47,19 +47,19 @@ export async function runMeeting(params: {
 		data: { objective },
 	});
 
-	const teamLead = runtime.members.get('team-lead');
+	const teamLead = runtime.members.get('technical-pm');
 	if (!teamLead) throw new Error('No team lead available for meeting');
 
 	// Get non-lead agents for discussion
-	const participants = [...runtime.members.entries()].filter(([role]) => role !== 'team-lead');
+	const participants = [...runtime.members.entries()].filter(([role]) => role !== 'technical-pm');
 
 	// Step 1: Team lead presents the objective
 	const presentation = await teamLead.send(
 		`You are starting a round-table meeting. Present the following objective to your team and ask for input:\n\nObjective: ${objective}\n\nProvide a brief summary of the work needed and what expertise is required. Then ask each team member for their perspective.`,
 	);
-	meetingLog.push(`[team-lead] ${presentation}`);
+	meetingLog.push(`[technical-pm] ${presentation}`);
 
-	await emitContribution(instance, 'team-lead', presentation);
+	await emitContribution(instance, 'technical-pm', presentation);
 
 	// Step 2-3: Round-robin discussion
 	let round = 0;
@@ -84,7 +84,7 @@ export async function runMeeting(params: {
 		const consensusCheck = await teamLead.send(
 			`The discussion so far:\n\n${meetingLog.slice(-participants.length - 1).join('\n\n')}\n\nBased on this discussion, do we have consensus to proceed? Consider all concerns raised. Reply with either:\n- "CONSENSUS: <brief summary of agreed plan>"\n- "NEED_DISCUSSION: <what needs to be resolved>"`,
 		);
-		meetingLog.push(`[team-lead] ${consensusCheck}`);
+		meetingLog.push(`[technical-pm] ${consensusCheck}`);
 
 		if (consensusCheck.toUpperCase().includes('CONSENSUS:')) {
 			// Step 5: Check veto members
@@ -95,7 +95,7 @@ export async function runMeeting(params: {
 
 			let vetoed = false;
 			for (const [role, agent] of vetoMembers) {
-				if (role === 'team-lead') continue; // team lead already agreed
+				if (role === 'technical-pm') continue; // team lead already agreed
 				const vetoCheck = await agent.send(
 					`The team has reached consensus on the following plan:\n\n${consensusCheck}\n\nAs a veto-holding member, do you approve this plan? Reply with:\n- "APPROVE" if you agree\n- "VETO: <reason>" if you have critical concerns that must be addressed`,
 				);

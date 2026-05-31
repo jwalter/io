@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { createChildLogger } from '../logging/logger.js';
 
 const logger = () => createChildLogger('wiki');
@@ -10,6 +10,11 @@ export interface WikiPage {
 	scope: string;
 	name: string;
 	content: string;
+}
+
+export interface WikiPageSummary {
+	name: string;
+	path: string;
 }
 
 export interface WikiSearchResult {
@@ -46,14 +51,40 @@ function scopeDir(scope: WikiScope): string {
 }
 
 /**
- * List all page names in a scope.
+ * List all pages in a scope, including nested directories.
  */
-export function listWikiPages(scope: WikiScope): string[] {
+export function listWikiPages(scope: WikiScope): WikiPageSummary[] {
 	const dir = scopeDir(scope);
 	if (!existsSync(dir)) return [];
-	return readdirSync(dir)
-		.filter((f) => f.endsWith('.md'))
-		.map((f) => f.replace(/\.md$/, ''));
+
+	const pages = collectWikiPages(dir);
+	return pages.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+function collectWikiPages(dir: string, prefix = ''): WikiPageSummary[] {
+	const pages: WikiPageSummary[] = [];
+
+	for (const entry of readdirSync(dir, { withFileTypes: true })) {
+		const entryPath = join(dir, entry.name);
+		const pagePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+
+		if (entry.isDirectory()) {
+			pages.push(...collectWikiPages(entryPath, pagePath));
+			continue;
+		}
+
+		if (!entry.isFile() || !entry.name.endsWith('.md')) {
+			continue;
+		}
+
+		const normalizedPath = pagePath.replace(/\.md$/, '');
+		pages.push({
+			name: normalizedPath,
+			path: normalizedPath,
+		});
+	}
+
+	return pages;
 }
 
 /**
@@ -71,8 +102,8 @@ export function readWikiPage(scope: WikiScope, pageName: string): WikiPage | nul
  */
 export function writeWikiPage(scope: WikiScope, pageName: string, content: string): WikiPage {
 	const dir = scopeDir(scope);
-	mkdirSync(dir, { recursive: true });
 	const filePath = join(dir, `${pageName}.md`);
+	mkdirSync(dirname(filePath), { recursive: true });
 	writeFileSync(filePath, content, 'utf-8');
 	logger().info({ scope, pageName }, 'Wiki page written');
 	return { scope, name: pageName, content };
@@ -88,8 +119,8 @@ export function searchWiki(keyword: string, scopes: WikiScope[]): WikiSearchResu
 
 	for (const scope of scopes) {
 		const pages = listWikiPages(scope);
-		for (const pageName of pages) {
-			const page = readWikiPage(scope, pageName);
+		for (const pageSummary of pages) {
+			const page = readWikiPage(scope, pageSummary.path);
 			if (!page) continue;
 
 			const lines = page.content.split('\n');
@@ -101,7 +132,7 @@ export function searchWiki(keyword: string, scopes: WikiScope[]): WikiSearchResu
 			}
 
 			if (matches.length > 0) {
-				results.push({ scope, name: pageName, matches: matches.slice(0, 5) });
+				results.push({ scope, name: pageSummary.name, matches: matches.slice(0, 5) });
 			}
 		}
 	}
@@ -132,7 +163,7 @@ export function getPageListing(scopes: WikiScope[]): string {
 		const pages = listWikiPages(scope);
 		if (pages.length > 0) {
 			const label = scope === 'io' ? 'IO' : scope === 'shared' ? 'Shared' : `Squad (${scope})`;
-			sections.push(`${label}: ${pages.join(', ')}`);
+			sections.push(`${label}: ${pages.map((page) => page.name).join(', ')}`);
 		}
 	}
 	return sections.length > 0 ? sections.join('\n') : '(no wiki pages yet)';

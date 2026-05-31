@@ -79,7 +79,7 @@ export function PrimaryBtn({
 			type={type}
 			onClick={onClick}
 			disabled={disabled}
-			className={`flex items-center gap-1.5 font-mono text-[11px] text-white rounded-lg active:opacity-80 primary-btn disabled:opacity-50 ${className}`}
+			className={`flex items-center gap-1.5 font-mono text-[11px] text-white rounded-lg active:opacity-80 primary-btn cursor-pointer disabled:opacity-50 ${className}`}
 		>
 			{children}
 		</button>
@@ -95,7 +95,7 @@ export function SecondaryBtn({
 		<button
 			type="button"
 			onClick={onClick}
-			className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[11px] text-zinc-400 bg-[#252525] hover:bg-[#2e2e2e] hover:text-zinc-100 transition-colors ${className}`}
+			className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[11px] text-zinc-400 bg-[#252525] hover:bg-[#2e2e2e] hover:text-zinc-100 transition-colors cursor-pointer ${className}`}
 		>
 			{children}
 		</button>
@@ -111,7 +111,7 @@ export function DangerBtn({
 		<button
 			type="button"
 			onClick={onClick}
-			className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[11px] text-zinc-400 bg-[#252525] hover:bg-red-500/10 hover:text-red-400 transition-colors ${className}`}
+			className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[11px] text-zinc-400 bg-[#252525] hover:bg-red-500/10 hover:text-red-400 transition-colors cursor-pointer ${className}`}
 		>
 			{children}
 		</button>
@@ -120,7 +120,7 @@ export function DangerBtn({
 
 export function statusToVariant(s: string): BadgeVariant {
 	if (s === 'connected' || s === 'idle') return 'success';
-	if (s === 'working') return 'warning';
+	if (s === 'active' || s === 'working') return 'warning';
 	if (s === 'reviewing') return 'info';
 	if (s === 'error') return 'error';
 	return 'muted';

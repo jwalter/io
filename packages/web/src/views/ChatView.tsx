@@ -1,10 +1,11 @@
 import { IoMark } from '@/components/ui/io-mark';
 import { Chip } from '@/components/ui/shared';
 import { type WsMessage, useWebSocket } from '@/hooks/use-websocket';
-import { api } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
+import { api, getCurrentToken } from '@/lib/api';
 import { Activity, ChevronDown, Paperclip, Send, Square } from 'lucide-react';
 import { marked } from 'marked';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 interface ToolCall {
 	name: string;
@@ -18,31 +19,50 @@ interface Message {
 	content: string;
 	timestamp: string;
 	toolCall?: ToolCall;
+	attachments?: string[] | null;
+	attachmentName?: string;
+}
+
+function formatTime(ts: string | Date): string {
+	return new Date(ts).toLocaleTimeString('en-US', {
+		hour: 'numeric',
+		minute: '2-digit',
+		hour12: true,
+		timeZone: 'America/Chicago',
+	});
 }
 
 export function ChatView() {
+	const { session } = useAuth();
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [input, setInput] = useState('');
 	const [streaming, setStreaming] = useState('');
 	const [isStreaming, setIsStreaming] = useState(false);
+	const [isThinking, setIsThinking] = useState(false);
+	const [selectedFile, setSelectedFile] = useState<File | null>(null);
 	const [expandedTool, setExpandedTool] = useState<string | null>(null);
-	const messagesEndRef = useRef<HTMLDivElement>(null);
+	const messagesContainerRef = useRef<HTMLDivElement>(null);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
+	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	// Load conversation history
 	useEffect(() => {
 		api
 			.get<{ messages: Message[] }>('/conversations?limit=50')
-			.then((data) => setMessages(data.messages))
+			.then((data) =>
+				setMessages(data.messages.map((message) => ({ ...message, timestamp: formatTime(message.timestamp) }))),
+			)
 			.catch(() => {});
 	}, []);
 
 	const handleDelta = useCallback((accumulated: string) => {
+		setIsThinking(false);
 		setIsStreaming(true);
 		setStreaming(accumulated);
 	}, []);
 
 	const handleMessage = useCallback((content: string) => {
+		setIsThinking(false);
 		setIsStreaming(false);
 		setStreaming('');
 		setMessages((prev) => [
@@ -51,41 +71,83 @@ export function ChatView() {
 				id: crypto.randomUUID(),
 				role: 'assistant',
 				content,
-				timestamp: new Date().toLocaleTimeString('en-US', {
-					hour: '2-digit',
-					minute: '2-digit',
-					hour12: false,
-				}),
+				timestamp: formatTime(new Date()),
 			},
 		]);
 	}, []);
 
 	const handleEvent = useCallback((_msg: WsMessage) => {}, []);
+	const handleError = useCallback(() => {
+		setIsThinking(false);
+		setIsStreaming(false);
+		setStreaming('');
+	}, []);
 
 	const { sendMessage } = useWebSocket({
 		onDelta: handleDelta,
 		onMessage: handleMessage,
 		onEvent: handleEvent,
+		onError: handleError,
 	});
 
-	// Auto-scroll
-	useEffect(() => {
-		messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-	}, [messages, streaming]);
+	useLayoutEffect(() => {
+		const container = messagesContainerRef.current;
+		if (container) {
+			container.scrollTop = container.scrollHeight;
+		}
+	}, [messages, streaming, isThinking]);
 
-	function handleSend() {
-		const text = input.trim();
-		if (!text || isStreaming) return;
+	async function uploadAttachment(file: File, messageId: string) {
+		const formData = new FormData();
+		formData.append('file', file);
+		formData.append('messageId', messageId);
 
-		const ts = new Date().toLocaleTimeString('en-US', {
-			hour: '2-digit',
-			minute: '2-digit',
-			hour12: false,
+		const token = getCurrentToken();
+		const res = await fetch('/api/attachments', {
+			method: 'POST',
+			body: formData,
+			headers: token ? { Authorization: `Bearer ${token}` } : undefined,
 		});
-		setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'user', content: text, timestamp: ts }]);
+
+		if (!res.ok) {
+			throw new Error('Failed to upload attachment');
+		}
+	}
+
+	async function handleSend() {
+		const text = input.trim();
+		if ((!text && !selectedFile) || isStreaming || isThinking) return;
+
+		const messageId = crypto.randomUUID();
+		const attachmentName = selectedFile?.name;
+		const outboundContent = [text, attachmentName ? `Attachment: ${attachmentName}` : '']
+			.filter(Boolean)
+			.join('\n\n');
+
+		setMessages((prev) => [
+			...prev,
+			{
+				id: messageId,
+				role: 'user',
+				content: text,
+				timestamp: formatTime(new Date()),
+				attachmentName,
+			},
+		]);
 		setInput('');
+		setSelectedFile(null);
+		setIsThinking(true);
+		if (fileInputRef.current) fileInputRef.current.value = '';
 		if (textareaRef.current) textareaRef.current.style.height = 'auto';
-		sendMessage(text);
+
+		try {
+			if (selectedFile) {
+				await uploadAttachment(selectedFile, messageId);
+			}
+			sendMessage(outboundContent);
+		} catch {
+			setIsThinking(false);
+		}
 	}
 
 	function handleKeyDown(e: React.KeyboardEvent) {
@@ -106,7 +168,7 @@ export function ChatView() {
 	return (
 		<div className="flex flex-col flex-1 min-h-0">
 			{/* Messages */}
-			<div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+			<div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
 				{messages.map((msg) => (
 					<div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
 						{/* Avatar */}
@@ -118,7 +180,7 @@ export function ChatView() {
 							}`}
 							style={msg.role === 'user' ? { background: 'rgba(228,58,156,0.12)' } : undefined}
 						>
-							{msg.role === 'user' ? 'U' : <IoMark height={12} />}
+							{msg.role === 'user' ? session?.user?.email?.charAt(0).toUpperCase() ?? 'U' : <IoMark height={12} />}
 						</div>
 
 						{/* Content */}
@@ -158,35 +220,61 @@ export function ChatView() {
 								</div>
 							)}
 
+							{msg.attachmentName && (
+								<div className="rounded-xl border border-white/[0.08] bg-[#1e1e1e] px-3 py-2 text-[11px] font-mono text-zinc-400">
+									{msg.attachmentName}
+								</div>
+							)}
+
 							{/* Message bubble */}
-							<div
-								className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-									msg.role === 'user'
-										? 'text-white rounded-tr-sm'
-										: 'bg-[#222222] border border-white/[0.07] text-zinc-200 rounded-tl-sm'
-								}`}
-								style={
-									msg.role === 'user'
-										? { background: 'linear-gradient(135deg, #D83333 0%, #C0285E 100%)' }
-										: undefined
-								}
-							>
-								{msg.role === 'user' ? (
-									<p className="whitespace-pre-wrap">{msg.content}</p>
-								) : (
-									<div
-										className="prose-io"
-										// biome-ignore lint: markdown rendering
-										dangerouslySetInnerHTML={{ __html: marked.parse(msg.content) as string }}
-									/>
-								)}
-							</div>
+							{msg.content && (
+								<div
+									className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+										msg.role === 'user'
+											? 'text-white rounded-tr-sm'
+											: 'bg-[#222222] border border-white/[0.07] text-zinc-200 rounded-tl-sm'
+									}`}
+									style={
+										msg.role === 'user'
+											? { background: 'linear-gradient(135deg, #D83333 0%, #C0285E 100%)' }
+											: undefined
+									}
+								>
+									{msg.role === 'user' ? (
+										<p className="whitespace-pre-wrap">{msg.content}</p>
+									) : (
+										<div
+											className="prose-io"
+											// biome-ignore lint: markdown rendering
+											dangerouslySetInnerHTML={{ __html: marked.parse(msg.content) as string }}
+										/>
+									)}
+								</div>
+							)}
 
 							{/* Timestamp */}
 							<span className="text-[11px] text-zinc-700 font-mono px-0.5">{msg.timestamp}</span>
 						</div>
 					</div>
 				))}
+
+				{/* Thinking indicator */}
+				{isThinking && (
+					<div className="flex gap-3">
+						<div className="flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center bg-[#282828] border border-white/[0.07] mt-0.5">
+							<IoMark height={12} />
+						</div>
+						<div className="bg-[#222222] border border-white/[0.07] rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-1.5">
+							{[0, 120, 240].map((d) => (
+								<span
+									key={d}
+									className="w-1.5 h-1.5 rounded-full bg-[#E43A9C] animate-bounce"
+									style={{ animationDelay: `${d}ms` }}
+								/>
+							))}
+						</div>
+					</div>
+				)}
 
 				{/* Streaming indicator */}
 				{isStreaming && streaming && (
@@ -222,12 +310,20 @@ export function ChatView() {
 					</div>
 				)}
 
-				<div ref={messagesEndRef} />
 			</div>
 
 			{/* Input area */}
 			<div className="border-t border-white/[0.06] p-4 flex-shrink-0">
 				<div className="bg-[#1e1e1e] border border-white/[0.08] rounded-2xl overflow-hidden transition-colors focus-within:border-[#E43A9C]/30">
+					<input
+						ref={fileInputRef}
+						type="file"
+						className="hidden"
+						onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+					/>
+					{selectedFile && (
+						<div className="px-4 pt-3 text-[11px] font-mono text-zinc-400">Attached: {selectedFile.name}</div>
+					)}
 					<textarea
 						ref={textareaRef}
 						value={input}
@@ -241,6 +337,7 @@ export function ChatView() {
 					<div className="flex items-center justify-between px-3 pb-2.5">
 						<button
 							type="button"
+							onClick={() => fileInputRef.current?.click()}
 							className="p-1.5 rounded-lg hover:bg-white/[0.05] text-zinc-700 hover:text-zinc-400 transition-colors"
 						>
 							<Paperclip className="w-4 h-4" />
@@ -258,7 +355,7 @@ export function ChatView() {
 								<button
 									type="button"
 									onClick={handleSend}
-									disabled={!input.trim()}
+									disabled={(!input.trim() && !selectedFile) || isThinking}
 									className="p-2 rounded-xl text-white disabled:opacity-30 disabled:cursor-not-allowed transition-opacity hover:opacity-90"
 									style={{ background: 'linear-gradient(135deg, #D83333, #E43A9C)' }}
 								>

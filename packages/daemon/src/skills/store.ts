@@ -77,6 +77,13 @@ export function installSkill(name: string, content: string): Skill {
 }
 
 /**
+ * Update an installed skill.
+ */
+export function updateSkill(name: string, content: string): Skill {
+	return installSkill(name, content);
+}
+
+/**
  * Install a skill from a URL (fetches raw content).
  */
 export async function installSkillFromUrl(name: string, url: string): Promise<Skill> {

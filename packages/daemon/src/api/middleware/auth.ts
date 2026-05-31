@@ -9,6 +9,7 @@ const logger = () => createChildLogger('auth');
 const EXEMPT_ROUTES: Array<{ method: string; path: string }> = [
 	{ method: 'GET', path: '/health' },
 	{ method: 'GET', path: '/config' },
+	{ method: 'GET', path: '/version' },
 ];
 
 function isExempt(method: string, path: string): boolean {
