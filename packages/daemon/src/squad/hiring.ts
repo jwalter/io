@@ -194,16 +194,8 @@ Based on this codebase, what senior/principal-level specialist roles does this p
 			systemMessage: { mode: 'replace' as const, content: ANALYZER_PROMPT },
 		});
 
-		let accumulated = '';
-		const unsubDelta = session.on('assistant.message_delta', (event) => {
-			accumulated += event.data.deltaContent;
-		});
-
-		try {
-			await session.sendAndWait({ prompt: userMessage }, 90_000);
-		} finally {
-			unsubDelta();
-		}
+		const result = await session.sendAndWait({ prompt: userMessage }, 90_000);
+		const accumulated = result?.data?.content ?? '';
 
 		const parsed = extractJson(accumulated);
 		if (!parsed || !Array.isArray(parsed.specialists)) {

@@ -58,16 +58,8 @@ export async function generateSquadNames(
 			systemMessage: { mode: 'replace' as const, content: NAME_GENERATION_PROMPT },
 		});
 
-		let accumulated = '';
-		const unsubDelta = session.on('assistant.message_delta', (event) => {
-			accumulated += event.data.deltaContent;
-		});
-
-		try {
-			await session.sendAndWait({ prompt: userPrompt }, 60_000);
-		} finally {
-			unsubDelta();
-		}
+		const response = await session.sendAndWait({ prompt: userPrompt }, 60_000);
+		const accumulated = response?.data?.content ?? '';
 
 		// Parse the JSON response
 		const parsed = extractJson(accumulated);
