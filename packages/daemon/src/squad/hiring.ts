@@ -1,198 +1,409 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
+import { getClient } from '../copilot/client.js';
 import { createChildLogger } from '../logging/logger.js';
 import { ensureSquadWiki } from '../wiki/index.js';
 import { addMember, createSquad } from './manager.js';
 import { generateSquadNames } from './name-generator.js';
-import { QA_TESTER_SKILL, SCRIBE_SKILL, TEAM_LEAD_SKILL } from './roles/templates.js';
+import { QA_TESTER_SKILL, SCRIBE_SKILL, TECHNICAL_PM_SKILL } from './roles/templates.js';
 import { parseSkillContent } from './skill-parser.js';
 
 const logger = () => createChildLogger('hiring');
 
-interface ProjectAnalysis {
+// ─── Proposal Storage ───────────────────────────────────────────────────────
+
+export interface ProposedMember {
+	role: string;
+	title: string;
+	justification: string;
+	isCore: boolean;
+	veto: boolean;
+	displayName?: string;
+	persona?: string;
+}
+
+export interface SquadProposal {
+	id: string;
+	repoUrl: string;
+	projectPath: string;
+	projectName: string;
+	universe: string;
+	members: ProposedMember[];
+	createdAt: number;
+}
+
+const proposals = new Map<string, SquadProposal>();
+
+export function getProposal(id: string): SquadProposal | undefined {
+	return proposals.get(id);
+}
+
+export function deleteProposal(id: string): void {
+	proposals.delete(id);
+}
+
+// ─── LLM Codebase Analyzer ─────────────────────────────────────────────────
+
+const ANALYZER_PROMPT = `You are a senior engineering hiring manager. Given a codebase summary, recommend the specialist roles needed for a high-performing engineering squad.
+
+Rules:
+- Roles must be SENIOR or PRINCIPAL level — no junior, mid-level, or generic titles
+- Roles must be SPECIFIC to the technology stack (e.g., "Senior React/Vite Engineer", not "Frontend Developer")
+- Recommend 2-5 specialist roles depending on project complexity
+- Consider: languages, frameworks, architecture patterns, testing needs, deployment complexity
+- Include a justification for each role explaining WHY the project needs that specific specialist
+- Decide whether QA and Testing should be separate roles based on project size/complexity. For small projects, one QA/Test Engineer suffices. For large projects with multiple test layers (unit, integration, e2e, performance), recommend separate QA Engineer and Tester.
+- Return ONLY valid JSON, no markdown fencing
+
+Respond with this exact JSON structure:
+{
+  "specialists": [
+    { "role": "<kebab-case-role-id>", "title": "<Senior/Principal Level Title>", "justification": "<why this project needs this role>" }
+  ],
+  "separateQaAndTester": true/false,
+  "qaJustification": "<why QA and Tester should or should not be separate>"
+}`;
+
+interface CodebaseSummary {
 	name: string;
-	languages: string[];
-	frameworks: string[];
-	hasTests: boolean;
-	hasCi: boolean;
-	suggestedSpecialists: string[];
+	readme: string;
+	manifests: Record<string, string>;
+	configFiles: string[];
+	directoryTree: string;
+	ciFiles: string[];
 }
 
 /**
- * Analyze a project directory to determine what kind of squad it needs.
+ * Sample key files from the project to build a codebase summary for the LLM.
  */
-export function analyzeProject(projectPath: string): ProjectAnalysis {
+function sampleCodebase(projectPath: string): CodebaseSummary {
 	const name = basename(projectPath);
-	const languages: string[] = [];
-	const frameworks: string[] = [];
-	let hasTests = false;
-	let hasCi = false;
-
-	// Check for common project indicators
 	const files = safeReadDir(projectPath);
 
-	// Language detection
-	if (files.includes('package.json')) {
-		languages.push('TypeScript/JavaScript');
-		const pkg = safeReadJson(join(projectPath, 'package.json'));
-		if (pkg) {
-			const deps = (pkg.dependencies ?? {}) as Record<string, string>;
-			const devDeps = (pkg.devDependencies ?? {}) as Record<string, string>;
-			const allDeps = { ...deps, ...devDeps };
-			if (allDeps.react || allDeps['react-dom']) frameworks.push('React');
-			if (allDeps.vue) frameworks.push('Vue');
-			if (allDeps.svelte) frameworks.push('Svelte');
-			if (allDeps.next) frameworks.push('Next.js');
-			if (allDeps.express || allDeps.fastify || allDeps.koa) frameworks.push('Node.js Backend');
-			if (allDeps.vitest || allDeps.jest || allDeps.mocha) hasTests = true;
+	const readmeFile = files.find((f) => f.toLowerCase().startsWith('readme'));
+	const readme = readmeFile ? safeReadFile(join(projectPath, readmeFile), 4000) : '';
+	const manifests = collectManifests(projectPath, files);
+	const configFiles = detectConfigFiles(files);
+	const directoryTree = buildDirectoryTree(projectPath, 2, 60);
+	const ciFiles = collectCiFiles(projectPath);
+
+	return { name, readme, manifests, configFiles, directoryTree, ciFiles };
+}
+
+const MANIFEST_FILES = [
+	'package.json',
+	'Cargo.toml',
+	'go.mod',
+	'pyproject.toml',
+	'requirements.txt',
+	'Gemfile',
+	'pom.xml',
+	'build.gradle',
+];
+
+function collectManifests(projectPath: string, files: string[]): Record<string, string> {
+	const manifests: Record<string, string> = {};
+	for (const mf of MANIFEST_FILES) {
+		if (files.includes(mf)) {
+			manifests[mf] = safeReadFile(join(projectPath, mf), 2000);
 		}
 	}
-	if (files.includes('Cargo.toml')) languages.push('Rust');
-	if (files.includes('go.mod')) languages.push('Go');
-	if (files.includes('requirements.txt') || files.includes('pyproject.toml'))
-		languages.push('Python');
-	if (files.includes('Gemfile')) languages.push('Ruby');
-	if (files.some((f) => f.endsWith('.csproj') || f.endsWith('.sln'))) languages.push('C#/.NET');
-
-	// CI detection
-	if (files.includes('.github')) {
-		const ghDir = safeReadDir(join(projectPath, '.github'));
-		if (ghDir.includes('workflows')) hasCi = true;
+	// Check for workspace/monorepo manifests
+	for (const sub of ['packages', 'apps', 'libs']) {
+		const subPath = join(projectPath, sub);
+		if (!existsSync(subPath)) continue;
+		const subContents = safeReadDir(subPath);
+		for (const pkg of subContents.slice(0, 8)) {
+			const pkgManifest = join(subPath, pkg, 'package.json');
+			if (existsSync(pkgManifest)) {
+				manifests[`${sub}/${pkg}/package.json`] = safeReadFile(pkgManifest, 1000);
+			}
+		}
 	}
+	return manifests;
+}
 
-	// Suggest specialists based on detected tech
-	const suggestedSpecialists: string[] = [];
-	if (frameworks.includes('React') || frameworks.includes('Vue') || frameworks.includes('Svelte'))
-		suggestedSpecialists.push('frontend-developer');
-	if (frameworks.includes('Node.js Backend')) suggestedSpecialists.push('backend-developer');
-	if (languages.includes('Rust')) suggestedSpecialists.push('rust-developer');
-	if (languages.includes('Go')) suggestedSpecialists.push('go-developer');
-	if (languages.includes('Python')) suggestedSpecialists.push('python-developer');
-	if (languages.includes('C#/.NET')) suggestedSpecialists.push('dotnet-developer');
+const CONFIG_PATTERNS = [
+	'tsconfig.json',
+	'vite.config',
+	'webpack.config',
+	'next.config',
+	'tailwind.config',
+	'docker-compose',
+	'Dockerfile',
+	'.env.example',
+	'biome.json',
+	'eslint',
+];
 
-	// If no specialists detected, add a generic one
-	if (suggestedSpecialists.length === 0 && languages.length > 0) {
-		suggestedSpecialists.push('developer');
+function detectConfigFiles(files: string[]): string[] {
+	return files.filter((f) =>
+		CONFIG_PATTERNS.some((p) => f.toLowerCase().includes(p.toLowerCase())),
+	);
+}
+
+function collectCiFiles(projectPath: string): string[] {
+	const ciFiles: string[] = [];
+	const ghWorkflows = join(projectPath, '.github', 'workflows');
+	if (existsSync(ghWorkflows)) {
+		const workflows = safeReadDir(ghWorkflows);
+		for (const wf of workflows.slice(0, 3)) {
+			ciFiles.push(safeReadFile(join(ghWorkflows, wf), 1000));
+		}
 	}
-
-	return { name, languages, frameworks, hasTests, hasCi, suggestedSpecialists };
+	return ciFiles;
 }
 
 /**
- * Generate a specialist SKILL.md from a role name and detected context.
+ * Use the LLM to analyze a codebase and recommend specialist roles.
  */
-function generateSpecialistSkill(role: string, analysis: ProjectAnalysis): string {
-	const langContext = analysis.languages.join(', ');
-	const frameworkContext =
-		analysis.frameworks.length > 0 ? `\nFrameworks: ${analysis.frameworks.join(', ')}` : '';
+async function analyzeCodebase(projectPath: string): Promise<{
+	specialists: { role: string; title: string; justification: string }[];
+	separateQaAndTester: boolean;
+}> {
+	const log = logger();
+	const summary = sampleCodebase(projectPath);
 
-	return `---
-role: ${role}
-tools:
-  - read_file
-  - edit_file
-  - run_command
-  - search_code
-veto: false
----
+	const userMessage = `Here is a summary of the "${summary.name}" project:
 
-# ${titleCase(role)}
+## README (truncated)
+${summary.readme || '(no README found)'}
 
-## Identity
-You are a ${titleCase(role)} specializing in ${langContext}.${frameworkContext}
+## Package Manifests
+${Object.entries(summary.manifests)
+	.map(([f, content]) => `### ${f}\n\`\`\`\n${content}\n\`\`\``)
+	.join('\n\n')}
 
-## Responsibilities
-- Implement features and fix bugs assigned by the Team Lead
-- Write clean, well-tested code following project conventions
-- Run tests before submitting work for review
-- Respond to code review feedback promptly
+## Config Files Present
+${summary.configFiles.join(', ') || '(none detected)'}
 
-## Boundaries
-- Only work on tasks assigned to you by the Team Lead
-- Do NOT modify files outside your area of expertise unless directed
-- Do NOT merge PRs — submit work for team lead review
-- Always run the test suite before reporting task completion
+## Directory Structure
+\`\`\`
+${summary.directoryTree}
+\`\`\`
 
-## Project Context
-Languages: ${langContext}${frameworkContext}
-`;
+## CI/CD Workflows
+${summary.ciFiles.length > 0 ? summary.ciFiles.map((c) => `\`\`\`yaml\n${c}\n\`\`\``).join('\n') : '(none found)'}
+
+Based on this codebase, what senior/principal-level specialist roles does this project need?`;
+
+	try {
+		const client = await getClient();
+		const session = await client.createSession({
+			systemMessage: { mode: 'replace' as const, content: ANALYZER_PROMPT },
+		});
+
+		let accumulated = '';
+		const unsubDelta = session.on('assistant.message_delta', (event) => {
+			accumulated += event.data.deltaContent;
+		});
+
+		try {
+			await session.sendAndWait({ prompt: userMessage }, 90_000);
+		} finally {
+			unsubDelta();
+		}
+
+		const parsed = extractJson(accumulated);
+		if (!parsed || !Array.isArray(parsed.specialists)) {
+			throw new Error('Invalid LLM response for codebase analysis');
+		}
+
+		log.info(
+			{
+				project: summary.name,
+				specialists: (parsed.specialists as { title: string }[]).map((s) => s.title),
+				separateQa: parsed.separateQaAndTester,
+			},
+			'Codebase analyzed',
+		);
+
+		return {
+			specialists: parsed.specialists as { role: string; title: string; justification: string }[],
+			separateQaAndTester: !!parsed.separateQaAndTester,
+		};
+	} catch (err) {
+		log.error({ err }, 'LLM codebase analysis failed, using fallback heuristics');
+		return fallbackAnalysis(projectPath);
+	}
 }
 
+// ─── Propose / Confirm Flow ────────────────────────────────────────────────
+
 /**
- * Execute the full squad hiring flow:
- * 1. Analyze the project
- * 2. Create the squad in DB
- * 3. Write SKILL.md files to disk
- * 4. Add all members
+ * Propose a squad: clone, analyze, generate names, store proposal for review.
  */
-export async function hireSquad(params: {
+export async function proposeSquad(params: {
 	projectPath: string;
 	repoUrl?: string;
 	name?: string;
 	universe?: string;
-}): Promise<{ squadId: string; analysis: ProjectAnalysis; members: string[]; universe: string }> {
+}): Promise<SquadProposal> {
 	const log = logger();
+	const projectName = params.name ?? basename(params.projectPath);
 
-	// 1. Analyze
-	const analysis = analyzeProject(params.projectPath);
-	const squadName = params.name ?? analysis.name;
-	log.info({ squadName, analysis }, 'Project analyzed');
+	// 1. Analyze with LLM
+	const analysis = await analyzeCodebase(params.projectPath);
 
-	// 2. Build skill files
-	const skillsDir = join(homedir(), '.io', 'squads', squadName);
-	mkdirSync(skillsDir, { recursive: true });
-
-	const skillFiles: { role: string; content: string; veto: boolean }[] = [
-		{ role: 'team-lead', content: TEAM_LEAD_SKILL, veto: true },
-		{ role: 'scribe', content: SCRIBE_SKILL, veto: false },
-		{ role: 'qa-tester', content: QA_TESTER_SKILL, veto: true },
+	// 2. Build member list — core roles + specialists
+	const members: ProposedMember[] = [
+		{
+			role: 'technical-pm',
+			title: 'Technical PM',
+			justification: 'Coordinates the team, makes architectural decisions, reviews all work',
+			isCore: true,
+			veto: true,
+		},
+		{
+			role: 'scribe',
+			title: 'Scribe',
+			justification: 'Records decisions, maintains documentation, writes PR descriptions',
+			isCore: true,
+			veto: false,
+		},
 	];
 
-	for (const specialist of analysis.suggestedSpecialists) {
-		skillFiles.push({
-			role: specialist,
-			content: generateSpecialistSkill(specialist, analysis),
+	if (analysis.separateQaAndTester) {
+		members.push({
+			role: 'qa-engineer',
+			title: 'QA Engineer',
+			justification:
+				'Quality gate — reviews code for edge cases, security issues, and test coverage',
+			isCore: true,
+			veto: true,
+		});
+		members.push({
+			role: 'tester',
+			title: 'Tester',
+			justification: 'Functional/integration testing, CI/CD pipeline verification, test automation',
+			isCore: true,
+			veto: false,
+		});
+	} else {
+		members.push({
+			role: 'qa-tester',
+			title: 'QA/Test Engineer',
+			justification: 'Quality gate — writes tests, reviews for edge cases, blocks bad merges',
+			isCore: true,
+			veto: true,
+		});
+	}
+
+	for (const spec of analysis.specialists) {
+		members.push({
+			role: spec.role,
+			title: spec.title,
+			justification: spec.justification,
+			isCore: false,
 			veto: false,
 		});
 	}
 
-	// 3. Generate character names from universe via LLM
-	const allRoles = skillFiles.map((f) => f.role);
+	// 3. Generate character names
+	const allRoles = members.map((m) => m.title);
 	const generated = await generateSquadNames(allRoles, params.universe);
-	log.info({ squadName, universe: generated.universe }, 'Universe names generated');
 
-	// 4. Create squad
-	const squad = await createSquad({
-		name: squadName,
-		projectPath: params.projectPath,
-		repoUrl: params.repoUrl,
-		universe: generated.universe,
-	});
-
-	// 5. Create wiki folder for this squad
-	ensureSquadWiki(squadName);
-
-	// 6. Write files and add members
-	const memberRoles: string[] = [];
-	for (const { role, content, veto } of skillFiles) {
-		const filePath = join(skillsDir, `${role}.skill.md`);
-		writeFileSync(filePath, content, 'utf-8');
-
-		const skill = parseSkillContent(content, filePath);
-		const assignment = generated.assignments.find((a) => a.role === role);
-		const displayName = assignment?.displayName ?? role;
-		const persona = assignment?.persona;
-		await addMember({ squadId: squad.id, skill, displayName, persona, isVetoMember: veto });
-		memberRoles.push(`${displayName} (${role})`);
+	// Assign names to members
+	for (const member of members) {
+		const assignment = generated.assignments.find(
+			(a) => a.role.toLowerCase() === member.title.toLowerCase(),
+		);
+		if (assignment) {
+			member.displayName = assignment.displayName;
+			member.persona = assignment.persona;
+		}
 	}
 
+	// 4. Store proposal
+	const proposalId = crypto.randomUUID();
+	const proposal: SquadProposal = {
+		id: proposalId,
+		repoUrl: params.repoUrl ?? '',
+		projectPath: params.projectPath,
+		projectName,
+		universe: generated.universe,
+		members,
+		createdAt: Date.now(),
+	};
+	proposals.set(proposalId, proposal);
+
 	log.info(
-		{ squadId: squad.id, members: memberRoles, universe: generated.universe },
-		'Squad hired successfully',
+		{
+			proposalId,
+			projectName,
+			universe: generated.universe,
+			memberCount: members.length,
+		},
+		'Squad proposal created',
 	);
-	return { squadId: squad.id, analysis, members: memberRoles, universe: generated.universe };
+
+	return proposal;
 }
+
+/**
+ * Confirm a squad proposal and create the actual squad.
+ */
+export async function confirmSquad(params: {
+	proposalId: string;
+	name?: string;
+	removedRoles?: string[];
+}): Promise<{ squadId: string; members: string[]; universe: string }> {
+	const log = logger();
+	const proposal = proposals.get(params.proposalId);
+	if (!proposal) {
+		throw new Error(`Proposal '${params.proposalId}' not found or has expired.`);
+	}
+
+	const squadName = params.name ?? proposal.projectName;
+	const removedSet = new Set(params.removedRoles?.map((r) => r.toLowerCase()) ?? []);
+	const finalMembers = proposal.members.filter((m) => !removedSet.has(m.role.toLowerCase()));
+
+	// 1. Create skill files directory
+	const skillsDir = join(homedir(), '.io', 'squads', squadName);
+	mkdirSync(skillsDir, { recursive: true });
+
+	// 2. Create the squad
+	const squad = await createSquad({
+		name: squadName,
+		projectPath: proposal.projectPath,
+		repoUrl: proposal.repoUrl || undefined,
+		universe: proposal.universe,
+	});
+
+	// 3. Create wiki
+	ensureSquadWiki(squadName);
+
+	// 4. Write skill files and add members
+	const memberRoles: string[] = [];
+	for (const member of finalMembers) {
+		const skillContent = generateSkillForMember(member, proposal.projectPath);
+		const filePath = join(skillsDir, `${member.role}.skill.md`);
+		writeFileSync(filePath, skillContent, 'utf-8');
+
+		const skill = parseSkillContent(skillContent, filePath);
+		await addMember({
+			squadId: squad.id,
+			skill,
+			displayName: member.displayName ?? member.title,
+			persona: member.persona,
+			isVetoMember: member.veto,
+		});
+		memberRoles.push(`${member.displayName ?? member.title} (${member.title})`);
+	}
+
+	// 5. Clean up proposal
+	proposals.delete(params.proposalId);
+
+	log.info(
+		{ squadId: squad.id, members: memberRoles, universe: proposal.universe },
+		'Squad confirmed and created',
+	);
+
+	return { squadId: squad.id, members: memberRoles, universe: proposal.universe };
+}
+
+// ─── Legacy API (kept for addMemberToExistingSquad) ─────────────────────────
 
 /**
  * Add a new member to an existing squad.
@@ -207,11 +418,15 @@ export async function addMemberToExistingSquad(params: {
 }): Promise<{ displayName: string; role: string }> {
 	const log = logger();
 
-	// Generate skill content for the role
-	const analysis = analyzeProject(params.projectPath);
-	const skillContent = generateRoleSkill(params.role, analysis);
+	const member: ProposedMember = {
+		role: params.role,
+		title: titleCase(params.role),
+		justification: '',
+		isCore: false,
+		veto: params.role.includes('qa'),
+	};
 
-	// Write skill file to disk
+	const skillContent = generateSkillForMember(member, params.projectPath);
 	const skillsDir = join(homedir(), '.io', 'squads', params.squadName);
 	mkdirSync(skillsDir, { recursive: true });
 	const filePath = join(skillsDir, `${params.role}.skill.md`);
@@ -220,7 +435,7 @@ export async function addMemberToExistingSquad(params: {
 	const skill = parseSkillContent(skillContent, filePath);
 
 	// Generate themed name if universe is set
-	let displayName = titleCase(params.role);
+	let displayName = member.title;
 	let persona: string | undefined;
 	if (params.universe) {
 		const generated = await generateSquadNames([params.role], params.universe);
@@ -236,25 +451,115 @@ export async function addMemberToExistingSquad(params: {
 		skill,
 		displayName,
 		persona,
-		isVetoMember: params.role === 'qa-tester',
+		isVetoMember: member.veto,
 	});
 
 	log.info({ squadId: params.squadId, role: params.role, displayName }, 'Member added to squad');
 	return { displayName, role: params.role };
 }
 
-/**
- * Generate a skill file for a given role, using project analysis if available.
- */
-function generateRoleSkill(role: string, analysis: ProjectAnalysis): string {
-	// Check for built-in roles
-	if (role === 'team-lead') return TEAM_LEAD_SKILL;
-	if (role === 'scribe') return SCRIBE_SKILL;
-	if (role === 'qa-tester') return QA_TESTER_SKILL;
-	return generateSpecialistSkill(role, analysis);
+// ─── Skill Generation ───────────────────────────────────────────────────────
+
+function generateSkillForMember(member: ProposedMember, projectPath: string): string {
+	// Core roles use built-in templates
+	if (member.role === 'technical-pm') return TECHNICAL_PM_SKILL;
+	if (member.role === 'scribe') return SCRIBE_SKILL;
+	if (member.role === 'qa-tester' || member.role === 'qa-engineer') return QA_TESTER_SKILL;
+
+	// Tester role (separate from QA)
+	if (member.role === 'tester') {
+		return generateTesterSkill();
+	}
+
+	// Specialist roles get generated skills
+	return generateSpecialistSkill(member, projectPath);
 }
 
-// Helpers
+function generateTesterSkill(): string {
+	return `---
+role: tester
+tools:
+  - read_file
+  - edit_file
+  - run_command
+  - search_code
+veto: false
+---
+
+# Tester
+
+## Identity
+You are the Tester — responsible for functional testing, integration testing, and CI/CD pipeline health.
+
+## Responsibilities
+- Write and maintain integration and end-to-end tests
+- Verify feature implementations against acceptance criteria
+- Run test suites and report failures with clear reproduction steps
+- Monitor CI/CD pipeline health and investigate flaky tests
+- Set up test infrastructure (fixtures, mocks, test databases)
+
+## Boundaries
+- You focus on test code and test infrastructure
+- You do NOT write production features
+- You work alongside the QA Engineer but focus on automation over manual review
+- You ensure CI stays green before any merge
+
+## Standards
+- All new features must have integration tests
+- Flaky tests must be identified and either fixed or quarantined
+- Test runs must be reproducible and fast
+- CI/CD pipeline failures are your top priority
+`;
+}
+
+function generateSpecialistSkill(member: ProposedMember, projectPath: string): string {
+	const summary = sampleCodebase(projectPath);
+	const langContext = Object.keys(summary.manifests)
+		.map((f) => {
+			if (f.includes('package.json')) return 'TypeScript/JavaScript';
+			if (f.includes('Cargo.toml')) return 'Rust';
+			if (f.includes('go.mod')) return 'Go';
+			if (f.includes('pyproject.toml') || f.includes('requirements.txt')) return 'Python';
+			return null;
+		})
+		.filter(Boolean)
+		.join(', ');
+
+	return `---
+role: ${member.role}
+tools:
+  - read_file
+  - edit_file
+  - run_command
+  - search_code
+veto: false
+---
+
+# ${member.title}
+
+## Identity
+You are a ${member.title} — a senior/principal-level specialist.
+${member.justification ? `Hired because: ${member.justification}` : ''}
+
+## Responsibilities
+- Implement features and fix bugs within your area of expertise
+- Write clean, well-tested code following project conventions
+- Provide expert-level guidance on your specialty area during team discussions
+- Run tests before submitting work for review
+- Mentor other team members on best practices in your domain
+
+## Boundaries
+- Only work on tasks assigned to you by the Technical PM
+- Do NOT modify files outside your area of expertise unless directed
+- Do NOT merge PRs — submit work for Technical PM review
+- Always run the test suite before reporting task completion
+
+## Project Context
+${langContext ? `Languages: ${langContext}` : ''}
+`;
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
 function safeReadDir(dir: string): string[] {
 	try {
@@ -263,6 +568,124 @@ function safeReadDir(dir: string): string[] {
 	} catch {
 		return [];
 	}
+}
+
+function safeReadFile(path: string, maxLength: number): string {
+	try {
+		if (!existsSync(path)) return '';
+		const content = readFileSync(path, 'utf-8');
+		return content.length > maxLength ? `${content.slice(0, maxLength)}\n...(truncated)` : content;
+	} catch {
+		return '';
+	}
+}
+
+function buildDirectoryTree(rootPath: string, maxDepth: number, maxEntries: number): string {
+	const lines: string[] = [];
+	function walk(dir: string, prefix: string, depth: number) {
+		if (depth > maxDepth || lines.length >= maxEntries) return;
+		const entries = safeReadDir(dir).filter(
+			(e) => !e.startsWith('.') && e !== 'node_modules' && e !== 'dist' && e !== 'target',
+		);
+		for (const entry of entries.slice(0, 20)) {
+			if (lines.length >= maxEntries) {
+				lines.push(`${prefix}... (truncated)`);
+				return;
+			}
+			lines.push(`${prefix}${entry}`);
+			const fullPath = join(dir, entry);
+			try {
+				const stat = statSync(fullPath);
+				if (stat.isDirectory()) {
+					walk(fullPath, `${prefix}  `, depth + 1);
+				}
+			} catch {
+				// skip
+			}
+		}
+	}
+	walk(rootPath, '', 0);
+	return lines.join('\n');
+}
+
+function extractJson(text: string): Record<string, unknown> | null {
+	try {
+		return JSON.parse(text.trim());
+	} catch {
+		const match = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+		if (match) {
+			try {
+				return JSON.parse(match[1].trim());
+			} catch {
+				return null;
+			}
+		}
+		const braceMatch = text.match(/\{[\s\S]*\}/);
+		if (braceMatch) {
+			try {
+				return JSON.parse(braceMatch[0]);
+			} catch {
+				return null;
+			}
+		}
+		return null;
+	}
+}
+
+function fallbackAnalysis(projectPath: string): {
+	specialists: { role: string; title: string; justification: string }[];
+	separateQaAndTester: boolean;
+} {
+	const files = safeReadDir(projectPath);
+	const specialists: { role: string; title: string; justification: string }[] = [];
+
+	if (files.includes('package.json')) {
+		const pkg = safeReadJson(join(projectPath, 'package.json'));
+		if (pkg) {
+			const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) } as Record<
+				string,
+				string
+			>;
+			if (deps.react) {
+				specialists.push({
+					role: 'senior-react-engineer',
+					title: 'Senior React Engineer',
+					justification: 'Project uses React for frontend',
+				});
+			}
+			if (deps.express || deps.fastify || deps.koa) {
+				specialists.push({
+					role: 'senior-node-backend-engineer',
+					title: 'Senior Node.js Backend Engineer',
+					justification: 'Project has Node.js backend',
+				});
+			}
+		}
+	}
+	if (files.includes('Cargo.toml')) {
+		specialists.push({
+			role: 'senior-rust-engineer',
+			title: 'Senior Rust Engineer',
+			justification: 'Project uses Rust',
+		});
+	}
+	if (files.includes('go.mod')) {
+		specialists.push({
+			role: 'senior-go-engineer',
+			title: 'Senior Go Engineer',
+			justification: 'Project uses Go',
+		});
+	}
+
+	if (specialists.length === 0) {
+		specialists.push({
+			role: 'senior-software-engineer',
+			title: 'Senior Software Engineer',
+			justification: 'General development work',
+		});
+	}
+
+	return { specialists, separateQaAndTester: false };
 }
 
 function safeReadJson(path: string): Record<string, unknown> | null {

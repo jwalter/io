@@ -14,4 +14,10 @@ export {
 	getSquadRuntime,
 	delegateToSquad,
 } from './manager.js';
-export { hireSquad, analyzeProject } from './hiring.js';
+export {
+	proposeSquad,
+	confirmSquad,
+	addMemberToExistingSquad,
+	getProposal,
+	deleteProposal,
+} from './hiring.js';
