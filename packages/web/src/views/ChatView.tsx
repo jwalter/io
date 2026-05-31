@@ -1,14 +1,23 @@
+import { IoMark } from '@/components/ui/io-mark';
+import { Chip } from '@/components/ui/shared';
 import { type WsMessage, useWebSocket } from '@/hooks/use-websocket';
 import { api } from '@/lib/api';
-import { Send } from 'lucide-react';
+import { Activity, ChevronDown, Paperclip, Send, Square } from 'lucide-react';
 import { marked } from 'marked';
 import { useCallback, useEffect, useRef, useState } from 'react';
+
+interface ToolCall {
+	name: string;
+	status: 'running' | 'done' | 'error';
+	result?: string;
+}
 
 interface Message {
 	id: string;
 	role: 'user' | 'assistant';
 	content: string;
 	timestamp: string;
+	toolCall?: ToolCall;
 }
 
 export function ChatView() {
@@ -16,8 +25,9 @@ export function ChatView() {
 	const [input, setInput] = useState('');
 	const [streaming, setStreaming] = useState('');
 	const [isStreaming, setIsStreaming] = useState(false);
+	const [expandedTool, setExpandedTool] = useState<string | null>(null);
 	const messagesEndRef = useRef<HTMLDivElement>(null);
-	const inputRef = useRef<HTMLTextAreaElement>(null);
+	const textareaRef = useRef<HTMLTextAreaElement>(null);
 
 	// Load conversation history
 	useEffect(() => {
@@ -41,16 +51,18 @@ export function ChatView() {
 				id: crypto.randomUUID(),
 				role: 'assistant',
 				content,
-				timestamp: new Date().toISOString(),
+				timestamp: new Date().toLocaleTimeString('en-US', {
+					hour: '2-digit',
+					minute: '2-digit',
+					hour12: false,
+				}),
 			},
 		]);
 	}, []);
 
-	const handleEvent = useCallback((_msg: WsMessage) => {
-		// Could show notifications/toasts here
-	}, []);
+	const handleEvent = useCallback((_msg: WsMessage) => {}, []);
 
-	const { connected, sendMessage } = useWebSocket({
+	const { sendMessage } = useWebSocket({
 		onDelta: handleDelta,
 		onMessage: handleMessage,
 		onEvent: handleEvent,
@@ -65,11 +77,14 @@ export function ChatView() {
 		const text = input.trim();
 		if (!text || isStreaming) return;
 
-		setMessages((prev) => [
-			...prev,
-			{ id: crypto.randomUUID(), role: 'user', content: text, timestamp: new Date().toISOString() },
-		]);
+		const ts = new Date().toLocaleTimeString('en-US', {
+			hour: '2-digit',
+			minute: '2-digit',
+			hour12: false,
+		});
+		setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'user', content: text, timestamp: ts }]);
 		setInput('');
+		if (textareaRef.current) textareaRef.current.style.height = 'auto';
 		sendMessage(text);
 	}
 
@@ -80,82 +95,182 @@ export function ChatView() {
 		}
 	}
 
-	return (
-		<div className="flex flex-col h-full">
-			{/* Header */}
-			<header className="h-14 flex items-center px-6 border-b border-[var(--color-border)] shrink-0">
-				<h1 className="text-lg font-semibold gradient-text">Chat</h1>
-				<div className="ml-auto flex items-center gap-2">
-					<span
-						className={`w-2 h-2 rounded-full ${connected ? 'bg-[var(--color-success)]' : 'bg-[var(--color-destructive)]'}`}
-					/>
-					<span className="text-xs text-[var(--color-muted-foreground)]">
-						{connected ? 'Connected' : 'Disconnected'}
-					</span>
-				</div>
-			</header>
+	function handleInput(e: React.ChangeEvent<HTMLTextAreaElement>) {
+		setInput(e.target.value);
+		if (textareaRef.current) {
+			textareaRef.current.style.height = 'auto';
+			textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 160)}px`;
+		}
+	}
 
+	return (
+		<div className="flex flex-col flex-1 min-h-0">
 			{/* Messages */}
-			<div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+			<div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
 				{messages.map((msg) => (
-					<MessageBubble key={msg.id} message={msg} />
+					<div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+						{/* Avatar */}
+						<div
+							className={`flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-mono mt-0.5 ${
+								msg.role === 'user'
+									? 'border border-[#E43A9C]/30 text-[#E43A9C]'
+									: 'bg-[#282828] border border-white/[0.07] text-zinc-500'
+							}`}
+							style={msg.role === 'user' ? { background: 'rgba(228,58,156,0.12)' } : undefined}
+						>
+							{msg.role === 'user' ? 'U' : <IoMark height={12} />}
+						</div>
+
+						{/* Content */}
+						<div
+							className={`flex flex-col gap-1.5 max-w-[72%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
+						>
+							{/* Tool call card */}
+							{msg.toolCall && (
+								<button
+									type="button"
+									onClick={() => setExpandedTool(expandedTool === msg.id ? null : msg.id)}
+									className="w-full text-left border border-white/[0.07] bg-[#1e1e1e] rounded-xl px-3 py-2 flex items-center gap-2 hover:border-[#E43A9C]/25 transition-colors"
+								>
+									<Activity className="w-3 h-3 text-[#E43A9C] flex-shrink-0" />
+									<span className="text-[11px] font-mono text-zinc-400 flex-1">
+										{msg.toolCall.name}
+									</span>
+									<Chip
+										variant={
+											msg.toolCall.status === 'done'
+												? 'success'
+												: msg.toolCall.status === 'error'
+													? 'error'
+													: 'warning'
+										}
+									>
+										{msg.toolCall.status}
+									</Chip>
+									<ChevronDown
+										className={`w-3 h-3 text-zinc-600 transition-transform flex-shrink-0 ${expandedTool === msg.id ? 'rotate-180' : ''}`}
+									/>
+								</button>
+							)}
+							{msg.toolCall && expandedTool === msg.id && (
+								<div className="w-full bg-[#181818] border border-white/[0.06] rounded-xl px-3 py-2">
+									<p className="text-[11px] font-mono text-zinc-500">{msg.toolCall.result}</p>
+								</div>
+							)}
+
+							{/* Message bubble */}
+							<div
+								className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+									msg.role === 'user'
+										? 'text-white rounded-tr-sm'
+										: 'bg-[#222222] border border-white/[0.07] text-zinc-200 rounded-tl-sm'
+								}`}
+								style={
+									msg.role === 'user'
+										? { background: 'linear-gradient(135deg, #D83333 0%, #C0285E 100%)' }
+										: undefined
+								}
+							>
+								{msg.role === 'user' ? (
+									<p className="whitespace-pre-wrap">{msg.content}</p>
+								) : (
+									<div
+										className="prose-io"
+										// biome-ignore lint: markdown rendering
+										dangerouslySetInnerHTML={{ __html: marked.parse(msg.content) as string }}
+									/>
+								)}
+							</div>
+
+							{/* Timestamp */}
+							<span className="text-[11px] text-zinc-700 font-mono px-0.5">{msg.timestamp}</span>
+						</div>
+					</div>
 				))}
-				{isStreaming && (
-					<MessageBubble
-						message={{ id: 'streaming', role: 'assistant', content: streaming, timestamp: '' }}
-					/>
+
+				{/* Streaming indicator */}
+				{isStreaming && streaming && (
+					<div className="flex gap-3">
+						<div className="flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center bg-[#282828] border border-white/[0.07] mt-0.5">
+							<IoMark height={12} />
+						</div>
+						<div className="bg-[#222222] border border-white/[0.07] rounded-2xl rounded-tl-sm px-4 py-2.5 max-w-[72%]">
+							<div
+								className="prose-io text-sm"
+								// biome-ignore lint: streaming markdown
+								dangerouslySetInnerHTML={{ __html: marked.parse(streaming) as string }}
+							/>
+						</div>
+					</div>
 				)}
+
+				{/* Streaming dots (no content yet) */}
+				{isStreaming && !streaming && (
+					<div className="flex gap-3">
+						<div className="flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center bg-[#282828] border border-white/[0.07] mt-0.5">
+							<IoMark height={12} />
+						</div>
+						<div className="bg-[#222222] border border-white/[0.07] rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-1.5">
+							{[0, 120, 240].map((d) => (
+								<span
+									key={d}
+									className="w-1.5 h-1.5 rounded-full bg-[#E43A9C] animate-bounce"
+									style={{ animationDelay: `${d}ms` }}
+								/>
+							))}
+						</div>
+					</div>
+				)}
+
 				<div ref={messagesEndRef} />
 			</div>
 
-			{/* Input */}
-			<div className="px-6 pb-4 pt-2 border-t border-[var(--color-border)]">
-				<div className="glass-card flex items-end gap-2 p-3">
+			{/* Input area */}
+			<div className="border-t border-white/[0.06] p-4 flex-shrink-0">
+				<div className="bg-[#1e1e1e] border border-white/[0.08] rounded-2xl overflow-hidden transition-colors focus-within:border-[#E43A9C]/30">
 					<textarea
-						ref={inputRef}
+						ref={textareaRef}
 						value={input}
-						onChange={(e) => setInput(e.target.value)}
+						onChange={handleInput}
 						onKeyDown={handleKeyDown}
-						placeholder="Message IO..."
+						placeholder="Message IO…"
 						rows={1}
-						className="flex-1 bg-transparent resize-none outline-none text-sm text-[var(--color-foreground)] placeholder:text-[var(--color-muted)] max-h-32"
+						className="w-full bg-transparent px-4 pt-3 pb-1 text-sm text-zinc-200 placeholder:text-zinc-700 resize-none focus:outline-none"
+						style={{ minHeight: '42px', maxHeight: '160px', fontFamily: 'Inter, sans-serif' }}
 					/>
-					<button
-						onClick={handleSend}
-						disabled={!input.trim() || isStreaming}
-						className="w-8 h-8 flex items-center justify-center rounded-lg bg-[var(--color-accent)] text-white disabled:opacity-40 transition-opacity hover:opacity-90"
-					>
-						<Send size={16} />
-					</button>
+					<div className="flex items-center justify-between px-3 pb-2.5">
+						<button
+							type="button"
+							className="p-1.5 rounded-lg hover:bg-white/[0.05] text-zinc-700 hover:text-zinc-400 transition-colors"
+						>
+							<Paperclip className="w-4 h-4" />
+						</button>
+						<div className="flex items-center gap-2">
+							{isStreaming ? (
+								<button
+									type="button"
+									onClick={() => setIsStreaming(false)}
+									className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-[11px] font-mono text-zinc-300 transition-colors"
+								>
+									<Square className="w-3 h-3" /> Stop
+								</button>
+							) : (
+								<button
+									type="button"
+									onClick={handleSend}
+									disabled={!input.trim()}
+									className="p-2 rounded-xl text-white disabled:opacity-30 disabled:cursor-not-allowed transition-opacity hover:opacity-90"
+									style={{ background: 'linear-gradient(135deg, #D83333, #E43A9C)' }}
+								>
+									<Send className="w-3.5 h-3.5" />
+								</button>
+							)}
+						</div>
+					</div>
 				</div>
-			</div>
-		</div>
-	);
-}
-
-function MessageBubble({ message }: { message: Message }) {
-	const isUser = message.role === 'user';
-
-	if (isUser) {
-		return (
-			<div className="flex justify-end">
-				<div className="max-w-[70%] rounded-2xl rounded-br-md px-4 py-2.5 bg-[var(--color-accent)]/15 border border-[var(--color-accent)]/20">
-					<p className="text-sm whitespace-pre-wrap">{message.content}</p>
-				</div>
-			</div>
-		);
-	}
-
-	const html = marked.parse(message.content) as string;
-
-	return (
-		<div className="flex justify-start">
-			<div className="max-w-[80%] rounded-2xl rounded-bl-md px-4 py-2.5 glass-card">
-				<div
-					className="prose-io text-sm"
-					// biome-ignore lint: markdown rendering
-					dangerouslySetInnerHTML={{ __html: html }}
-				/>
+				<p className="text-center text-[11px] text-zinc-800 font-mono mt-2">
+					IO may make mistakes. Verify important outputs.
+				</p>
 			</div>
 		</div>
 	);
