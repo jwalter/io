@@ -103,8 +103,8 @@ export async function initOrchestrator(config: IOConfig): Promise<void> {
 			sessionId = savedSessionId;
 			logger.info({ sessionId }, 'Resumed orchestrator session');
 			return;
-		} catch (err) {
-			logger.warn({ err, sessionId: savedSessionId }, 'Failed to resume session, creating new one');
+		} catch {
+			logger.info({ sessionId: savedSessionId }, 'Previous session expired, creating new one');
 		}
 	}
 
