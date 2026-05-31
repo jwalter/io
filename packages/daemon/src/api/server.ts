@@ -104,11 +104,11 @@ export function createApiServer(config: IOConfig): ApiServer {
 	// WebSocket server for streaming
 	const wss = new WebSocketServer({ server, path: '/ws' });
 
-	wss.on('connection', (ws, req) => {
+	wss.on('connection', async (ws, req) => {
 		// Verify token from query string if auth is configured
 		const url = new URL(req.url ?? '', `http://${req.headers.host}`);
 		const token = url.searchParams.get('token');
-		if (!verifyWsToken(config, token)) {
+		if (!(await verifyWsToken(config, token))) {
 			ws.close(4001, 'Unauthorized');
 			return;
 		}
