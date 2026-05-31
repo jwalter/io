@@ -30,6 +30,15 @@ function resolveDataDir(dir: string): string {
 	return dir;
 }
 
+/** Read a trimmed string from env or config, returning null if empty. */
+function readString(
+	envVal: string | undefined,
+	configVal: string | null | undefined,
+): string | null {
+	const raw = envVal || configVal || null;
+	return raw?.trim() || null;
+}
+
 /**
  * Load IO configuration. Priority: env vars > config file > defaults.
  * Config file location: ~/.io/config.json (or IO_DATA_DIR/config.json).
@@ -66,9 +75,9 @@ export function loadConfig(): IOConfig {
 				: fileConfig.telegram?.allowedChatIds || [],
 		},
 		supabase: {
-			projectUrl: process.env.IO_SUPABASE_URL || fileConfig.supabase?.projectUrl || null,
-			anonKey: process.env.IO_SUPABASE_ANON_KEY || fileConfig.supabase?.anonKey || null,
-			jwtSecret: process.env.IO_SUPABASE_JWT_SECRET || fileConfig.supabase?.jwtSecret || null,
+			projectUrl: readString(process.env.IO_SUPABASE_URL, fileConfig.supabase?.projectUrl),
+			anonKey: readString(process.env.IO_SUPABASE_ANON_KEY, fileConfig.supabase?.anonKey),
+			jwtSecret: readString(process.env.IO_SUPABASE_JWT_SECRET, fileConfig.supabase?.jwtSecret),
 		},
 	};
 }

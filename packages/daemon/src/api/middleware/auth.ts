@@ -45,10 +45,12 @@ export function authMiddleware(config: IOConfig) {
 		try {
 			jwt.verify(token, config.supabase.jwtSecret, {
 				algorithms: ['HS256'],
+				clockTolerance: 30,
 			});
 			next();
 		} catch (err) {
-			logger().debug({ err }, 'JWT verification failed');
+			const errMessage = err instanceof Error ? err.message : 'Unknown error';
+			logger().warn({ err: errMessage }, 'JWT verification failed');
 			res.status(401).json({ error: 'Invalid or expired token' });
 		}
 	};
@@ -68,7 +70,10 @@ export function verifyWsToken(config: IOConfig, token: string | null): boolean {
 	}
 
 	try {
-		jwt.verify(token, config.supabase.jwtSecret, { algorithms: ['HS256'] });
+		jwt.verify(token, config.supabase.jwtSecret, {
+			algorithms: ['HS256'],
+			clockTolerance: 30,
+		});
 		return true;
 	} catch {
 		return false;
