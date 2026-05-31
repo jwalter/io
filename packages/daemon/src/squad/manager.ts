@@ -207,6 +207,102 @@ export async function disbandSquad(squadId: string): Promise<void> {
 	logger().info({ squadId }, 'Squad disbanded');
 }
 
+/** Permanently delete a squad and all associated data */
+export async function deleteSquad(squadId: string): Promise<void> {
+	const db = getDatabase();
+
+	// Destroy any running agents first
+	const runtime = activeSquads.get(squadId);
+	if (runtime) {
+		for (const agent of runtime.members.values()) {
+			await agent.destroy().catch(() => {});
+		}
+		activeSquads.delete(squadId);
+	}
+
+	// Get squad name for disk cleanup
+	const squad = await getSquadById(squadId);
+	const squadName = squad?.name;
+
+	// Delete all associated data (order matters for FK constraints)
+	await db.execute({ sql: 'DELETE FROM inbox_entries WHERE squad_id = ?', args: [squadId] });
+	await db.execute({ sql: 'DELETE FROM agent_activity WHERE squad_id = ?', args: [squadId] });
+	await db.execute({ sql: 'DELETE FROM decisions WHERE squad_id = ?', args: [squadId] });
+	await db.execute({ sql: 'DELETE FROM token_usage WHERE squad_id = ?', args: [squadId] });
+	await db.execute({ sql: 'DELETE FROM squad_instances WHERE squad_id = ?', args: [squadId] });
+	await db.execute({ sql: 'DELETE FROM squad_members WHERE squad_id = ?', args: [squadId] });
+	await db.execute({
+		sql: "DELETE FROM schedules WHERE target_type = 'squad' AND target_id = ?",
+		args: [squadId],
+	});
+	await db.execute({
+		sql: 'DELETE FROM skill_activations WHERE target_id = ?',
+		args: [squadId],
+	});
+	await db.execute({ sql: 'DELETE FROM squads WHERE id = ?', args: [squadId] });
+
+	// Remove skill files from disk
+	if (squadName) {
+		const { rmSync, existsSync } = await import('node:fs');
+		const { join } = await import('node:path');
+		const { homedir } = await import('node:os');
+		const skillsDir = join(homedir(), '.io', 'squads', squadName);
+		if (existsSync(skillsDir)) {
+			rmSync(skillsDir, { recursive: true, force: true });
+		}
+	}
+
+	logger().info({ squadId, squadName }, 'Squad permanently deleted');
+}
+
+/** Rename a squad member's display name */
+export async function renameMember(memberId: string, newDisplayName: string): Promise<void> {
+	const db = getDatabase();
+	await db.execute({
+		sql: 'UPDATE squad_members SET display_name = ? WHERE id = ?',
+		args: [newDisplayName, memberId],
+	});
+	logger().info({ memberId, newDisplayName }, 'Member renamed');
+}
+
+/** Remove (retire) a member from a squad */
+export async function removeMember(memberId: string, squadId: string): Promise<void> {
+	const db = getDatabase();
+	await db.execute({
+		sql: "UPDATE squad_members SET status = 'retired' WHERE id = ?",
+		args: [memberId],
+	});
+
+	// Destroy running agent if squad is booted
+	const runtime = activeSquads.get(squadId);
+	if (runtime) {
+		// Find and remove the agent by member ID
+		for (const [role, agent] of runtime.members.entries()) {
+			const members = await getSquadMembers(squadId);
+			const member = members.find((m) => m.id === memberId);
+			if (member && member.roleName === role) {
+				await agent.destroy().catch(() => {});
+				runtime.members.delete(role);
+				break;
+			}
+		}
+	}
+
+	logger().info({ memberId, squadId }, 'Member removed from squad');
+}
+
+/** Find a squad member by role name or display name */
+export async function findMember(squadId: string, identifier: string): Promise<SquadMember | null> {
+	const members = await getSquadMembers(squadId);
+	return (
+		members.find(
+			(m) =>
+				m.roleName.toLowerCase() === identifier.toLowerCase() ||
+				m.displayName.toLowerCase() === identifier.toLowerCase(),
+		) ?? null
+	);
+}
+
 /** Retheme a squad with a new universe — updates display names and personas */
 export async function rethemeSquad(
 	squadId: string,

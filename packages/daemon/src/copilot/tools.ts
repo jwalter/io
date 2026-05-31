@@ -9,14 +9,18 @@ import {
 	removeSkill,
 } from '../skills/index.js';
 import { runInstance } from '../squad/execution/runner.js';
-import { hireSquad } from '../squad/hiring.js';
+import { addMemberToExistingSquad, hireSquad } from '../squad/hiring.js';
 import {
 	bootSquad,
 	delegateToSquad,
+	deleteSquad,
+	findMember,
 	getSquadByName,
 	getSquadMembers,
 	getSquadRuntime,
 	listSquads,
+	removeMember,
+	renameMember,
 	rethemeSquad,
 } from '../squad/manager.js';
 import { listInboxEntries, resolveInboxEntry } from '../store/inbox.js';
@@ -187,6 +191,181 @@ export function createOrchestratorTools() {
 					return {
 						textResultForLlm: JSON.stringify({
 							error: `Failed to retheme squad: ${err instanceof Error ? err.message : String(err)}`,
+						}),
+						resultType: 'success' as const,
+					};
+				}
+			},
+		}),
+
+		defineTool('delete_squad', {
+			description:
+				'Permanently delete a squad and ALL its history (instances, token usage, activity, inbox entries, schedules). This cannot be undone. Use disband_squad for soft-delete instead.',
+			parameters: z.object({
+				squadName: z.string().describe('Name of the squad to permanently delete'),
+			}),
+			handler: async (args: { squadName: string }) => {
+				try {
+					const squad = await getSquadByName(args.squadName);
+					if (!squad) {
+						return {
+							textResultForLlm: JSON.stringify({ error: `Squad '${args.squadName}' not found.` }),
+							resultType: 'success' as const,
+						};
+					}
+					await deleteSquad(squad.id);
+					return {
+						textResultForLlm: JSON.stringify({
+							deleted: true,
+							message: `Squad '${args.squadName}' and all its history have been permanently deleted.`,
+						}),
+						resultType: 'success' as const,
+					};
+				} catch (err) {
+					return {
+						textResultForLlm: JSON.stringify({
+							error: `Failed to delete squad: ${err instanceof Error ? err.message : String(err)}`,
+						}),
+						resultType: 'success' as const,
+					};
+				}
+			},
+		}),
+
+		defineTool('rename_squad_member', {
+			description:
+				"Change a squad member's display name. Identify the member by their current display name or role name.",
+			parameters: z.object({
+				squadName: z.string().describe('Name of the squad'),
+				member: z.string().describe('Current display name or role name of the member to rename'),
+				newDisplayName: z.string().describe('The new display name for the member'),
+			}),
+			handler: async (args: { squadName: string; member: string; newDisplayName: string }) => {
+				try {
+					const squad = await getSquadByName(args.squadName);
+					if (!squad) {
+						return {
+							textResultForLlm: JSON.stringify({ error: `Squad '${args.squadName}' not found.` }),
+							resultType: 'success' as const,
+						};
+					}
+					const found = await findMember(squad.id, args.member);
+					if (!found) {
+						return {
+							textResultForLlm: JSON.stringify({
+								error: `Member '${args.member}' not found in squad '${args.squadName}'.`,
+							}),
+							resultType: 'success' as const,
+						};
+					}
+					await renameMember(found.id, args.newDisplayName);
+					return {
+						textResultForLlm: JSON.stringify({
+							renamed: true,
+							previousName: found.displayName,
+							newName: args.newDisplayName,
+							role: found.roleName,
+						}),
+						resultType: 'success' as const,
+					};
+				} catch (err) {
+					return {
+						textResultForLlm: JSON.stringify({
+							error: `Failed to rename member: ${err instanceof Error ? err.message : String(err)}`,
+						}),
+						resultType: 'success' as const,
+					};
+				}
+			},
+		}),
+
+		defineTool('fire_squad_member', {
+			description:
+				'Remove (fire) a member from a squad. The member is retired and their running agent is destroyed. Identify by display name or role name.',
+			parameters: z.object({
+				squadName: z.string().describe('Name of the squad'),
+				member: z.string().describe('Display name or role name of the member to fire'),
+			}),
+			handler: async (args: { squadName: string; member: string }) => {
+				try {
+					const squad = await getSquadByName(args.squadName);
+					if (!squad) {
+						return {
+							textResultForLlm: JSON.stringify({ error: `Squad '${args.squadName}' not found.` }),
+							resultType: 'success' as const,
+						};
+					}
+					const found = await findMember(squad.id, args.member);
+					if (!found) {
+						return {
+							textResultForLlm: JSON.stringify({
+								error: `Member '${args.member}' not found in squad '${args.squadName}'.`,
+							}),
+							resultType: 'success' as const,
+						};
+					}
+					await removeMember(found.id, squad.id);
+					return {
+						textResultForLlm: JSON.stringify({
+							fired: true,
+							member: found.displayName,
+							role: found.roleName,
+							message: `${found.displayName} (${found.roleName}) has been removed from the squad.`,
+						}),
+						resultType: 'success' as const,
+					};
+				} catch (err) {
+					return {
+						textResultForLlm: JSON.stringify({
+							error: `Failed to fire member: ${err instanceof Error ? err.message : String(err)}`,
+						}),
+						resultType: 'success' as const,
+					};
+				}
+			},
+		}),
+
+		defineTool('hire_squad_member', {
+			description:
+				"Add a new member to an existing squad. A skill file is generated for the role and the member gets a themed name from the squad's universe.",
+			parameters: z.object({
+				squadName: z.string().describe('Name of the squad to add a member to'),
+				role: z
+					.string()
+					.describe(
+						'Role for the new member (e.g., "frontend-developer", "backend-developer", "devops-engineer", "designer", "qa-tester")',
+					),
+			}),
+			handler: async (args: { squadName: string; role: string }) => {
+				try {
+					const squad = await getSquadByName(args.squadName);
+					if (!squad) {
+						return {
+							textResultForLlm: JSON.stringify({ error: `Squad '${args.squadName}' not found.` }),
+							resultType: 'success' as const,
+						};
+					}
+					const result = await addMemberToExistingSquad({
+						squadId: squad.id,
+						squadName: squad.name,
+						role: args.role,
+						projectPath: squad.projectPath,
+						universe: squad.universe,
+					});
+					return {
+						textResultForLlm: JSON.stringify({
+							hired: true,
+							displayName: result.displayName,
+							role: result.role,
+							squad: args.squadName,
+							message: `${result.displayName} (${result.role}) has joined the squad.`,
+						}),
+						resultType: 'success' as const,
+					};
+				} catch (err) {
+					return {
+						textResultForLlm: JSON.stringify({
+							error: `Failed to hire member: ${err instanceof Error ? err.message : String(err)}`,
 						}),
 						resultType: 'success' as const,
 					};

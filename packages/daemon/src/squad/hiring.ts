@@ -194,6 +194,66 @@ export async function hireSquad(params: {
 	return { squadId: squad.id, analysis, members: memberRoles, universe: generated.universe };
 }
 
+/**
+ * Add a new member to an existing squad.
+ * Generates a skill file and optionally themes the name to the squad's universe.
+ */
+export async function addMemberToExistingSquad(params: {
+	squadId: string;
+	squadName: string;
+	role: string;
+	projectPath: string;
+	universe?: string;
+}): Promise<{ displayName: string; role: string }> {
+	const log = logger();
+
+	// Generate skill content for the role
+	const analysis = analyzeProject(params.projectPath);
+	const skillContent = generateRoleSkill(params.role, analysis);
+
+	// Write skill file to disk
+	const skillsDir = join(homedir(), '.io', 'squads', params.squadName);
+	mkdirSync(skillsDir, { recursive: true });
+	const filePath = join(skillsDir, `${params.role}.skill.md`);
+	writeFileSync(filePath, skillContent, 'utf-8');
+
+	const skill = parseSkillContent(skillContent, filePath);
+
+	// Generate themed name if universe is set
+	let displayName = titleCase(params.role);
+	let persona: string | undefined;
+	if (params.universe) {
+		const generated = await generateSquadNames([params.role], params.universe);
+		const assignment = generated.assignments[0];
+		if (assignment) {
+			displayName = assignment.displayName;
+			persona = assignment.persona;
+		}
+	}
+
+	await addMember({
+		squadId: params.squadId,
+		skill,
+		displayName,
+		persona,
+		isVetoMember: params.role === 'qa-tester',
+	});
+
+	log.info({ squadId: params.squadId, role: params.role, displayName }, 'Member added to squad');
+	return { displayName, role: params.role };
+}
+
+/**
+ * Generate a skill file for a given role, using project analysis if available.
+ */
+function generateRoleSkill(role: string, analysis: ProjectAnalysis): string {
+	// Check for built-in roles
+	if (role === 'team-lead') return TEAM_LEAD_SKILL;
+	if (role === 'scribe') return SCRIBE_SKILL;
+	if (role === 'qa-tester') return QA_TESTER_SKILL;
+	return generateSpecialistSkill(role, analysis);
+}
+
 // Helpers
 
 function safeReadDir(dir: string): string[] {
