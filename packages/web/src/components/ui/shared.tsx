@@ -118,6 +118,22 @@ export function DangerBtn({
 	);
 }
 
+export function WarnBtn({
+	children,
+	onClick,
+	className = '',
+}: { children: React.ReactNode; onClick?: () => void; className?: string }) {
+	return (
+		<button
+			type="button"
+			onClick={onClick}
+			className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[11px] text-zinc-400 bg-[#252525] hover:bg-amber-500/10 hover:text-amber-400 transition-colors cursor-pointer ${className}`}
+		>
+			{children}
+		</button>
+	);
+}
+
 export function statusToVariant(s: string): BadgeVariant {
 	if (s === 'connected' || s === 'idle') return 'success';
 	if (s === 'active' || s === 'working') return 'warning';
