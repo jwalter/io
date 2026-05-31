@@ -3,6 +3,7 @@ import type { AgentEvent, AgentStatus } from '@io/shared';
 import { z } from 'zod';
 import { getClient } from '../copilot/client.js';
 import { createChildLogger } from '../logging/logger.js';
+import { recordTokenUsage } from '../models/token-tracker.js';
 import {
 	getSquadScopes,
 	listWikiPages,
@@ -78,6 +79,19 @@ export class Agent {
 			systemMessage: { mode: 'replace', content: systemPrompt },
 			onPermissionRequest: approveAll,
 			tools: this.buildTools(),
+		});
+
+		this.session.on('assistant.usage', (event) => {
+			const data = event.data;
+			if (data.inputTokens || data.outputTokens) {
+				recordTokenUsage({
+					squadId: this.squadId,
+					agentRole: this.role,
+					model: data.model,
+					inputTokens: data.inputTokens ?? 0,
+					outputTokens: data.outputTokens ?? 0,
+				}).catch(() => {});
+			}
 		});
 
 		this.logger.info('Agent session initialized');

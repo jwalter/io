@@ -1,6 +1,7 @@
 import { approveAll } from '@github/copilot-sdk';
 import type { IOConfig } from '../config.js';
 import { createChildLogger } from '../logging/logger.js';
+import { recordTokenUsage } from '../models/token-tracker.js';
 import { getActiveSkillsContent } from '../skills/index.js';
 import { listSquads } from '../squad/manager.js';
 import { appendConversationMessage } from '../store/conversations.js';
@@ -102,6 +103,7 @@ export async function initOrchestrator(config: IOConfig): Promise<void> {
 		try {
 			session = await client.resumeSession(savedSessionId, sessionOptions);
 			sessionId = savedSessionId;
+			subscribeToUsage(session);
 			logger.info({ sessionId }, 'Resumed orchestrator session');
 			return;
 		} catch {
@@ -112,8 +114,23 @@ export async function initOrchestrator(config: IOConfig): Promise<void> {
 	// Create new session
 	session = await client.createSession(sessionOptions);
 	sessionId = session.sessionId;
+	subscribeToUsage(session);
 	await saveSessionId(sessionId);
 	logger.info({ sessionId }, 'Created new orchestrator session');
+}
+
+function subscribeToUsage(sess: Session): void {
+	sess.on('assistant.usage', (event) => {
+		const data = event.data;
+		if (data.inputTokens || data.outputTokens) {
+			recordTokenUsage({
+				agentRole: 'orchestrator',
+				model: data.model,
+				inputTokens: data.inputTokens ?? 0,
+				outputTokens: data.outputTokens ?? 0,
+			}).catch((err) => logger.error({ err }, 'Failed to record token usage'));
+		}
+	});
 }
 
 export function sendMessage(
