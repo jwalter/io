@@ -93,14 +93,14 @@ export async function generateSquadNames(
 		return result;
 	} catch (err) {
 		log.error({ err, roles, universe }, 'Failed to generate names, falling back to role names');
-		return fallback(roles);
+		return fallback(roles, universe);
 	}
 }
 
 /** Fallback: use role names as display names with no persona */
-function fallback(roles: string[]): GeneratedNames {
+function fallback(roles: string[], universe?: string): GeneratedNames {
 	return {
-		universe: 'none',
+		universe: universe ?? 'none',
 		assignments: roles.map((role) => ({ role, displayName: role, persona: '' })),
 	};
 }
