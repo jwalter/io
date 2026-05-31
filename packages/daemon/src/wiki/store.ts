@@ -79,7 +79,7 @@ function collectWikiPages(dir: string, prefix = ''): WikiPageSummary[] {
 
 		const normalizedPath = pagePath.replace(/\.md$/, '');
 		pages.push({
-			name: normalizedPath,
+			name: entry.name,
 			path: normalizedPath,
 		});
 	}

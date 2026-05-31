@@ -220,7 +220,17 @@ export function WikiView() {
 		}
 		return paths;
 	}, [filteredTree, normalizedQuery, selectedPage]);
-	const selectedPageName = selectedPage ? selectedPage.split('/').slice(-1)[0] ?? '' : '';
+	const selectedNode = selectedPage
+		? (function findNode(nodes: TreeNode[]): TreeNode | null {
+				for (const n of nodes) {
+					if (n.path === selectedPage) return n;
+					const found = findNode(n.children);
+					if (found) return found;
+				}
+				return null;
+			})(filteredTree)
+		: null;
+	const selectedPageName = selectedNode?.name ?? (selectedPage ? selectedPage.split('/').pop() ?? '' : '');
 
 	useEffect(() => {
 		const directoryPaths = collectDirectoryPaths(tree);
@@ -376,7 +386,7 @@ export function WikiView() {
 						<div className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.07] px-6">
 							<div className="min-w-0">
 								<h3 className="truncate font-mono text-sm text-zinc-100">{selectedPageName}</h3>
-								<p className="truncate font-mono text-[11px] text-zinc-500">{selectedPage}</p>
+								<p className="truncate font-mono text-[11px] text-zinc-500">{selectedPage}.md</p>
 							</div>
 							<div className="flex items-center gap-2">
 								{editing ? (
