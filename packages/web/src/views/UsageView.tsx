@@ -24,11 +24,11 @@ interface UsageEntry {
 }
 
 interface UsageResponse {
-	entries: UsageEntry[];
+	records: UsageEntry[];
 	totals: {
-		inputTokens: number;
-		outputTokens: number;
-		estimatedCost: number;
+		totalInputTokens: number;
+		totalOutputTokens: number;
+		totalCostUsd: number;
 		callCount: number;
 	};
 }
@@ -61,7 +61,7 @@ export function UsageView() {
 
 	// Aggregate by day for time chart
 	const byDay = new Map<string, { date: string; tokens: number; cost: number }>();
-	for (const entry of data.entries) {
+	for (const entry of data.records) {
 		const date = entry.timestamp.slice(0, 10);
 		const existing = byDay.get(date) ?? { date, tokens: 0, cost: 0 };
 		existing.tokens += entry.inputTokens + entry.outputTokens;
@@ -72,7 +72,7 @@ export function UsageView() {
 
 	// Aggregate by model for pie chart
 	const byModel = new Map<string, number>();
-	for (const entry of data.entries) {
+	for (const entry of data.records) {
 		byModel.set(
 			entry.model,
 			(byModel.get(entry.model) ?? 0) + entry.inputTokens + entry.outputTokens,
@@ -111,11 +111,11 @@ export function UsageView() {
 			<div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
 				<SummaryCard
 					label="Total Tokens"
-					value={formatNumber(data.totals.inputTokens + data.totals.outputTokens)}
+					value={formatNumber(data.totals.totalInputTokens + data.totals.totalOutputTokens)}
 				/>
-				<SummaryCard label="Input Tokens" value={formatNumber(data.totals.inputTokens)} />
-				<SummaryCard label="Output Tokens" value={formatNumber(data.totals.outputTokens)} />
-				<SummaryCard label="Est. Cost" value={`$${data.totals.estimatedCost.toFixed(4)}`} />
+				<SummaryCard label="Input Tokens" value={formatNumber(data.totals.totalInputTokens)} />
+				<SummaryCard label="Output Tokens" value={formatNumber(data.totals.totalOutputTokens)} />
+				<SummaryCard label="Est. Cost" value={`$${data.totals.totalCostUsd.toFixed(4)}`} />
 			</div>
 
 			{/* Charts */}
