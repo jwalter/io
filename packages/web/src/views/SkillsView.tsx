@@ -244,62 +244,48 @@ export function SkillsView() {
 		}
 	}
 
-	const resultCountLabel =
-		sourceTab === 'installed'
-			? `${filteredInstalledSkills.length} of ${installedSkills.length} installed`
-			: `${remoteSkills.length} results`;
-
 	const selectedInstalledActive = Boolean(selectedInstalledSummary?.activatedForOrchestrator);
 	const selectedInstalledBusy = busySkillName === selectedInstalledSkill?.name;
 	const selectedRemoteBusy = busySkillName === selectedRemoteSkill?.name;
 
 	return (
-		<div className="flex-1 min-h-0 overflow-hidden p-6">
-			<div className="flex h-full gap-4">
-				<div className="glass-card flex h-full w-80 shrink-0 flex-col rounded-2xl border border-white/[0.08] p-4">
-					<div className="mb-4">
-						<h2
-							className="text-[30px] uppercase tracking-[0.08em] text-zinc-100"
-							style={{ fontFamily: "'Bebas Neue', sans-serif" }}
-						>
-							Skills
-						</h2>
-						<p className="mt-1 font-mono text-[11px] text-zinc-500">{resultCountLabel}</p>
-					</div>
+		<div className="flex flex-1 min-h-0 overflow-hidden">
+			{/* Left panel */}
+			<div className="w-64 flex-shrink-0 border-r border-white/[0.06] flex flex-col overflow-hidden">
+				<div className="px-2.5 pt-2.5 pb-2 flex-shrink-0 border-b border-white/[0.06] space-y-2">
+						<div className="relative">
+							<Search className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-zinc-700" />
+							<input
+								type="text"
+								value={search}
+								onChange={(event) => setSearch(event.target.value)}
+								placeholder="Search skills…"
+								className="w-full bg-[#181818] border border-white/[0.06] rounded-xl pl-7 pr-2 py-1.5 text-[11px] text-zinc-300 font-mono placeholder:text-zinc-700 focus:outline-none focus:border-[#E43A9C]/30 transition-colors"
+							/>
+						</div>
+						<div className="flex flex-col gap-0.5">
+							{SOURCE_TABS.map((tab) => (
+								<button
+									key={tab.id}
+									type="button"
+									onClick={() => setSourceTab(tab.id)}
+									className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] font-mono transition-colors flex items-center justify-between cursor-pointer ${
+										sourceTab === tab.id
+											? 'text-[#E43A9C]'
+											: 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'
+									}`}
+									style={sourceTab === tab.id ? { background: 'rgba(228,58,156,0.10)' } : undefined}
+								>
+									<span>{tab.label}</span>
+									{tab.id === 'installed' && (
+										<span className="text-[10px] text-zinc-600">{installedSkills.length}</span>
+									)}
+								</button>
+							))}
+						</div>
+				</div>
 
-					<div className="relative mb-3">
-						<Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-600" />
-						<input
-							type="text"
-							value={search}
-							onChange={(event) => setSearch(event.target.value)}
-							placeholder={
-								sourceTab === 'installed'
-									? 'Search installed skills'
-									: `Search ${formatSourceLabel(sourceTab)} registry`
-							}
-							className="w-full rounded-2xl border border-white/[0.08] bg-white/[0.04] py-2.5 pl-9 pr-3 text-[11px] font-mono text-zinc-200 outline-none transition-colors placeholder:text-zinc-600 focus:border-[#E43A9C]/50"
-						/>
-					</div>
-
-					<div className="mb-4 flex rounded-2xl bg-white/[0.03] p-1">
-						{SOURCE_TABS.map((tab) => (
-							<button
-								key={tab.id}
-								type="button"
-								onClick={() => setSourceTab(tab.id)}
-								className={`flex-1 rounded-xl px-2 py-2 text-[11px] font-mono transition-colors ${
-									sourceTab === tab.id
-										? 'bg-[#E43A9C]/15 text-[#E43A9C]'
-										: 'text-zinc-500 hover:text-zinc-200'
-								}`}
-							>
-								{tab.label}
-							</button>
-						))}
-					</div>
-
-					<div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+				<div className="flex-1 overflow-y-auto py-1.5">
 						{loadingList && sourceTab !== 'installed' ? (
 							<div className="flex items-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.03] px-3 py-3 font-mono text-[11px] text-zinc-500">
 								<LoaderCircle className="h-3.5 w-3.5 animate-spin" /> Searching registry...
@@ -318,24 +304,17 @@ export function SkillsView() {
 										setIsEditing(false);
 										setSelectedName(skill.name);
 									}}
-									className={`w-full rounded-2xl border p-3 text-left transition-all ${
+									className={`w-full text-left px-3 py-2.5 border-b border-white/[0.03] transition-colors cursor-pointer ${
 										isSelected
-											? 'border-[#E43A9C]/40 bg-[#E43A9C]/10 shadow-[0_0_0_1px_rgba(228,58,156,0.15)]'
-											: 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.04]'
+											? 'border-l-2 border-l-[#E43A9C] bg-[#E43A9C]/5'
+											: 'hover:bg-white/[0.03]'
 									}`}
 								>
-									<div className="flex items-start justify-between gap-3">
-										<div className="min-w-0">
-											<div className="mb-1 flex items-center gap-2">
-												<span className="truncate font-mono text-[12px] text-zinc-100">{skill.name}</span>
-												{'installed' in skill && skill.installed ? <Chip variant="success">installed</Chip> : null}
-											</div>
-											<p className="line-clamp-2 font-mono text-[11px] leading-relaxed text-zinc-500">{description}</p>
-										</div>
-										<div className="mt-0.5 rounded-xl bg-[#E43A9C]/12 p-2 text-[#E43A9C]">
-											{sourceTab === 'installed' ? <Zap className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
-										</div>
+									<div className="flex items-center gap-2 mb-0.5">
+										<span className="truncate font-mono text-[11px] text-zinc-200">{skill.name}</span>
+										{'installed' in skill && skill.installed ? <Chip variant="success">installed</Chip> : null}
 									</div>
+									<p className="line-clamp-2 font-mono text-[10px] leading-relaxed text-zinc-600">{description}</p>
 								</button>
 							);
 						})}
@@ -356,7 +335,8 @@ export function SkillsView() {
 					</div>
 				</div>
 
-				<div className="glass-card flex min-h-0 flex-1 flex-col rounded-2xl border border-white/[0.08] p-5">
+				{/* Right detail panel */}
+				<div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-5">
 					{sourceTab === 'installed' && selectedInstalledSummary ? (
 						<>
 							<div className="mb-5 flex items-start justify-between gap-4 border-b border-white/[0.06] pb-5">
@@ -521,7 +501,6 @@ export function SkillsView() {
 							</div>
 						</div>
 					)}
-				</div>
 			</div>
 		</div>
 	);
