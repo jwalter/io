@@ -254,11 +254,11 @@ export function createOrchestratorTools() {
 					const { generateSquadNames } = await import('../squad/name-generator.js');
 					const generated = await generateSquadNames(roles, args.universe);
 
-					await rethemeSquad(squad.id, generated.universe, generated.assignments);
+					await rethemeSquad(squad.id, args.universe, generated.assignments);
 
 					return {
 						textResultForLlm: JSON.stringify({
-							message: `Squad '${args.squadName}' rethemed to ${generated.universe}!`,
+							message: `Squad '${args.squadName}' rethemed to ${args.universe}!`,
 							members: generated.assignments.map((a) => `${a.displayName} (${a.role})`),
 						}),
 						resultType: 'success' as const,

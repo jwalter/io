@@ -309,12 +309,13 @@ export async function proposeSquad(params: {
 
 	// 4. Store proposal
 	const proposalId = crypto.randomUUID();
+	const resolvedUniverse = params.universe ?? generated.universe;
 	const proposal: SquadProposal = {
 		id: proposalId,
 		repoUrl: params.repoUrl ?? '',
 		projectPath: params.projectPath,
 		projectName,
-		universe: generated.universe,
+		universe: resolvedUniverse,
 		members,
 		createdAt: Date.now(),
 	};
@@ -324,7 +325,7 @@ export async function proposeSquad(params: {
 		{
 			proposalId,
 			projectName,
-			universe: generated.universe,
+			universe: resolvedUniverse,
 			memberCount: members.length,
 		},
 		'Squad proposal created',
