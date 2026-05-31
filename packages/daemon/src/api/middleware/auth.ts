@@ -18,37 +18,64 @@ function isExempt(method: string, path: string): boolean {
 // Cached JWKS fetcher
 let jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
 
-function getJwks(config: IOConfig): ReturnType<typeof createRemoteJWKSet> {
+function getJwks(projectUrl: string): ReturnType<typeof createRemoteJWKSet> {
 	if (!jwks) {
-		const jwksUrl = new URL('/auth/v1/.well-known/jwks.json', config.supabase.projectUrl!);
+		const jwksUrl = new URL('/auth/v1/.well-known/jwks.json', projectUrl);
 		jwks = createRemoteJWKSet(jwksUrl);
 	}
 	return jwks;
 }
 
 /**
- * Verify a Supabase JWT token.
- * Tries jwtSecret first (HS256 — most common Supabase setup),
- * then falls back to JWKS (RS256) for projects using asymmetric signing.
+ * Verify a Supabase JWT token using multiple strategies:
+ * 1. JWKS (asymmetric RS256/ES256) if projectUrl is available
+ * 2. Shared secret (HS256) if jwtSecret is available
+ * 3. Supabase Auth server introspection as final fallback
  */
 async function verifyToken(config: IOConfig, token: string): Promise<boolean> {
-	// Try shared secret first (HS256 — default Supabase signing)
-	if (config.supabase.jwtSecret) {
-		const secret = new TextEncoder().encode(config.supabase.jwtSecret);
-		await jwtVerify(token, secret, {
-			algorithms: ['HS256', 'HS384', 'HS512'],
-			clockTolerance: 30,
-		});
-		return true;
-	}
+	const errors: string[] = [];
 
-	// Fall back to JWKS (RS256) for asymmetric signing
+	// Strategy 1: Try JWKS verification (asymmetric signing)
 	if (config.supabase.projectUrl) {
-		const keySet = getJwks(config);
-		await jwtVerify(token, keySet, { clockTolerance: 30 });
-		return true;
+		try {
+			const keySet = getJwks(config.supabase.projectUrl);
+			await jwtVerify(token, keySet, { clockTolerance: 30 });
+			return true;
+		} catch (err) {
+			errors.push(`JWKS: ${err instanceof Error ? err.message : 'unknown'}`);
+		}
 	}
 
+	// Strategy 2: Try shared secret (HS256)
+	if (config.supabase.jwtSecret) {
+		try {
+			const secret = new TextEncoder().encode(config.supabase.jwtSecret);
+			await jwtVerify(token, secret, { clockTolerance: 30 });
+			return true;
+		} catch (err) {
+			errors.push(`HS256: ${err instanceof Error ? err.message : 'unknown'}`);
+		}
+	}
+
+	// Strategy 3: Verify via Supabase Auth server (introspection)
+	if (config.supabase.projectUrl && config.supabase.anonKey) {
+		try {
+			const res = await fetch(`${config.supabase.projectUrl}/auth/v1/user`, {
+				headers: {
+					apikey: config.supabase.anonKey,
+					Authorization: `Bearer ${token}`,
+				},
+			});
+			if (res.ok) {
+				return true;
+			}
+			errors.push(`Auth server: HTTP ${res.status}`);
+		} catch (err) {
+			errors.push(`Auth server: ${err instanceof Error ? err.message : 'unknown'}`);
+		}
+	}
+
+	logger().warn({ strategies: errors.join('; ') }, 'All JWT verification strategies failed');
 	return false;
 }
 
@@ -80,7 +107,13 @@ export function authMiddleware(config: IOConfig) {
 		const token = authHeader.slice(7);
 
 		verifyToken(config, token)
-			.then(() => next())
+			.then((valid) => {
+				if (valid) {
+					next();
+				} else {
+					res.status(401).json({ error: 'Invalid or expired token' });
+				}
+			})
 			.catch((err) => {
 				const errMessage = err instanceof Error ? err.message : 'Unknown error';
 				logger().warn({ err: errMessage }, 'JWT verification failed');
