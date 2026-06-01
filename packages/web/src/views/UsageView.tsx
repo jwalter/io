@@ -233,8 +233,8 @@ function BySquadTab({ records }: { records: UsageEntry[] }) {
 			existing.calls += 1;
 			existing.cost += r.estimatedCostUsd ?? 0;
 
-			const agentKey = r.agentRole ?? 'unknown';
-			const agent = existing.agents.get(agentKey) ?? { role: agentKey, model: r.model, inputTokens: 0, outputTokens: 0, calls: 0, cost: 0 };
+			const agentKey = `${r.agentRole ?? 'unknown'}:${r.model}`;
+			const agent = existing.agents.get(agentKey) ?? { role: r.agentRole ?? 'unknown', model: r.model, inputTokens: 0, outputTokens: 0, calls: 0, cost: 0 };
 			agent.inputTokens += r.inputTokens;
 			agent.outputTokens += r.outputTokens;
 			agent.calls += 1;
@@ -340,7 +340,7 @@ function ByAgentTab({ records }: { records: UsageEntry[] }) {
 	const agents = useMemo(() => {
 		const map = new Map<string, { name: string; squad: string; model: string; inputTokens: number; outputTokens: number; calls: number; cost: number }>();
 		for (const r of records) {
-			const key = `${r.squadId ?? 'io'}:${r.agentRole ?? 'orchestrator'}`;
+			const key = `${r.squadId ?? 'io'}:${r.agentRole ?? 'orchestrator'}:${r.model}`;
 			const existing = map.get(key) ?? { name: r.agentRole ?? 'orchestrator', squad: r.squadName ?? (r.squadId ? r.squadId.slice(0, 8) : 'IO'), model: r.model, inputTokens: 0, outputTokens: 0, calls: 0, cost: 0 };
 			existing.inputTokens += r.inputTokens;
 			existing.outputTokens += r.outputTokens;
@@ -397,8 +397,8 @@ function IOTab({ records }: { records: UsageEntry[] }) {
 	const byRole = useMemo(() => {
 		const map = new Map<string, { name: string; model: string; inputTokens: number; outputTokens: number; calls: number; cost: number }>();
 		for (const r of ioRecords) {
-			const key = r.agentRole ?? 'orchestrator';
-			const existing = map.get(key) ?? { name: key, model: r.model, inputTokens: 0, outputTokens: 0, calls: 0, cost: 0 };
+			const key = `${r.agentRole ?? 'orchestrator'}:${r.model}`;
+			const existing = map.get(key) ?? { name: r.agentRole ?? 'orchestrator', model: r.model, inputTokens: 0, outputTokens: 0, calls: 0, cost: 0 };
 			existing.inputTokens += r.inputTokens;
 			existing.outputTokens += r.outputTokens;
 			existing.calls += 1;
