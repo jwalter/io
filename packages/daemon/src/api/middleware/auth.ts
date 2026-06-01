@@ -76,7 +76,7 @@ async function verifyToken(config: IOConfig, token: string): Promise<boolean> {
 		}
 	}
 
-	logger().warn({ strategies: errors.join('; ') }, 'All JWT verification strategies failed');
+	logger().debug({ strategies: errors.join('; ') }, 'All JWT verification strategies failed');
 	return false;
 }
 

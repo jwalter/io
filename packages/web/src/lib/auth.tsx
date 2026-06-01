@@ -1,6 +1,6 @@
 import { type Session, type SupabaseClient, createClient } from '@supabase/supabase-js';
 import { type ReactNode, createContext, useContext, useEffect, useRef, useState } from 'react';
-import { api, setTokenGetter } from './api';
+import { api, setTokenGetter, setTokenRefresher } from './api';
 
 interface AuthContextType {
 	session: Session | null;
@@ -33,6 +33,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		setTokenGetter(() => sessionRef.current?.access_token ?? null);
 	}, []);
 
+	// Store supabase client ref for the refresher
+	const supabaseRef = useRef<SupabaseClient | null>(null);
+
+	// Register token refresher so api.ts can refresh on 401
+	useEffect(() => {
+		setTokenRefresher(async () => {
+			const client = supabaseRef.current;
+			if (!client) return null;
+			const { data, error } = await client.auth.refreshSession();
+			if (error || !data.session) return null;
+			sessionRef.current = data.session;
+			setSession(data.session);
+			return data.session.access_token;
+		});
+	}, []);
+
 	// Fetch Supabase config from daemon and initialize client
 	useEffect(() => {
 		api
@@ -43,6 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 				if (config.supabase.projectUrl && config.supabase.anonKey) {
 					const client = createClient(config.supabase.projectUrl, config.supabase.anonKey);
 					setSupabase(client);
+						supabaseRef.current = client;
 
 					// Get existing session
 					client.auth.getSession().then(({ data }) => {

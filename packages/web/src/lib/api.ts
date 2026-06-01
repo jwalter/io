@@ -2,9 +2,15 @@ const API_BASE = '/api';
 
 // Global token getter — set by AuthProvider
 let getAccessToken: (() => string | null) | null = null;
+// Global token refresher — set by AuthProvider
+let refreshAccessToken: (() => Promise<string | null>) | null = null;
 
 export function setTokenGetter(getter: () => string | null) {
 	getAccessToken = getter;
+}
+
+export function setTokenRefresher(refresher: () => Promise<string | null>) {
+	refreshAccessToken = refresher;
 }
 
 export function getCurrentToken(): string | null {
@@ -22,10 +28,22 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 		headers.Authorization = `Bearer ${token}`;
 	}
 
-	const res = await fetch(`${API_BASE}${path}`, {
+	let res = await fetch(`${API_BASE}${path}`, {
 		...options,
 		headers,
 	});
+
+	// On 401, attempt to refresh the token and retry once
+	if (res.status === 401 && refreshAccessToken) {
+		const newToken = await refreshAccessToken();
+		if (newToken) {
+			headers.Authorization = `Bearer ${newToken}`;
+			res = await fetch(`${API_BASE}${path}`, {
+				...options,
+				headers,
+			});
+		}
+	}
 
 	if (!res.ok) {
 		const body = await res.json().catch(() => ({ error: res.statusText }));
