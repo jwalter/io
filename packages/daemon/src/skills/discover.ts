@@ -182,6 +182,7 @@ async function fetchGitHubSkillContent(registrySource: string, skillId: string):
 		throw new Error(`Unsupported registry source: ${registrySource}`);
 	}
 
+	// Try common flat paths first (fast path)
 	const candidates = [`skills/${skillId}/SKILL.md`, `${skillId}/SKILL.md`];
 	for (const path of candidates) {
 		const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
@@ -197,6 +198,50 @@ async function fetchGitHubSkillContent(registrySource: string, skillId: string):
 		if (content.trim()) {
 			return content;
 		}
+	}
+
+	// Fallback: search the repo tree recursively for {skillId}/SKILL.md
+	// This handles repos where skills are nested under category subdirectories
+	// (e.g., skills/productivity/grill-me/SKILL.md)
+	const suffix = `${skillId}/SKILL.md`;
+	try {
+		const treeRes = await fetch(
+			`https://api.github.com/repos/${owner}/${repo}/git/trees/main?recursive=1`,
+			{
+				headers: {
+					Accept: 'application/json',
+					'User-Agent': 'io-skills-discovery',
+				},
+			},
+		);
+
+		if (treeRes.ok) {
+			const tree = (await treeRes.json()) as { tree?: Array<{ path?: string; type?: string }> };
+			const match = tree.tree?.find(
+				(entry) => entry.type === 'blob' && entry.path?.endsWith(suffix),
+			);
+
+			if (match?.path) {
+				const contentRes = await fetch(
+					`https://api.github.com/repos/${owner}/${repo}/contents/${match.path}`,
+					{
+						headers: {
+							Accept: 'application/vnd.github.raw+json',
+							'User-Agent': 'io-skills-discovery',
+						},
+					},
+				);
+
+				if (contentRes.ok) {
+					const content = await contentRes.text();
+					if (content.trim()) {
+						return content;
+					}
+				}
+			}
+		}
+	} catch {
+		logger().debug({ registrySource, skillId }, 'Tree search fallback failed');
 	}
 
 	throw new Error(`Could not resolve SKILL.md for ${registrySource}/${skillId}`);
