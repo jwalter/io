@@ -5,7 +5,7 @@ import { useTimezone } from '@/hooks/use-config';
 import { useAuth } from '@/lib/auth';
 import { formatTime as fmtTime } from '@/lib/timezone';
 import { Activity, ChevronDown, Paperclip, Send, Square } from 'lucide-react';
-import { marked } from 'marked';
+import { configuredMarked as marked } from '@/components/ui/markdown';
 import { useLayoutEffect, useRef, useState } from 'react';
 
 export function ChatView() {

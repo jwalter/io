@@ -1,7 +1,7 @@
 import { IoMark } from '@/components/ui/io-mark';
 import { useChat } from '@/hooks/use-chat';
 import { MessageCircle, Paperclip, Send, Square, X } from 'lucide-react';
-import { marked } from 'marked';
+import { configuredMarked as marked } from '@/components/ui/markdown';
 import {
 	type ChangeEvent,
 	type KeyboardEvent,

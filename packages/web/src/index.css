@@ -273,6 +273,26 @@ body {
 
 /* ─── Prose (markdown content) ─────────────────────────────────────────────── */
 
+.prose-io h1,
+.prose-io h2,
+.prose-io h3,
+.prose-io h4,
+.prose-io h5,
+.prose-io h6 {
+	background: linear-gradient(135deg, #D83333 0%, #E43A9C 50%, #F041FF 100%);
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+	background-clip: text;
+	font-weight: 600;
+	text-transform: none;
+	margin: 1.1em 0 0.4em;
+	line-height: 1.4;
+}
+.prose-io h1 { font-size: 1.35em; }
+.prose-io h2 { font-size: 1.15em; }
+.prose-io h3 { font-size: 1em; }
+.prose-io h4 { font-size: 0.9em; }
+
 .prose-io p {
 	margin: 0.6em 0;
 }

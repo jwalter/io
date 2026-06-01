@@ -13,7 +13,7 @@ import {
 	Search,
 	Trash2,
 } from 'lucide-react';
-import { marked } from 'marked';
+import { configuredMarked as marked } from '@/components/ui/markdown';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
