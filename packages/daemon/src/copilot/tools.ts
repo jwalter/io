@@ -1,5 +1,6 @@
 import { defineTool } from '@github/copilot-sdk';
 import { z } from 'zod';
+import { createChildLogger } from '../logging/logger.js';
 import {
 	activateSkill,
 	deactivateSkill,
@@ -451,7 +452,7 @@ export function createOrchestratorTools() {
 
 		defineTool('delegate_to_squad', {
 			description:
-				"Delegate a message or task to a specific squad's team lead. Use this when the user's message relates to a project that has an assigned squad.",
+				"Delegate a message or task to a specific squad's team lead. The squad will work on it in the background and deliver results to the user's inbox. Returns immediately after dispatching.",
 			parameters: z.object({
 				squadName: z.string().describe('Name of the squad to delegate to'),
 				message: z.string().describe('The full message or task to delegate'),
@@ -473,11 +474,22 @@ export function createOrchestratorTools() {
 						await bootSquad(squad);
 					}
 
-					const response = await delegateToSquad(squad.id, args.message);
+					// Fire-and-forget: send message to team lead with inbox delivery instruction
+					const delegationMessage = `${args.message}\n\nIMPORTANT: When you have completed this work or have results to share, deliver them to the user's inbox using the add_to_inbox tool. Include a clear title and your findings/deliverables in the content.`;
+
+					delegateToSquad(squad.id, delegationMessage).catch((err) => {
+						// Log but don't block — squad will deliver via inbox
+						createChildLogger('orchestrator').warn(
+							{ err, squadName: args.squadName },
+							'Background delegation failed',
+						);
+					});
+
 					return {
 						textResultForLlm: JSON.stringify({
-							delegatedTo: args.squadName,
-							teamLeadResponse: response,
+							delegated: true,
+							squadName: args.squadName,
+							message: `Task dispatched to ${args.squadName}. They will deliver results to the inbox when complete.`,
 						}),
 						resultType: 'success' as const,
 					};
