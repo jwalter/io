@@ -32,9 +32,10 @@ export async function runMeeting(params: {
 	instance: Instance;
 	runtime: SquadRuntime;
 	objective: string;
+	attachments?: Array<{ type: 'file'; path: string; displayName?: string }>;
 }): Promise<MeetingResult> {
 	const log = logger();
-	const { instance, runtime, objective } = params;
+	const { instance, runtime, objective, attachments } = params;
 	const meetingLog: string[] = [];
 
 	await transitionInstance(instance.id, 'meeting');
@@ -54,9 +55,13 @@ export async function runMeeting(params: {
 	// Get non-lead agents for discussion
 	const participants = [...runtime.members.entries()].filter(([role]) => role !== 'technical-pm');
 
-	// Step 1: Team lead presents the objective
+	// Step 1: Team lead presents the objective (with any user-provided attachments)
+	const attachmentNote = attachments?.length
+		? `\n\nThe user has provided ${attachments.length} file(s) as reference material. They are attached to this message — review them as part of your planning.`
+		: '';
 	const presentation = await teamLead.send(
-		`You are starting a round-table meeting. Present the following objective to your team and ask for input:\n\nObjective: ${objective}\n\nProvide a brief summary of the work needed and what expertise is required. Then ask each team member for their perspective.`,
+		`You are starting a round-table meeting. Present the following objective to your team and ask for input:\n\nObjective: ${objective}${attachmentNote}\n\nProvide a brief summary of the work needed and what expertise is required. Then ask each team member for their perspective.`,
+		attachments,
 	);
 	meetingLog.push(`[technical-pm] ${presentation}`);
 

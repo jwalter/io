@@ -46,6 +46,25 @@ import {
 	writeWikiPage,
 } from '../wiki/index.js';
 import { queryActivity } from '../store/activity.js';
+import { getDatabase } from '../store/db.js';
+
+/** Resolve attachment IDs to disk paths from the database */
+async function resolveAttachmentPaths(ids: string[]): Promise<Array<{ type: 'file'; path: string; displayName?: string }>> {
+	if (ids.length === 0) return [];
+	const db = getDatabase();
+	const placeholders = ids.map(() => '?').join(',');
+	const result = await db.execute({
+		sql: `SELECT id, filename, disk_path FROM attachments WHERE id IN (${placeholders})`,
+		args: ids,
+	});
+	return result.rows
+		.filter((row) => row.disk_path)
+		.map((row) => ({
+			type: 'file' as const,
+			path: row.disk_path as string,
+			displayName: row.filename as string,
+		}));
+}
 
 export function createOrchestratorTools() {
 	return [
@@ -452,12 +471,16 @@ export function createOrchestratorTools() {
 
 		defineTool('delegate_to_squad', {
 			description:
-				"Delegate a message or task to a specific squad's team lead. Use this for planning, research, questions, analysis, or any task that does NOT require writing/committing code. The squad will work on it in the background and deliver results to the user's inbox. Returns immediately after dispatching.",
+				"Delegate a message or task to a specific squad's team lead. Use this for planning, research, questions, analysis, or any task that does NOT require writing/committing code. The squad will work on it in the background and deliver results to the user's inbox. Returns immediately after dispatching. If the user's message included file attachments, pass their IDs so the squad can access them.",
 			parameters: z.object({
 				squadName: z.string().describe('Name of the squad to delegate to'),
 				message: z.string().describe('The full message or task to delegate'),
+				attachmentIds: z
+					.array(z.string())
+					.optional()
+					.describe('IDs of file attachments from the conversation to forward to the squad'),
 			}),
-			handler: async (args: { squadName: string; message: string }) => {
+			handler: async (args: { squadName: string; message: string; attachmentIds?: string[] }) => {
 				const squad = await getSquadByName(args.squadName);
 				if (!squad) {
 					return {
@@ -474,6 +497,11 @@ export function createOrchestratorTools() {
 						await bootSquad(squad);
 					}
 
+					// Resolve attachment IDs to disk paths
+					const fileAttachments = args.attachmentIds?.length
+						? await resolveAttachmentPaths(args.attachmentIds)
+						: undefined;
+
 					// Create a delegation history record
 					const delegationId = crypto.randomUUID();
 					const db = (await import('../store/db.js')).getDatabase();
@@ -486,7 +514,7 @@ export function createOrchestratorTools() {
 					// Fire-and-forget: send message to team lead with inbox delivery instruction
 					const delegationMessage = `${args.message}\n\nIMPORTANT: When you have completed this work or have results to share, deliver them to the user's inbox using the add_to_inbox tool. Include a clear title and your findings/deliverables in the content.`;
 
-					delegateToSquad(squad.id, delegationMessage)
+					delegateToSquad(squad.id, delegationMessage, fileAttachments)
 						.then(async (response) => {
 							// Log the team lead's response as activity
 							const { logActivity } = await import('../store/activity.js');
@@ -547,13 +575,17 @@ export function createOrchestratorTools() {
 
 		defineTool('run_squad_instance', {
 			description:
-				'Start a new work instance for a squad. This kicks off the full lifecycle: meeting → task execution → PR creation. ONLY use this when the user explicitly wants code written, committed, and a pull request created. Do NOT use for planning, research, analysis, or questions — use delegate_to_squad for those instead.',
+				'Start a new work instance for a squad. This kicks off the full lifecycle: meeting → task execution → PR creation. ONLY use this when the user explicitly wants code written, committed, and a pull request created. Do NOT use for planning, research, analysis, or questions — use delegate_to_squad for those instead. If the user provided file attachments (mockups, specs), pass their IDs so the squad can reference them.',
 			parameters: z.object({
 				squadName: z.string().describe('Name of the squad'),
 				objective: z.string().describe('What the squad should accomplish'),
 				issueRef: z.string().optional().describe('GitHub issue reference (e.g., #42)'),
+				attachmentIds: z
+					.array(z.string())
+					.optional()
+					.describe('IDs of file attachments from the conversation to forward to the squad'),
 			}),
-			handler: async (args: { squadName: string; objective: string; issueRef?: string }) => {
+			handler: async (args: { squadName: string; objective: string; issueRef?: string; attachmentIds?: string[] }) => {
 				const squad = await getSquadByName(args.squadName);
 				if (!squad) {
 					return {
@@ -563,10 +595,16 @@ export function createOrchestratorTools() {
 				}
 
 				try {
+					// Resolve attachment IDs to disk paths
+					const fileAttachments = args.attachmentIds?.length
+						? await resolveAttachmentPaths(args.attachmentIds)
+						: undefined;
+
 					const result = await runInstance({
 						squad,
 						objective: args.objective,
 						issueRef: args.issueRef,
+						attachments: fileAttachments,
 					});
 
 					return {

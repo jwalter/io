@@ -29,6 +29,12 @@ export interface AgentMessage {
 	content: string;
 }
 
+export interface FileAttachment {
+	type: 'file';
+	path: string;
+	displayName?: string;
+}
+
 type Session = Awaited<ReturnType<Awaited<ReturnType<typeof getClient>>['createSession']>>;
 
 /**
@@ -129,7 +135,7 @@ export class Agent {
 	}
 
 	/** Send a message and get a response */
-	async send(content: string): Promise<string> {
+	async send(content: string, attachments?: FileAttachment[]): Promise<string> {
 		if (!this.session) {
 			throw new Error(`Agent ${this.role} not initialized`);
 		}
@@ -138,7 +144,11 @@ export class Agent {
 		this.emitEvent('agent:task_started', { content: content.slice(0, 100) });
 
 		try {
-			const result = await this.session.sendAndWait({ prompt: content }, 300_000);
+			const options: { prompt: string; attachments?: FileAttachment[] } = { prompt: content };
+			if (attachments && attachments.length > 0) {
+				options.attachments = attachments;
+			}
+			const result = await this.session.sendAndWait(options, 300_000);
 			const response = result?.data?.content ?? '';
 			this._status = 'idle';
 			this.emitEvent('agent:task_completed', { responseLength: response.length });

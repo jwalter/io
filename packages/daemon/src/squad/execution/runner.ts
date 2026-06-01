@@ -32,9 +32,10 @@ export async function runInstance(params: {
 	squad: Squad;
 	objective: string;
 	issueRef?: string;
+	attachments?: Array<{ type: 'file'; path: string; displayName?: string }>;
 }): Promise<RunResult> {
 	const log = logger();
-	const { squad, objective, issueRef } = params;
+	const { squad, objective, issueRef, attachments } = params;
 
 	// Ensure squad is booted
 	let runtime: SquadRuntime | undefined = getSquadRuntime(squad.id);
@@ -48,7 +49,7 @@ export async function runInstance(params: {
 
 	try {
 		// 2. Run meeting
-		const meetingResult = await runMeeting({ instance, runtime, objective });
+		const meetingResult = await runMeeting({ instance, runtime, objective, attachments });
 
 		if (!meetingResult.consensus) {
 			log.warn({ instanceId: instance.id }, 'Meeting did not reach consensus');

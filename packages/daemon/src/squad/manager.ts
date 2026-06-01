@@ -429,7 +429,7 @@ export function getSquadRuntime(squadId: string): SquadRuntime | undefined {
 }
 
 /** Delegate a message to a squad's team lead */
-export async function delegateToSquad(squadId: string, message: string): Promise<string> {
+export async function delegateToSquad(squadId: string, message: string, attachments?: Array<{ type: 'file'; path: string; displayName?: string }>): Promise<string> {
 	const runtime = activeSquads.get(squadId);
 	if (!runtime) {
 		throw new Error(`Squad ${squadId} is not running`);
@@ -440,5 +440,5 @@ export async function delegateToSquad(squadId: string, message: string): Promise
 		throw new Error(`Squad ${squadId} has no team lead`);
 	}
 
-	return teamLead.send(message);
+	return teamLead.send(message, attachments);
 }
