@@ -143,6 +143,7 @@ export function listAllWikiPages(): Array<{ name: string; path: string; isDir?: 
 function scopeDir(scope: WikiScope): string {
 	if (scope === 'io') return join(wikiRoot, 'io');
 	if (scope === 'shared') return join(wikiRoot, 'shared');
+	if (scope === 'templates') return join(wikiRoot, 'templates');
 	return join(wikiRoot, 'squads', scope);
 }
 

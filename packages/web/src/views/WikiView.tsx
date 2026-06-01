@@ -318,6 +318,9 @@ export function WikiView() {
 			const relativePath = parts.slice(2).join('/');
 			return { scope: squadName, relativePath };
 		}
+		if (fullPath.startsWith('templates/')) {
+			return { scope: 'templates', relativePath: fullPath.slice(10) };
+		}
 		if (fullPath.startsWith('io/')) {
 			return { scope: 'io', relativePath: fullPath.slice(3) };
 		}
