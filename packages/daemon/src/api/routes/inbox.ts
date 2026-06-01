@@ -2,10 +2,13 @@ import { Router } from 'express';
 import {
 	type InboxKind,
 	type InboxStatus,
+	deleteInboxEntries,
+	deleteInboxEntry,
 	getInboxEntry,
 	getUnreadCount,
 	listInboxEntries,
 	markInboxRead,
+	markInboxReadBulk,
 	resolveInboxEntry,
 } from '../../store/inbox.js';
 
@@ -71,6 +74,57 @@ export function inboxRouter(): Router {
 			res.json({ status: 'ok' });
 		} catch {
 			res.status(500).json({ error: 'Failed to mark entry as read' });
+		}
+	});
+
+	/**
+	 * POST /api/inbox/bulk/read
+	 * Mark multiple entries as read.
+	 * Body: { ids: string[] }
+	 */
+	router.post('/inbox/bulk/read', async (req, res) => {
+		try {
+			const { ids } = req.body as { ids?: string[] };
+			if (!ids || !Array.isArray(ids)) {
+				res.status(400).json({ error: 'ids array is required' });
+				return;
+			}
+			await markInboxReadBulk(ids);
+			res.json({ status: 'ok' });
+		} catch {
+			res.status(500).json({ error: 'Failed to mark entries as read' });
+		}
+	});
+
+	/**
+	 * POST /api/inbox/bulk/delete
+	 * Delete multiple entries.
+	 * Body: { ids: string[] }
+	 */
+	router.post('/inbox/bulk/delete', async (req, res) => {
+		try {
+			const { ids } = req.body as { ids?: string[] };
+			if (!ids || !Array.isArray(ids)) {
+				res.status(400).json({ error: 'ids array is required' });
+				return;
+			}
+			await deleteInboxEntries(ids);
+			res.json({ status: 'ok' });
+		} catch {
+			res.status(500).json({ error: 'Failed to delete entries' });
+		}
+	});
+
+	/**
+	 * DELETE /api/inbox/:id
+	 * Delete a single entry.
+	 */
+	router.delete('/inbox/:id', async (req, res) => {
+		try {
+			await deleteInboxEntry(req.params.id);
+			res.json({ status: 'ok' });
+		} catch {
+			res.status(500).json({ error: 'Failed to delete entry' });
 		}
 	});
 

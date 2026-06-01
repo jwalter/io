@@ -1,21 +1,18 @@
 import { marked } from 'marked';
 import { useMemo } from 'react';
 
-const GRADIENT_STYLE =
-	'linear-gradient(135deg, #D83333 0%, #E43A9C 50%, #F041FF 100%)';
-
 marked.use({
 	renderer: {
 		heading({ tokens, depth }: { tokens: { raw: string }[]; depth: number }) {
 			const text = tokens.map((t: { raw: string }) => t.raw).join('');
 			const tag = `h${depth}`;
 			const sizes: Record<number, string> = {
-				1: '1.85em',
-				2: '1.5em',
-				3: '1.25em',
-				4: '1.1em',
+				1: '1.5rem',
+				2: '1.25rem',
+				3: '1.125rem',
+				4: '1rem',
 			};
-			return `<${tag} style="background:${GRADIENT_STYLE};-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-size:${sizes[depth] ?? '1em'};font-weight:600;margin:1.1em 0 0.4em;">${text}</${tag}>`;
+			return `<${tag} style="font-size:${sizes[depth] ?? '1rem'};font-weight:500;color:#e4e4e7;margin:1.1em 0 0.4em;line-height:1.5;">${text}</${tag}>`;
 		},
 	},
 });

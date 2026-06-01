@@ -183,6 +183,43 @@ export async function getUnreadCount(): Promise<number> {
 	return (result.rows[0]?.count as number) ?? 0;
 }
 
+/**
+ * Delete an inbox entry by ID.
+ */
+export async function deleteInboxEntry(id: string): Promise<void> {
+	const db = getDatabase();
+	await db.execute({
+		sql: 'DELETE FROM inbox_entries WHERE id = ?',
+		args: [id],
+	});
+}
+
+/**
+ * Delete multiple inbox entries by ID.
+ */
+export async function deleteInboxEntries(ids: string[]): Promise<void> {
+	if (ids.length === 0) return;
+	const db = getDatabase();
+	const placeholders = ids.map(() => '?').join(',');
+	await db.execute({
+		sql: `DELETE FROM inbox_entries WHERE id IN (${placeholders})`,
+		args: ids,
+	});
+}
+
+/**
+ * Mark multiple inbox entries as read.
+ */
+export async function markInboxReadBulk(ids: string[]): Promise<void> {
+	if (ids.length === 0) return;
+	const db = getDatabase();
+	const placeholders = ids.map(() => '?').join(',');
+	await db.execute({
+		sql: `UPDATE inbox_entries SET status = 'read' WHERE id IN (${placeholders}) AND status = 'unread'`,
+		args: ids,
+	});
+}
+
 function rowToEntry(row: Record<string, unknown>): InboxEntry {
 	return {
 		id: row.id as string,
