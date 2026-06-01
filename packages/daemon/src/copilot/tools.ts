@@ -19,7 +19,7 @@ import {
 import {
 	bootSquad,
 	delegateToSquad,
-	deleteSquad,
+	disbandSquad,
 	findMember,
 	getSquadByName,
 	getSquadMembers,
@@ -294,11 +294,11 @@ export function createOrchestratorTools() {
 			},
 		}),
 
-		defineTool('delete_squad', {
+		defineTool('disband_squad', {
 			description:
-				'Permanently delete a squad and ALL its history (instances, token usage, activity, inbox entries, schedules). This cannot be undone. Use disband_squad for soft-delete instead.',
+				'Delete a squad. This disbands the squad, cancels its schedules, resolves pending inbox items, and removes wiki/skill files from disk. The squad record is preserved for usage reports. This cannot be undone.',
 			parameters: z.object({
-				squadName: z.string().describe('Name of the squad to permanently delete'),
+				squadName: z.string().describe('Name of the squad to disband'),
 			}),
 			handler: async (args: { squadName: string }) => {
 				try {
@@ -309,18 +309,18 @@ export function createOrchestratorTools() {
 							resultType: 'success' as const,
 						};
 					}
-					await deleteSquad(squad.id);
+					await disbandSquad(squad.id);
 					return {
 						textResultForLlm: JSON.stringify({
-							deleted: true,
-							message: `Squad '${args.squadName}' and all its history have been permanently deleted.`,
+							disbanded: true,
+							message: `Squad '${args.squadName}' has been disbanded. Usage data is preserved for reports.`,
 						}),
 						resultType: 'success' as const,
 					};
 				} catch (err) {
 					return {
 						textResultForLlm: JSON.stringify({
-							error: `Failed to delete squad: ${err instanceof Error ? err.message : String(err)}`,
+							error: `Failed to disband squad: ${err instanceof Error ? err.message : String(err)}`,
 						}),
 						resultType: 'success' as const,
 					};

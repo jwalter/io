@@ -185,15 +185,33 @@ export async function getSquadMembers(squadId: string): Promise<SquadMember[]> {
 	}));
 }
 
-/** Disband a squad */
+/** Disband a squad — soft-delete that preserves data for usage reports */
 export async function disbandSquad(squadId: string): Promise<void> {
 	const db = getDatabase();
+
+	// Get squad name for disk cleanup and event
+	const squad = await getSquadById(squadId);
+	const squadName = squad?.name ?? '';
+
+	// Mark squad and members as disbanded/retired
 	await db.execute({
 		sql: "UPDATE squads SET status = 'disbanded' WHERE id = ?",
 		args: [squadId],
 	});
 	await db.execute({
 		sql: "UPDATE squad_members SET status = 'retired' WHERE squad_id = ?",
+		args: [squadId],
+	});
+
+	// Cancel schedules targeting this squad
+	await db.execute({
+		sql: "DELETE FROM schedules WHERE target_type = 'squad' AND target_id = ?",
+		args: [squadId],
+	});
+
+	// Auto-resolve pending inbox entries
+	await db.execute({
+		sql: "UPDATE inbox_entries SET status = 'dismissed', response = 'Squad was disbanded', resolved_at = CURRENT_TIMESTAMP WHERE squad_id = ? AND status IN ('unread', 'pending')",
 		args: [squadId],
 	});
 
@@ -206,63 +224,31 @@ export async function disbandSquad(squadId: string): Promise<void> {
 		activeSquads.delete(squadId);
 	}
 
-	await getEventBus().emit({
-		id: crypto.randomUUID(),
-		timestamp: new Date(),
-		type: 'squad:disbanded',
-		squadId,
-		squadName: '',
-	});
-
-	logger().info({ squadId }, 'Squad disbanded');
-}
-
-/** Permanently delete a squad and all associated data */
-export async function deleteSquad(squadId: string): Promise<void> {
-	const db = getDatabase();
-
-	// Destroy any running agents first
-	const runtime = activeSquads.get(squadId);
-	if (runtime) {
-		for (const agent of runtime.members.values()) {
-			await agent.destroy().catch(() => {});
-		}
-		activeSquads.delete(squadId);
-	}
-
-	// Get squad name for disk cleanup
-	const squad = await getSquadById(squadId);
-	const squadName = squad?.name;
-
-	// Delete all associated data (order matters for FK constraints)
-	// Note: token_usage is intentionally preserved for historical usage reporting
-	await db.execute({ sql: 'DELETE FROM inbox_entries WHERE squad_id = ?', args: [squadId] });
-	await db.execute({ sql: 'DELETE FROM agent_activity WHERE squad_id = ?', args: [squadId] });
-	await db.execute({ sql: 'DELETE FROM decisions WHERE squad_id = ?', args: [squadId] });
-	await db.execute({ sql: 'DELETE FROM squad_instances WHERE squad_id = ?', args: [squadId] });
-	await db.execute({ sql: 'DELETE FROM squad_members WHERE squad_id = ?', args: [squadId] });
-	await db.execute({
-		sql: "DELETE FROM schedules WHERE target_type = 'squad' AND target_id = ?",
-		args: [squadId],
-	});
-	await db.execute({
-		sql: 'DELETE FROM skill_activations WHERE target_id = ?',
-		args: [squadId],
-	});
-	await db.execute({ sql: 'DELETE FROM squads WHERE id = ?', args: [squadId] });
-
-	// Remove skill files from disk
+	// Clean up disk artifacts (wiki folder + skill files)
 	if (squadName) {
 		const { rmSync, existsSync } = await import('node:fs');
 		const { join } = await import('node:path');
 		const { homedir } = await import('node:os');
-		const skillsDir = join(homedir(), '.io', 'squads', squadName);
+		const home = homedir();
+		const wikiDir = join(home, '.io', 'wiki', 'squads', squadName);
+		if (existsSync(wikiDir)) {
+			rmSync(wikiDir, { recursive: true, force: true });
+		}
+		const skillsDir = join(home, '.io', 'squads', squadName);
 		if (existsSync(skillsDir)) {
 			rmSync(skillsDir, { recursive: true, force: true });
 		}
 	}
 
-	logger().info({ squadId, squadName }, 'Squad permanently deleted');
+	await getEventBus().emit({
+		id: crypto.randomUUID(),
+		timestamp: new Date(),
+		type: 'squad:disbanded',
+		squadId,
+		squadName,
+	});
+
+	logger().info({ squadId, squadName }, 'Squad disbanded');
 }
 
 /** Rename a squad member's display name */
