@@ -94,21 +94,21 @@ export async function listInboxEntries(filters?: {
 	squadId?: string;
 	kind?: InboxKind;
 	limit?: number;
-}): Promise<InboxEntry[]> {
+}): Promise<(InboxEntry & { squadName?: string })[]> {
 	const db = getDatabase();
 	const conditions: string[] = [];
 	const args: (string | number)[] = [];
 
 	if (filters?.status) {
-		conditions.push('status = ?');
+		conditions.push('i.status = ?');
 		args.push(filters.status);
 	}
 	if (filters?.squadId) {
-		conditions.push('squad_id = ?');
+		conditions.push('i.squad_id = ?');
 		args.push(filters.squadId);
 	}
 	if (filters?.kind) {
-		conditions.push('kind = ?');
+		conditions.push('i.kind = ?');
 		args.push(filters.kind);
 	}
 
@@ -116,14 +116,18 @@ export async function listInboxEntries(filters?: {
 	const limit = filters?.limit ?? 50;
 
 	const result = await db.execute({
-		sql: `SELECT id, squad_id, instance_id, kind, title, content, status, response, created_at, resolved_at
-		      FROM inbox_entries ${where}
-		      ORDER BY created_at DESC
+		sql: `SELECT i.id, i.squad_id, i.instance_id, i.kind, i.title, i.content, i.status, i.response, i.created_at, i.resolved_at, s.name as squad_name
+		      FROM inbox_entries i LEFT JOIN squads s ON i.squad_id = s.id
+		      ${where}
+		      ORDER BY i.created_at DESC
 		      LIMIT ?`,
 		args: [...args, limit],
 	});
 
-	return result.rows.map(rowToEntry);
+	return result.rows.map((row) => ({
+		...rowToEntry(row),
+		squadName: (row.squad_name as string | null) ?? undefined,
+	}));
 }
 
 /**

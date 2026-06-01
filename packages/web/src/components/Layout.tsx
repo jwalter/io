@@ -40,7 +40,8 @@ function NavBtn({
 	icon: Icon,
 	label,
 	collapsed,
-}: { to: string; icon: React.ElementType; label: string; collapsed: boolean }) {
+	badge,
+}: { to: string; icon: React.ElementType; label: string; collapsed: boolean; badge?: number }) {
 	return (
 		<NavLink
 			to={to}
@@ -48,7 +49,7 @@ function NavBtn({
 			title={collapsed ? label : undefined}
 			className={({ isActive }) =>
 				cn(
-					'w-full flex items-center gap-2.5 px-2 py-2 rounded-xl text-[11px] font-mono transition-colors cursor-pointer',
+					'w-full flex items-center gap-2.5 px-2 py-2 rounded-xl text-[11px] font-mono transition-colors cursor-pointer relative',
 					collapsed ? 'justify-center' : '',
 					isActive
 						? 'text-[#E43A9C]'
@@ -59,6 +60,11 @@ function NavBtn({
 		>
 			<Icon className="w-3.5 h-3.5 flex-shrink-0" />
 			{!collapsed && label}
+			{badge != null && badge > 0 && (
+				<span className="absolute top-1 right-1 min-w-[14px] h-[14px] flex items-center justify-center rounded-full bg-[#E43A9C] text-[9px] text-white font-mono px-1">
+					{badge > 99 ? '99+' : badge}
+				</span>
+			)}
 		</NavLink>
 	);
 }
@@ -66,6 +72,7 @@ function NavBtn({
 export function Layout() {
 	const [collapsed, setCollapsed] = useState(false);
 	const [version, setVersion] = useState('...');
+	const [unreadCount, setUnreadCount] = useState(0);
 	const { supabase } = useAuth();
 
 	useEffect(() => {
@@ -84,8 +91,27 @@ export function Layout() {
 				}
 			});
 
+		// Fetch unread inbox count
+		api
+			.get<{ count: number }>('/inbox/unread-count')
+			.then(({ count }) => {
+				if (active) setUnreadCount(count);
+			})
+			.catch(() => {});
+
+		// Poll every 30 seconds
+		const interval = setInterval(() => {
+			api
+				.get<{ count: number }>('/inbox/unread-count')
+				.then(({ count }) => {
+					if (active) setUnreadCount(count);
+				})
+				.catch(() => {});
+		}, 30000);
+
 		return () => {
 			active = false;
+			clearInterval(interval);
 		};
 	}, []);
 
@@ -131,9 +157,14 @@ export function Layout() {
 				<div className="flex-shrink-0 border-t border-white/[0.06]">
 					<div className="py-1.5 px-1.5 space-y-0.5">
 						{NAV_BOTTOM.map((item) => (
-							<NavBtn key={item.to} collapsed={collapsed} {...item} />
-						))}
-					</div>
+								<NavBtn
+									key={item.to}
+									collapsed={collapsed}
+									badge={item.to === '/feed' ? unreadCount : undefined}
+									{...item}
+								/>
+							))}
+						</div>
 					<div className="border-t border-white/[0.05] py-1.5 px-1.5 space-y-0.5">
 						<a
 							href="https://github.com/michaeljolley/io"
