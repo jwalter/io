@@ -31,9 +31,10 @@ function squadColor(index: number): string {
 }
 
 interface ActivityItem {
-	type: string;
-	text: string;
-	agent: string;
+	id: string;
+	status: string;
+	objective: string | null;
+	issueRef: string | null;
 	timestamp: string;
 }
 
@@ -218,25 +219,30 @@ function SquadListView() {
 										className="text-[10px] font-mono uppercase tracking-wider mb-2"
 										style={{ color: `${color}80` }}
 									>
-										Recent Activity
+											Recent Work
 									</p>
 									<ul className="space-y-1.5">
-										{squad.recentActivity.map((a, i) => {
+											{squad.recentActivity.map((a) => {
 											const iconProps = { className: 'w-3.5 h-3.5 flex-shrink-0 mt-px' };
-											const icon = activityIcon(a.type, iconProps);
-											return (
-												<li
-													key={`${a.timestamp}-${i}`}
-													className="flex items-start gap-1.5 text-[11px] font-mono text-zinc-600"
-												>
-													{icon}
-													<span className="truncate">{a.text || `${a.agent}: ${a.type}`}</span>
-												</li>
-											);
-										})}
-									</ul>
-								</div>
-							)}
+												const icon = activityIcon(a.status, iconProps);
+												const label = a.objective
+													? a.objective.length > 60
+														? `${a.objective.slice(0, 60)}…`
+														: a.objective
+													: a.issueRef || 'Instance';
+												return (
+													<li
+														key={a.id}
+														className="flex items-start gap-1.5 text-[11px] font-mono text-zinc-600"
+													>
+														{icon}
+														<span className="truncate">{label}</span>
+													</li>
+												);
+											})}
+										</ul>
+									</div>
+								)}
 						</button>
 					);
 				})}

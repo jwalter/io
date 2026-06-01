@@ -25,21 +25,22 @@ export function squadsRouter(): Router {
 					const instances = getSquadInstances(s.id);
 					const activeInstances = instances.filter((i) => isActiveInstance(i.status)).length;
 
-					// Fetch last 5 activity entries for this squad
-					const activityResult = await db.execute({
-						sql: `SELECT activity_type, content, agent_role, timestamp
-						      FROM agent_activity
+					// Fetch last 5 instances (work items/prompts) for this squad
+						const instanceResult = await db.execute({
+							sql: `SELECT id, status, objective, issue_ref, created_at
+							      FROM squad_instances
 						      WHERE squad_id = ?
-						      ORDER BY timestamp DESC
+							      ORDER BY created_at DESC
 						      LIMIT 5`,
 						args: [s.id],
 					});
-					const recentActivity = activityResult.rows.map((row) => ({
-						type: row.activity_type as string,
-						text: row.content as string,
-						agent: row.agent_role as string,
-						timestamp: row.timestamp as string,
-					}));
+						const recentActivity = instanceResult.rows.map((row) => ({
+							id: row.id as string,
+							status: row.status as string,
+							objective: row.objective as string | null,
+							issueRef: row.issue_ref as string | null,
+							timestamp: row.created_at as string,
+						}));
 
 					return {
 						id: s.id,

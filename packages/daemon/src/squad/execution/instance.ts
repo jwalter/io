@@ -65,14 +65,15 @@ export async function createInstance(params: {
 
 	// Persist to DB
 	await db.execute({
-		sql: `INSERT INTO squad_instances (id, squad_id, issue_ref, worktree_path, branch_name, status)
-		      VALUES (?, ?, ?, ?, ?, 'planning')`,
+		sql: `INSERT INTO squad_instances (id, squad_id, issue_ref, worktree_path, branch_name, objective, status)
+		      VALUES (?, ?, ?, ?, ?, ?, 'planning')`,
 		args: [
 			id,
 			params.squad.id,
 			params.issueRef ?? null,
 			worktree?.path ?? null,
 			worktree?.branch ?? null,
+			params.objective,
 		],
 	});
 

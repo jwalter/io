@@ -200,6 +200,13 @@ const MIGRATIONS: { version: number; statements: string[] }[] = [
 			'INSERT OR REPLACE INTO schema_version (version) VALUES (7)',
 		],
 	},
+	{
+			version: 8,
+			statements: [
+				'ALTER TABLE squad_instances ADD COLUMN objective TEXT',
+				'INSERT OR REPLACE INTO schema_version (version) VALUES (8)',
+			],
+	},
 ];
 
 export async function initDatabase(dataDir: string): Promise<Client> {
