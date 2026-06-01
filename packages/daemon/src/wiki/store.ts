@@ -68,12 +68,25 @@ export function listAllWikiPages(): Array<{ scope: string; name: string; path: s
 	const allPages: Array<{ scope: string; name: string; path: string; isDir?: boolean }> = [];
 	const scopes = listWikiScopes();
 
+	// Always include top-level directories
+	allPages.push({ scope: 'io', name: 'io', path: 'io', isDir: true });
+	allPages.push({ scope: 'shared', name: 'shared', path: 'shared', isDir: true });
+	allPages.push({ scope: 'squads', name: 'squads', path: 'squads', isDir: true });
+
 	for (const scope of scopes) {
 		const pages = listWikiPages(scope);
 		const scopePrefix = scope === 'io' ? 'io' : scope === 'shared' ? 'shared' : `squads/${scope}`;
 
-		// Always include the scope directory itself
-		allPages.push({ scope, name: scopePrefix, path: scopePrefix, isDir: true });
+		// For squad scopes, also emit the squad directory
+		if (scope !== 'io' && scope !== 'shared') {
+			allPages.push({ scope, name: scope, path: scopePrefix, isDir: true });
+		}
+
+		// Also emit any subdirectories found within the scope
+		const dir = scopeDir(scope);
+		if (existsSync(dir)) {
+			collectDirs(dir, scopePrefix, allPages, scope);
+		}
 
 		for (const page of pages) {
 			allPages.push({
@@ -84,6 +97,22 @@ export function listAllWikiPages(): Array<{ scope: string; name: string; path: s
 		}
 	}
 	return allPages;
+}
+
+/** Recursively collect subdirectories within a scope */
+function collectDirs(
+	dir: string,
+	prefix: string,
+	out: Array<{ scope: string; name: string; path: string; isDir?: boolean }>,
+	scope: string,
+): void {
+	for (const entry of readdirSync(dir, { withFileTypes: true })) {
+		if (entry.isDirectory()) {
+			const subPath = `${prefix}/${entry.name}`;
+			out.push({ scope, name: entry.name, path: subPath, isDir: true });
+			collectDirs(join(dir, entry.name), subPath, out, scope);
+		}
+	}
 }
 
 function scopeDir(scope: WikiScope): string {

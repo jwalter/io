@@ -14,7 +14,7 @@ import {
 	Trash2,
 } from 'lucide-react';
 import { marked } from 'marked';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 interface WikiPage {
@@ -144,6 +144,7 @@ function TreeItem({
 	autoExpandedPaths,
 	onToggle,
 	onSelect,
+	onAddToFolder,
 }: {
 	node: TreeNode;
 	depth: number;
@@ -152,6 +153,7 @@ function TreeItem({
 	autoExpandedPaths: Set<string>;
 	onToggle: (path: string) => void;
 	onSelect: (path: string) => void;
+	onAddToFolder: (folderPath: string) => void;
 }) {
 	const isSelected = selectedPage === node.path;
 	const isExpanded = node.isDir && (expandedPaths.has(node.path) || autoExpandedPaths.has(node.path));
@@ -160,23 +162,38 @@ function TreeItem({
 	if (node.isDir) {
 		return (
 			<div>
-				<button
-					type="button"
-					onClick={() => onToggle(node.path)}
-					className="flex w-full items-center gap-2 rounded-lg py-2 pr-3 text-left text-[11px] font-mono text-zinc-400 transition-colors hover:bg-white/[0.04] hover:text-zinc-200"
+				<div
+					className="flex w-full items-center group rounded-lg py-2 pr-3 text-left text-[11px] font-mono text-zinc-400 transition-colors hover:bg-white/[0.04] hover:text-zinc-200"
 					style={{ paddingLeft }}
 				>
-					<ChevronRight
-						size={14}
-						className={`shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
-					/>
-					{isExpanded ? (
-						<FolderOpen size={14} className="shrink-0 text-zinc-500" />
-					) : (
-						<Folder size={14} className="shrink-0 text-zinc-500" />
-					)}
-					<span className="truncate">{node.name}</span>
-				</button>
+					<button
+						type="button"
+						onClick={() => onToggle(node.path)}
+						className="flex items-center gap-2 flex-1 min-w-0"
+					>
+						<ChevronRight
+							size={14}
+							className={`shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+						/>
+						{isExpanded ? (
+							<FolderOpen size={14} className="shrink-0 text-zinc-500" />
+						) : (
+							<Folder size={14} className="shrink-0 text-zinc-500" />
+						)}
+						<span className="truncate">{node.name}</span>
+					</button>
+					<button
+						type="button"
+						onClick={(e) => {
+							e.stopPropagation();
+							onAddToFolder(node.path);
+						}}
+						className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-white/[0.08] transition-opacity text-zinc-600 hover:text-zinc-300"
+						title={`Add page to ${node.name}`}
+					>
+						<Plus size={12} />
+					</button>
+				</div>
 				{isExpanded && (
 					<div>
 						{node.children.map((child) => (
@@ -189,6 +206,7 @@ function TreeItem({
 								autoExpandedPaths={autoExpandedPaths}
 								onToggle={onToggle}
 								onSelect={onSelect}
+								onAddToFolder={onAddToFolder}
 							/>
 						))}
 					</div>
@@ -224,6 +242,7 @@ export function WikiView() {
 	const [search, setSearch] = useState('');
 	const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
 	const [creating, setCreating] = useState(false);
+	const newPageInputRef = useRef<HTMLInputElement>(null);
 
 	useEffect(() => {
 		loadPages();
@@ -331,6 +350,18 @@ export function WikiView() {
 		}
 	}
 
+	function handleAddToFolder(folderPath: string) {
+		setNewPageName(`${folderPath}/`);
+		// Focus input and place cursor at end
+		setTimeout(() => {
+			const input = newPageInputRef.current;
+			if (input) {
+				input.focus();
+				input.setSelectionRange(input.value.length, input.value.length);
+			}
+		}, 0);
+	}
+
 	async function createPage() {
 		let path = newPageName.trim().replace(/^\/+|\/+$/g, '');
 		if (!path) return;
@@ -398,7 +429,8 @@ export function WikiView() {
 								autoExpandedPaths={autoExpandedPaths}
 								onToggle={toggleDirectory}
 								onSelect={loadPage}
-							/>
+									onAddToFolder={handleAddToFolder}
+								/>
 						))
 					) : (
 						<p className="py-4 text-center font-mono text-[11px] text-zinc-700">No pages found</p>
@@ -408,6 +440,7 @@ export function WikiView() {
 				<div className="border-t border-white/[0.07] p-3">
 					<div className="space-y-2">
 						<input
+							ref={newPageInputRef}
 							type="text"
 							value={newPageName}
 							onChange={(event) => setNewPageName(event.target.value)}
