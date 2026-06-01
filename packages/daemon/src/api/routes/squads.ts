@@ -1,7 +1,8 @@
 import { Router } from 'express';
-import { getSquadInstances } from '../../squad/execution/instance.js';
+import { getInstance, getSquadInstances } from '../../squad/execution/instance.js';
 import { runInstance } from '../../squad/execution/runner.js';
 import { getSquadByName, getSquadMembers, listSquads } from '../../squad/manager.js';
+import { getDatabase } from '../../store/db.js';
 
 function isActiveInstance(status: string): boolean {
 	return status !== 'complete' && status !== 'failed';
@@ -16,12 +17,30 @@ export function squadsRouter(): Router {
 	 */
 	router.get('/squads', async (_req, res) => {
 		try {
+			const db = getDatabase();
 			const squads = await listSquads();
 			const results = await Promise.all(
 				squads.map(async (s) => {
 					const members = await getSquadMembers(s.id);
 					const instances = getSquadInstances(s.id);
 					const activeInstances = instances.filter((i) => isActiveInstance(i.status)).length;
+
+					// Fetch last 5 activity entries for this squad
+					const activityResult = await db.execute({
+						sql: `SELECT activity_type, content, agent_role, timestamp
+						      FROM agent_activity
+						      WHERE squad_id = ?
+						      ORDER BY timestamp DESC
+						      LIMIT 5`,
+						args: [s.id],
+					});
+					const recentActivity = activityResult.rows.map((row) => ({
+						type: row.activity_type as string,
+						text: row.content as string,
+						agent: row.agent_role as string,
+						timestamp: row.timestamp as string,
+					}));
+
 					return {
 						id: s.id,
 						name: s.name,
@@ -34,6 +53,7 @@ export function squadsRouter(): Router {
 						activeInstances,
 						totalInstances: instances.length,
 						createdAt: s.createdAt.toISOString(),
+						recentActivity,
 					};
 				}),
 			);
@@ -145,6 +165,84 @@ export function squadsRouter(): Router {
 			});
 		} catch (err) {
 			res.status(500).json({ error: 'Failed to start instance' });
+		}
+	});
+
+	/**
+	 * GET /api/squads/:name/instances/:instanceId
+	 * Get detailed instance info with agent activity.
+	 */
+	router.get('/squads/:name/instances/:instanceId', async (req, res) => {
+		try {
+			const squad = await getSquadByName(req.params.name);
+			if (!squad) {
+				res.status(404).json({ error: `Squad '${req.params.name}' not found` });
+				return;
+			}
+
+			const instance = getInstance(req.params.instanceId);
+			if (!instance || instance.squadId !== squad.id) {
+				res.status(404).json({ error: 'Instance not found' });
+				return;
+			}
+
+			const members = await getSquadMembers(squad.id);
+			const db = getDatabase();
+
+			// Fetch agent activity for this instance
+			const activityResult = await db.execute({
+				sql: `SELECT id, agent_role, activity_type, content, model_used, tokens_used, timestamp
+				      FROM agent_activity
+				      WHERE instance_id = ?
+				      ORDER BY timestamp ASC`,
+				args: [instance.id],
+			});
+
+			const activity = activityResult.rows.map((row) => ({
+				id: row.id as string,
+				agent: row.agent_role as string,
+				type: row.activity_type as string,
+				content: row.content as string,
+				model: row.model_used as string | null,
+				tokensUsed: row.tokens_used as number | null,
+				timestamp: row.timestamp as string,
+			}));
+
+			// Build member status from tasks
+			const memberDetails = members.map((m) => {
+				const task = instance.tasks.find(
+					(t) => t.assignedTo === m.roleName && t.status === 'in_progress',
+				);
+				return {
+					id: m.id,
+					displayName: m.displayName,
+					role: m.roleName,
+					roleName: m.roleName,
+					status: task ? 'working' : 'idle',
+					currentTask: task?.description ?? null,
+				};
+			});
+
+			res.json({
+				instance: {
+					id: instance.id,
+					status: instance.status,
+					branch: instance.branch,
+					issueRef: instance.issueRef,
+					taskCount: instance.tasks.length,
+					tasksComplete: instance.tasks.filter((t) => t.status === 'done').length,
+					tasks: instance.tasks.map((t) => ({
+						id: t.id,
+						description: t.description,
+						assignedTo: t.assignedTo,
+						status: t.status,
+					})),
+				},
+				members: memberDetails,
+				activity,
+			});
+		} catch (err) {
+			res.status(500).json({ error: 'Failed to get instance detail' });
 		}
 	});
 

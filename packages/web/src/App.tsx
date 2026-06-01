@@ -47,6 +47,7 @@ function ProtectedApp() {
 					<Route index element={<ChatView />} />
 					<Route path="squads" element={<SquadsView />} />
 					<Route path="squads/:name" element={<SquadsView />} />
+					<Route path="squads/:name/instances/:instanceId" element={<SquadsView />} />
 					<Route path="feed" element={<FeedView />} />
 					<Route path="skills" element={<SkillsView />} />
 					<Route path="schedules" element={<SchedulesView />} />
