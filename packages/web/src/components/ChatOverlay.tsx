@@ -1,110 +1,27 @@
 import { IoMark } from '@/components/ui/io-mark';
-import { pushNotification } from '@/components/NotificationPanel';
-import { type WsMessage, useWebSocket } from '@/hooks/use-websocket';
-import { api, getCurrentToken } from '@/lib/api';
+import { useChat } from '@/hooks/use-chat';
 import { MessageCircle, Paperclip, Send, Square, X } from 'lucide-react';
 import { marked } from 'marked';
 import {
 	type ChangeEvent,
 	type KeyboardEvent,
-	useCallback,
-	useEffect,
 	useLayoutEffect,
 	useMemo,
 	useRef,
 	useState,
 } from 'react';
 
-interface OverlayMessage {
-	id: string;
-	role: 'user' | 'assistant';
-	content: string;
-	timestamp: string;
-	attachmentName?: string;
-}
-
-function formatTimestamp(ts: string | Date): string {
-	return new Date(ts).toISOString();
-}
-
 export function ChatOverlay() {
 	const [open, setOpen] = useState(false);
-	const [messages, setMessages] = useState<OverlayMessage[]>([]);
 	const [input, setInput] = useState('');
-	const [isStreaming, setIsStreaming] = useState(false);
-	const [streaming, setStreaming] = useState('');
 	const [selectedFile, setSelectedFile] = useState<File | null>(null);
 	const messagesRef = useRef<HTMLDivElement>(null);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
+	const { messages, streaming, isStreaming, connected, sendChatMessage, addUserMessage, uploadAttachment } = useChat();
+
 	const recentMessages = useMemo(() => messages.slice(-10), [messages]);
-
-	const fetchRecentMessages = useCallback(async () => {
-		try {
-			const data = await api.get<{ messages: OverlayMessage[] }>('/conversations?limit=10');
-			setMessages(
-				data.messages.map((message) => ({
-					...message,
-					timestamp: formatTimestamp(message.timestamp),
-				})),
-			);
-		} catch {
-			// ignore history fetch failures in the floating overlay
-		}
-	}, []);
-
-	useEffect(() => {
-		void fetchRecentMessages();
-	}, [fetchRecentMessages]);
-
-	useEffect(() => {
-		if (open) {
-			void fetchRecentMessages();
-		}
-	}, [fetchRecentMessages, open]);
-
-	const handleDelta = useCallback((accumulated: string) => {
-		setIsStreaming(true);
-		setStreaming(accumulated);
-	}, []);
-
-	const handleMessage = useCallback((content: string) => {
-		setIsStreaming(false);
-		setStreaming('');
-		setMessages((prev) => [
-			...prev,
-			{
-				id: crypto.randomUUID(),
-				role: 'assistant',
-				content,
-				timestamp: formatTimestamp(new Date()),
-			},
-		]);
-	}, []);
-
-	const handleEvent = useCallback((msg: WsMessage) => {
-		if (msg.notification) {
-			pushNotification({
-				id: msg.event?.id ?? crypto.randomUUID(),
-				message: msg.notification,
-				timestamp: msg.event?.timestamp ?? new Date().toISOString(),
-				eventType: msg.event?.type ?? 'unknown',
-			});
-		}
-	}, []);
-
-	const handleError = useCallback(() => {
-		setIsStreaming(false);
-		setStreaming('');
-	}, []);
-
-	const { connected, sendMessage } = useWebSocket({
-		onDelta: handleDelta,
-		onMessage: handleMessage,
-		onEvent: handleEvent,
-		onError: handleError,
-	});
 
 	useLayoutEffect(() => {
 		const container = messagesRef.current;
@@ -112,23 +29,6 @@ export function ChatOverlay() {
 			container.scrollTop = container.scrollHeight;
 		}
 	}, [recentMessages, streaming, isStreaming, open]);
-
-	async function uploadAttachment(file: File, messageId: string) {
-		const formData = new FormData();
-		formData.append('file', file);
-		formData.append('messageId', messageId);
-
-		const token = getCurrentToken();
-		const response = await fetch('/api/attachments', {
-			method: 'POST',
-			body: formData,
-			headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-		});
-
-		if (!response.ok) {
-			throw new Error('Failed to upload attachment');
-		}
-	}
 
 	async function handleSend() {
 		const text = input.trim();
@@ -140,20 +40,15 @@ export function ChatOverlay() {
 			.filter(Boolean)
 			.join('\n\n');
 
-		setMessages((prev) => [
-			...prev,
-			{
-				id: messageId,
-				role: 'user',
-				content: text,
-				timestamp: formatTimestamp(new Date()),
-				attachmentName,
-			},
-		]);
+		addUserMessage({
+			id: messageId,
+			role: 'user',
+			content: text,
+			timestamp: new Date().toISOString(),
+			attachmentName,
+		});
 		setInput('');
 		setSelectedFile(null);
-		setIsStreaming(true);
-		setStreaming('');
 		if (fileInputRef.current) fileInputRef.current.value = '';
 		if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
@@ -161,10 +56,10 @@ export function ChatOverlay() {
 			if (selectedFile) {
 				await uploadAttachment(selectedFile, messageId);
 			}
-			sendMessage(outboundContent);
+			sendChatMessage(outboundContent);
 			setOpen(true);
 		} catch {
-			setIsStreaming(false);
+			// handled by context
 		}
 	}
 
@@ -299,14 +194,7 @@ export function ChatOverlay() {
 								/>
 								<button
 									type="button"
-									onClick={() => {
-										if (isStreaming) {
-											setIsStreaming(false);
-											setStreaming('');
-											return;
-										}
-										void handleSend();
-									}}
+									onClick={() => void handleSend()}
 									disabled={(!input.trim() && !selectedFile) || (!connected && !isStreaming)}
 									className="p-1.5 rounded-lg text-white disabled:opacity-25 disabled:cursor-not-allowed transition-opacity hover:opacity-90 flex-shrink-0 cursor-pointer"
 									style={{ background: 'linear-gradient(135deg, #D83333, #E43A9C)' }}

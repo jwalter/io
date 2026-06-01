@@ -1,28 +1,10 @@
 import { IoMark } from '@/components/ui/io-mark';
-import { pushNotification } from '@/components/NotificationPanel';
 import { Chip } from '@/components/ui/shared';
-import { type WsMessage, useWebSocket } from '@/hooks/use-websocket';
+import { useChat } from '@/hooks/use-chat';
 import { useAuth } from '@/lib/auth';
-import { api, getCurrentToken } from '@/lib/api';
 import { Activity, ChevronDown, Paperclip, Send, Square } from 'lucide-react';
 import { marked } from 'marked';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-
-interface ToolCall {
-	name: string;
-	status: 'running' | 'done' | 'error';
-	result?: string;
-}
-
-interface Message {
-	id: string;
-	role: 'user' | 'assistant';
-	content: string;
-	timestamp: string;
-	toolCall?: ToolCall;
-	attachments?: string[] | null;
-	attachmentName?: string;
-}
+import { useLayoutEffect, useRef, useState } from 'react';
 
 function formatTime(ts: string | Date): string {
 	return new Date(ts).toLocaleTimeString('en-US', {
@@ -35,70 +17,13 @@ function formatTime(ts: string | Date): string {
 
 export function ChatView() {
 	const { session } = useAuth();
-	const [messages, setMessages] = useState<Message[]>([]);
+	const { messages, streaming, isStreaming, isThinking, sendChatMessage, addUserMessage, uploadAttachment } = useChat();
 	const [input, setInput] = useState('');
-	const [streaming, setStreaming] = useState('');
-	const [isStreaming, setIsStreaming] = useState(false);
-	const [isThinking, setIsThinking] = useState(false);
 	const [selectedFile, setSelectedFile] = useState<File | null>(null);
 	const [expandedTool, setExpandedTool] = useState<string | null>(null);
 	const messagesContainerRef = useRef<HTMLDivElement>(null);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
-
-	// Load conversation history
-	useEffect(() => {
-		api
-			.get<{ messages: Message[] }>('/conversations?limit=50')
-			.then((data) =>
-				setMessages(data.messages.map((message) => ({ ...message, timestamp: formatTime(message.timestamp) }))),
-			)
-			.catch(() => {});
-	}, []);
-
-	const handleDelta = useCallback((accumulated: string) => {
-		setIsThinking(false);
-		setIsStreaming(true);
-		setStreaming(accumulated);
-	}, []);
-
-	const handleMessage = useCallback((content: string) => {
-		setIsThinking(false);
-		setIsStreaming(false);
-		setStreaming('');
-		setMessages((prev) => [
-			...prev,
-			{
-				id: crypto.randomUUID(),
-				role: 'assistant',
-				content,
-				timestamp: formatTime(new Date()),
-			},
-		]);
-	}, []);
-
-	const handleEvent = useCallback((msg: WsMessage) => {
-		if (msg.notification) {
-			pushNotification({
-				id: msg.event?.id ?? crypto.randomUUID(),
-				message: msg.notification,
-				timestamp: msg.event?.timestamp ?? new Date().toISOString(),
-				eventType: msg.event?.type ?? 'unknown',
-			});
-		}
-	}, []);
-	const handleError = useCallback(() => {
-		setIsThinking(false);
-		setIsStreaming(false);
-		setStreaming('');
-	}, []);
-
-	const { sendMessage } = useWebSocket({
-		onDelta: handleDelta,
-		onMessage: handleMessage,
-		onEvent: handleEvent,
-		onError: handleError,
-	});
 
 	useLayoutEffect(() => {
 		const container = messagesContainerRef.current;
@@ -106,23 +31,6 @@ export function ChatView() {
 			container.scrollTop = container.scrollHeight;
 		}
 	}, [messages, streaming, isThinking]);
-
-	async function uploadAttachment(file: File, messageId: string) {
-		const formData = new FormData();
-		formData.append('file', file);
-		formData.append('messageId', messageId);
-
-		const token = getCurrentToken();
-		const res = await fetch('/api/attachments', {
-			method: 'POST',
-			body: formData,
-			headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-		});
-
-		if (!res.ok) {
-			throw new Error('Failed to upload attachment');
-		}
-	}
 
 	async function handleSend() {
 		const text = input.trim();
@@ -134,19 +42,15 @@ export function ChatView() {
 			.filter(Boolean)
 			.join('\n\n');
 
-		setMessages((prev) => [
-			...prev,
-			{
-				id: messageId,
-				role: 'user',
-				content: text,
-				timestamp: formatTime(new Date()),
-				attachmentName,
-			},
-		]);
+		addUserMessage({
+			id: messageId,
+			role: 'user',
+			content: text,
+			timestamp: new Date().toISOString(),
+			attachmentName,
+		});
 		setInput('');
 		setSelectedFile(null);
-		setIsThinking(true);
 		if (fileInputRef.current) fileInputRef.current.value = '';
 		if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
@@ -154,9 +58,9 @@ export function ChatView() {
 			if (selectedFile) {
 				await uploadAttachment(selectedFile, messageId);
 			}
-			sendMessage(outboundContent);
+			sendChatMessage(outboundContent);
 		} catch {
-			setIsThinking(false);
+			// handled by context
 		}
 	}
 
@@ -263,7 +167,7 @@ export function ChatView() {
 							)}
 
 							{/* Timestamp */}
-							<span className="text-[11px] text-zinc-700 font-mono px-0.5">{msg.timestamp}</span>
+							<span className="text-[11px] text-zinc-700 font-mono px-0.5">{formatTime(msg.timestamp)}</span>
 						</div>
 					</div>
 				))}
@@ -356,7 +260,7 @@ export function ChatView() {
 							{isStreaming ? (
 								<button
 									type="button"
-									onClick={() => setIsStreaming(false)}
+									onClick={() => { /* stop not yet supported */ }}
 									className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-[11px] font-mono text-zinc-300 transition-colors"
 								>
 									<Square className="w-3 h-3" /> Stop
