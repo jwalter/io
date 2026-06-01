@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { createChildLogger } from '../logging/logger.js';
 
 const logger = () => createChildLogger('wiki');
@@ -158,6 +158,32 @@ export function deleteWikiPage(scope: WikiScope, pageName: string): boolean {
 	if (!existsSync(filePath)) return false;
 	unlinkSync(filePath);
 	logger().info({ scope, pageName }, 'Wiki page deleted');
+	return true;
+}
+
+// Protected root directories that cannot be deleted
+const PROTECTED_DIRS = new Set(['io', 'shared', 'squads']);
+
+/**
+ * Delete a wiki directory and all its contents.
+ * Protected directories (io, shared, squads) cannot be deleted.
+ * Path is relative to wiki root (e.g. "squads/myproject").
+ */
+export function deleteWikiDirectory(relativePath: string): boolean {
+	if (!wikiRoot) return false;
+
+	// Block deletion of protected root directories
+	const normalized = relativePath.replace(/^\/+|\/+$/g, '');
+	if (PROTECTED_DIRS.has(normalized)) return false;
+
+	const target = resolve(wikiRoot, normalized);
+	// Safety: ensure target is actually inside wikiRoot
+	if (!target.startsWith(resolve(wikiRoot))) return false;
+
+	if (!existsSync(target)) return false;
+
+	rmSync(target, { recursive: true, force: true });
+	logger().info({ path: normalized }, 'Wiki directory deleted');
 	return true;
 }
 

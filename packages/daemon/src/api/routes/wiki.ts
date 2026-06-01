@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { deleteWikiPage, listAllWikiPages, listWikiPages, readWikiPage, searchWiki, writeWikiPage } from '../../wiki/index.js';
+import { deleteWikiDirectory, deleteWikiPage, listAllWikiPages, listWikiPages, readWikiPage, searchWiki, writeWikiPage } from '../../wiki/index.js';
 
 export const wikiRouter = Router();
 
@@ -7,6 +7,21 @@ export const wikiRouter = Router();
 wikiRouter.get('/all', (_req, res) => {
 	const pages = listAllWikiPages();
 	res.json({ pages });
+});
+
+// Delete a directory (must come before /:scope/*page to avoid conflict)
+wikiRouter.delete('/dir/*path', (req, res) => {
+	const dirPath = Array.isArray(req.params.path) ? req.params.path.join('/') : req.params.path;
+	if (!dirPath) {
+		res.status(400).json({ error: 'Directory path is required' });
+		return;
+	}
+	const deleted = deleteWikiDirectory(dirPath);
+	if (!deleted) {
+		res.status(400).json({ error: `Cannot delete '${dirPath}' — protected or not found` });
+		return;
+	}
+	res.json({ status: 'ok' });
 });
 
 // List pages in a scope

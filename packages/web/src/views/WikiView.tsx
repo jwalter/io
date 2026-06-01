@@ -145,6 +145,7 @@ function TreeItem({
 	onToggle,
 	onSelect,
 	onAddToFolder,
+	onDeleteFolder,
 }: {
 	node: TreeNode;
 	depth: number;
@@ -154,10 +155,12 @@ function TreeItem({
 	onToggle: (path: string) => void;
 	onSelect: (path: string) => void;
 	onAddToFolder: (folderPath: string) => void;
+	onDeleteFolder: (folderPath: string) => void;
 }) {
 	const isSelected = selectedPage === node.path;
 	const isExpanded = node.isDir && (expandedPaths.has(node.path) || autoExpandedPaths.has(node.path));
 	const paddingLeft = 12 + depth * 16;
+	const isProtected = node.isDir && ['io', 'shared', 'squads'].includes(node.path);
 
 	if (node.isDir) {
 		return (
@@ -182,17 +185,32 @@ function TreeItem({
 						)}
 						<span className="truncate">{node.name}</span>
 					</button>
-					<button
-						type="button"
-						onClick={(e) => {
-							e.stopPropagation();
-							onAddToFolder(node.path);
-						}}
-						className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-white/[0.08] transition-opacity text-zinc-600 hover:text-zinc-300"
-						title={`Add page to ${node.name}`}
-					>
-						<Plus size={12} />
-					</button>
+					<div className="flex items-center gap-0.5">
+						{!isProtected && (
+							<button
+								type="button"
+								onClick={(e) => {
+									e.stopPropagation();
+									onDeleteFolder(node.path);
+								}}
+								className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-red-500/20 transition-opacity text-zinc-600 hover:text-red-400"
+								title={`Delete ${node.name}`}
+							>
+								<Trash2 size={12} />
+							</button>
+						)}
+						<button
+							type="button"
+							onClick={(e) => {
+								e.stopPropagation();
+								onAddToFolder(node.path);
+							}}
+							className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-white/[0.08] transition-opacity text-zinc-600 hover:text-zinc-300"
+							title={`Add page to ${node.name}`}
+						>
+							<Plus size={12} />
+						</button>
+					</div>
 				</div>
 				{isExpanded && (
 					<div>
@@ -207,6 +225,7 @@ function TreeItem({
 								onToggle={onToggle}
 								onSelect={onSelect}
 								onAddToFolder={onAddToFolder}
+								onDeleteFolder={onDeleteFolder}
 							/>
 						))}
 					</div>
@@ -242,6 +261,7 @@ export function WikiView() {
 	const [search, setSearch] = useState('');
 	const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
 	const [creating, setCreating] = useState(false);
+	const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 	const newPageInputRef = useRef<HTMLInputElement>(null);
 
 	useEffect(() => {
@@ -362,6 +382,30 @@ export function WikiView() {
 		}, 0);
 	}
 
+	function handleDeleteFolder(folderPath: string) {
+		setConfirmDelete(folderPath);
+	}
+
+	async function confirmDeleteFolder() {
+		if (!confirmDelete) return;
+		try {
+			await api.delete(`/wiki/dir/${confirmDelete}`);
+			toast.success(`Deleted ${confirmDelete}`);
+			// If the selected page was inside the deleted folder, clear selection
+			if (selectedPage?.startsWith(confirmDelete)) {
+				setSelectedPage(null);
+				setContent('');
+				setEditContent('');
+				setEditing(false);
+			}
+			loadPages();
+		} catch {
+			toast.error('Failed to delete directory');
+		} finally {
+			setConfirmDelete(null);
+		}
+	}
+
 	async function createPage() {
 		let path = newPageName.trim().replace(/^\/+|\/+$/g, '');
 		if (!path) return;
@@ -429,8 +473,9 @@ export function WikiView() {
 								autoExpandedPaths={autoExpandedPaths}
 								onToggle={toggleDirectory}
 								onSelect={loadPage}
-									onAddToFolder={handleAddToFolder}
-								/>
+								onAddToFolder={handleAddToFolder}
+								onDeleteFolder={handleDeleteFolder}
+							/>
 						))
 					) : (
 						<p className="py-4 text-center font-mono text-[11px] text-zinc-700">No pages found</p>
@@ -538,6 +583,26 @@ export function WikiView() {
 					</div>
 				)}
 			</div>
+
+			{/* Confirm delete directory dialog */}
+			{confirmDelete && (
+				<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+					<div className="w-full max-w-sm rounded-2xl border border-white/[0.07] bg-[#1a1a1a] p-6 shadow-2xl">
+						<h3 className="mb-2 text-sm font-medium text-zinc-100">Delete directory?</h3>
+						<p className="mb-4 text-xs text-zinc-400">
+							This will permanently delete <span className="font-mono text-zinc-200">{confirmDelete}</span> and all its contents.
+						</p>
+						<div className="flex justify-end gap-2">
+							<SecondaryBtn onClick={() => setConfirmDelete(null)} className="px-3 py-1.5">
+								Cancel
+							</SecondaryBtn>
+							<DangerBtn onClick={confirmDeleteFolder} className="px-3 py-1.5">
+								<Trash2 size={12} /> Delete
+							</DangerBtn>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 }

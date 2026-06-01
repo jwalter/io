@@ -7,6 +7,7 @@ export {
 	readWikiPage,
 	writeWikiPage,
 	deleteWikiPage,
+	deleteWikiDirectory,
 	searchWiki,
 	getSquadScopes,
 	getOrchestratorScopes,
