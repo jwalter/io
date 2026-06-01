@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import matter from 'gray-matter';
 import { getActiveSkillsContent } from '../skills/index.js';
-import { getPageListing, getSquadScopes } from '../wiki/index.js';
+import { getPageListing, getSquadScopes, readSquadRules } from '../wiki/index.js';
 
 export interface SkillDefinition {
 	role: string;
@@ -98,6 +98,14 @@ export async function compileSystemPrompt(
 		parts.push(
 			'\n## Veto Power\nYou have veto power in meetings. Use it when you identify critical issues.',
 		);
+	}
+
+	// Inject squad rules from _rules.md (hard requirements for agents)
+	if (squadName) {
+		const rules = readSquadRules(squadName);
+		if (rules) {
+			parts.push(`\n## Rules\nThe following rules MUST be followed at all times:\n\n${rules}`);
+		}
 	}
 
 	// Inject wiki page listing so agents know what knowledge is available

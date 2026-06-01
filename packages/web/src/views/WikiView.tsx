@@ -160,7 +160,7 @@ function TreeItem({
 	const isSelected = selectedPage === node.path;
 	const isExpanded = node.isDir && (expandedPaths.has(node.path) || autoExpandedPaths.has(node.path));
 	const paddingLeft = 12 + depth * 16;
-	const isProtected = node.isDir && ['io', 'shared', 'squads'].includes(node.path);
+	const isProtected = node.isDir && ['io', 'shared', 'squads', 'templates'].includes(node.path);
 
 	if (node.isDir) {
 		return (

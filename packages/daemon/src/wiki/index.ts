@@ -12,5 +12,6 @@ export {
 	getSquadScopes,
 	getOrchestratorScopes,
 	getPageListing,
+	readSquadRules,
 } from './store.js';
 export type { WikiScope, WikiPage, WikiPageSummary, WikiSearchResult } from './store.js';

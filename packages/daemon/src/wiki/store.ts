@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { createChildLogger } from '../logging/logger.js';
 
@@ -25,6 +25,26 @@ export interface WikiSearchResult {
 
 let wikiRoot = '';
 
+const DEFAULT_RULES = `# Squad Rules
+
+These rules are automatically enforced for all squad members.
+
+## Git Workflow
+- Always pull the latest main branch before starting work
+- Create feature branches from main (never commit directly to main)
+- Run tests before committing changes
+- Never force-push to shared branches
+
+## Code Quality
+- Run the project's linter before submitting changes
+- Ensure all existing tests pass after your changes
+- Add tests for new functionality
+
+## Communication
+- Document significant decisions in the wiki
+- Update the wiki when you discover important project context
+`;
+
 /**
  * Initialize the wiki directory structure.
  */
@@ -33,15 +53,50 @@ export function initWiki(dataDir: string): void {
 	mkdirSync(join(wikiRoot, 'io'), { recursive: true });
 	mkdirSync(join(wikiRoot, 'shared'), { recursive: true });
 	mkdirSync(join(wikiRoot, 'squads'), { recursive: true });
+	mkdirSync(join(wikiRoot, 'templates'), { recursive: true });
+
+	// Seed default _rules.md template if not present
+	const rulesTemplate = join(wikiRoot, 'templates', '_rules.md');
+	if (!existsSync(rulesTemplate)) {
+		writeFileSync(rulesTemplate, DEFAULT_RULES, 'utf-8');
+	}
+
 	logger().info({ wikiRoot }, 'Wiki initialized');
 }
 
 /**
- * Ensure a squad wiki folder exists.
+ * Ensure a squad wiki folder exists. Seeds from templates/ on first creation.
  */
 export function ensureSquadWiki(squadName: string): void {
 	const dir = join(wikiRoot, 'squads', squadName);
+	const isNew = !existsSync(dir);
 	mkdirSync(dir, { recursive: true });
+
+	// Seed from templates on first creation
+	if (isNew) {
+		const templatesDir = join(wikiRoot, 'templates');
+		if (existsSync(templatesDir)) {
+			seedFromTemplates(templatesDir, dir);
+		}
+	}
+}
+
+/**
+ * Recursively copy files from templates directory into target.
+ */
+function seedFromTemplates(src: string, dest: string): void {
+	for (const entry of readdirSync(src, { withFileTypes: true })) {
+		const srcPath = join(src, entry.name);
+		const destPath = join(dest, entry.name);
+		if (entry.isDirectory()) {
+			mkdirSync(destPath, { recursive: true });
+			seedFromTemplates(srcPath, destPath);
+		} else if (entry.isFile()) {
+			if (!existsSync(destPath)) {
+				copyFileSync(srcPath, destPath);
+			}
+		}
+	}
 }
 
 /**
@@ -162,7 +217,7 @@ export function deleteWikiPage(scope: WikiScope, pageName: string): boolean {
 }
 
 // Protected root directories that cannot be deleted
-const PROTECTED_DIRS = new Set(['io', 'shared', 'squads']);
+const PROTECTED_DIRS = new Set(['io', 'shared', 'squads', 'templates']);
 
 /**
  * Delete a wiki directory and all its contents.
@@ -234,15 +289,25 @@ export function getOrchestratorScopes(): WikiScope[] {
 
 /**
  * Get a summary of available pages for injection into system prompts.
+ * Excludes _rules.md since it's injected separately.
  */
 export function getPageListing(scopes: WikiScope[]): string {
 	const sections: string[] = [];
 	for (const scope of scopes) {
-		const pages = listWikiPages(scope);
+		const pages = listWikiPages(scope).filter((p) => p.path !== '_rules');
 		if (pages.length > 0) {
 			const label = scope === 'io' ? 'IO' : scope === 'shared' ? 'Shared' : `Squad (${scope})`;
 			sections.push(`${label}: ${pages.map((page) => page.name).join(', ')}`);
 		}
 	}
 	return sections.length > 0 ? sections.join('\n') : '(no wiki pages yet)';
+}
+
+/**
+ * Read the _rules.md content for a squad. Returns null if not found.
+ */
+export function readSquadRules(squadName: string): string | null {
+	const filePath = join(wikiRoot, 'squads', squadName, '_rules.md');
+	if (!existsSync(filePath)) return null;
+	return readFileSync(filePath, 'utf-8');
 }
