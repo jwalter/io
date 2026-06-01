@@ -114,6 +114,7 @@ interface InstanceDetail {
 		taskCount: number;
 		tasksComplete: number;
 		tasks: InstanceTask[];
+		meetingLog?: string[];
 	};
 	members: SquadMember[];
 	activity: AgentActivityEvent[];
@@ -493,12 +494,13 @@ function InstanceDetailView({
 			<AgentWorkView
 				agentName={member?.displayName || selectedAgent}
 				agentRole={selectedAgent}
-				currentTask={member?.currentTask || null}
-				events={agentEvents}
-				color={color}
-				onBack={() => setSelectedAgent(null)}
-				squadName={squadName}
-			/>
+					agentStatus={member?.status || 'idle'}
+					currentTask={member?.currentTask || null}
+					events={agentEvents}
+					color={color}
+					onBack={() => setSelectedAgent(null)}
+					squadName={squadName}
+				/>
 		);
 	}
 
@@ -561,7 +563,7 @@ function InstanceDetailView({
 								</p>
 							)}
 						</div>
-						{agent.status === 'working' && (
+						{(agent.status === 'working' || agent.status === 'in meeting') && (
 							<div className="flex items-center gap-1 flex-shrink-0">
 								<button
 									type="button"
@@ -572,26 +574,63 @@ function InstanceDetailView({
 								>
 									<Activity className="w-4 h-4" />
 								</button>
-								<button
-									type="button"
-									onClick={() => toast.success(`${agent.displayName} stopped`)}
-									title="Stop agent"
-									className="p-2 rounded-xl hover:bg-red-500/10 text-zinc-600 hover:text-red-400 transition-colors cursor-pointer"
-								>
-									<Square className="w-4 h-4" />
-								</button>
+								{agent.status === 'working' && (
+									<button
+										type="button"
+										onClick={() => toast.success(`${agent.displayName} stopped`)}
+										title="Stop agent"
+										className="p-2 rounded-xl hover:bg-red-500/10 text-zinc-600 hover:text-red-400 transition-colors cursor-pointer"
+									>
+										<Square className="w-4 h-4" />
+									</button>
+								)}
 							</div>
 						)}
 					</div>
 				))}
 			</div>
+
+			{/* Meeting Discussion */}
+			{(detail.instance.status === 'meeting' || detail.instance.status === 'planning') &&
+				detail.instance.meetingLog &&
+				detail.instance.meetingLog.length > 0 && (
+					<div className="mt-6">
+						<h3
+							className="text-lg tracking-wide mb-3"
+							style={{ fontFamily: "'Bebas Neue', sans-serif", color }}
+						>
+							Meeting Discussion
+						</h3>
+						<div className="space-y-2">
+							{detail.instance.meetingLog.map((entry, i) => {
+								const match = entry.match(/^\[([^\]]+)\]\s*(.*)/s);
+								const role = match ? match[1] : 'unknown';
+								const message = match ? match[2] : entry;
+								return (
+									<div
+										key={`meeting-${i}`}
+										className="glass-card border border-white/[0.07] rounded-xl px-4 py-3"
+									>
+										<div className="flex items-center gap-2 mb-1">
+											<Users className="w-3.5 h-3.5" style={{ color: '#818cf8' }} />
+											<span className="text-[10px] font-mono uppercase tracking-wider text-indigo-400">
+												{role}
+											</span>
+										</div>
+										<p className="text-xs text-zinc-400 whitespace-pre-wrap leading-relaxed">
+											{message}
+										</p>
+									</div>
+								);
+							})}
+						</div>
+					</div>
+				)}
 		</div>
 	);
 }
 
-// ─── Agent Work Timeline ──────────────────────────────────────────────────────
-
-type WorkEventKind = 'thought' | 'tool_call' | 'tool_result' | 'message' | 'decision';
+type WorkEventKind = 'thought' | 'tool_call' | 'tool_result' | 'message' | 'decision' | 'meeting';
 
 const KIND_META: Record<
 	WorkEventKind,
@@ -612,10 +651,12 @@ const KIND_META: Record<
 	},
 	message: { label: 'Message', icon: Bot, color: '#E43A9C', bg: 'rgba(228,58,156,0.15)' },
 	decision: { label: 'Decision', icon: Crown, color: '#fbbf24', bg: 'rgba(251,191,36,0.1)' },
+	meeting: { label: 'Meeting', icon: Users, color: '#818cf8', bg: 'rgba(129,140,248,0.1)' },
 };
 
 function mapActivityTypeToKind(type: string): WorkEventKind {
 	const t = type.toLowerCase();
+	if (t.includes('meeting')) return 'meeting';
 	if (t.includes('tool_call') || t.includes('tool-call')) return 'tool_call';
 	if (t.includes('tool_result') || t.includes('tool-result')) return 'tool_result';
 	if (t.includes('thought') || t.includes('thinking') || t.includes('reason')) return 'thought';
@@ -626,6 +667,7 @@ function mapActivityTypeToKind(type: string): WorkEventKind {
 function AgentWorkView({
 	agentName,
 	agentRole,
+	agentStatus,
 	currentTask,
 	events,
 	color,
@@ -634,6 +676,7 @@ function AgentWorkView({
 }: {
 	agentName: string;
 	agentRole: string;
+	agentStatus: string;
 	currentTask: string | null;
 	events: AgentActivityEvent[];
 	color: string;
@@ -661,7 +704,7 @@ function AgentWorkView({
 					<p className="text-[11px] text-zinc-600 font-mono mt-0.5">{agentRole}</p>
 					{currentTask && <p className="text-sm text-zinc-400 mt-1">{currentTask}</p>}
 				</div>
-				<Chip variant="warning">working</Chip>
+				<Chip variant={statusToVariant(agentStatus)}>{agentStatus}</Chip>
 			</div>
 
 			<div className="relative">

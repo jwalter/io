@@ -170,6 +170,14 @@ function mapEventToActivity(event: IOEvent): Parameters<typeof logActivity>[0] |
 				activityType: 'meeting_contribution',
 				content: { message: event.content },
 			};
+		case 'meeting:veto':
+			return {
+				squadId: event.squadId,
+				instanceId: event.instanceId,
+				agentRole: event.agentRole,
+				activityType: 'meeting_contribution',
+				content: { message: event.content, veto: true },
+			};
 		default:
 			return null;
 	}

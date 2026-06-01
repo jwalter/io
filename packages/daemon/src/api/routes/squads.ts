@@ -252,6 +252,7 @@ export function squadsRouter(): Router {
 						assignedTo: t.assignedTo,
 						status: t.status,
 					})),
+					meetingLog: instance.meetingLog,
 				},
 				members: memberDetails,
 				activity,
