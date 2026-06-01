@@ -1,7 +1,13 @@
 import { Router } from 'express';
-import { deleteWikiPage, listWikiPages, readWikiPage, searchWiki, writeWikiPage } from '../../wiki/index.js';
+import { deleteWikiPage, listAllWikiPages, listWikiPages, readWikiPage, searchWiki, writeWikiPage } from '../../wiki/index.js';
 
 export const wikiRouter = Router();
+
+// List ALL pages across all scopes
+wikiRouter.get('/all', (_req, res) => {
+	const pages = listAllWikiPages();
+	res.json({ pages });
+});
 
 // List pages in a scope
 wikiRouter.get('/:scope', (req, res) => {

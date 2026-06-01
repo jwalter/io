@@ -2,6 +2,8 @@ export {
 	initWiki,
 	ensureSquadWiki,
 	listWikiPages,
+	listAllWikiPages,
+	listWikiScopes,
 	readWikiPage,
 	writeWikiPage,
 	deleteWikiPage,

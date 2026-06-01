@@ -44,6 +44,41 @@ export function ensureSquadWiki(squadName: string): void {
 	mkdirSync(dir, { recursive: true });
 }
 
+/**
+ * List all available wiki scopes (io, shared, + all squads with wiki folders).
+ */
+export function listWikiScopes(): string[] {
+	const scopes = ['io', 'shared'];
+	const squadsDir = join(wikiRoot, 'squads');
+	if (existsSync(squadsDir)) {
+		for (const entry of readdirSync(squadsDir, { withFileTypes: true })) {
+			if (entry.isDirectory()) {
+				scopes.push(entry.name);
+			}
+		}
+	}
+	return scopes;
+}
+
+/**
+ * List all pages across all scopes, with scope prefix in the path.
+ */
+export function listAllWikiPages(): Array<{ scope: string; name: string; path: string }> {
+	const allPages: Array<{ scope: string; name: string; path: string }> = [];
+	for (const scope of listWikiScopes()) {
+		const pages = listWikiPages(scope);
+		const scopePrefix = scope === 'io' ? 'io' : scope === 'shared' ? 'shared' : `squads/${scope}`;
+		for (const page of pages) {
+			allPages.push({
+				scope,
+				name: page.name,
+				path: `${scopePrefix}/${page.path}`,
+			});
+		}
+	}
+	return allPages;
+}
+
 function scopeDir(scope: WikiScope): string {
 	if (scope === 'io') return join(wikiRoot, 'io');
 	if (scope === 'shared') return join(wikiRoot, 'shared');
