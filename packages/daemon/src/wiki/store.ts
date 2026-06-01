@@ -60,69 +60,29 @@ export function listWikiScopes(): string[] {
 	return scopes;
 }
 
-/** Return just the squad names that have wiki folders */
-function listSquadNames(): string[] {
-	const squadsDir = join(wikiRoot, 'squads');
-	if (!existsSync(squadsDir)) return [];
-	return readdirSync(squadsDir, { withFileTypes: true })
-		.filter((e) => e.isDirectory())
-		.map((e) => e.name);
-}
-
 /**
  * List all pages across all scopes, with scope prefix in the path.
- * Always includes scope directories even if they are empty.
+ * Simply walks the wiki directory recursively — directories and .md files.
  */
-export function listAllWikiPages(): Array<{ scope: string; name: string; path: string; isDir?: boolean }> {
-	const allPages: Array<{ scope: string; name: string; path: string; isDir?: boolean }> = [];
+export function listAllWikiPages(): Array<{ name: string; path: string; isDir?: boolean }> {
+	if (!wikiRoot || !existsSync(wikiRoot)) return [];
 
-	// Always include top-level directories
-	allPages.push({ scope: 'io', name: 'io', path: 'io', isDir: true });
-	allPages.push({ scope: 'shared', name: 'shared', path: 'shared', isDir: true });
-	allPages.push({ scope: 'squads', name: 'squads', path: 'squads', isDir: true });
+	const results: Array<{ name: string; path: string; isDir?: boolean }> = [];
 
-	// Process built-in scopes (io, shared)
-	for (const scope of ['io', 'shared'] as const) {
-		const dir = scopeDir(scope);
-		if (existsSync(dir)) {
-			collectDirs(dir, scope, allPages, scope);
-		}
-		for (const page of listWikiPages(scope)) {
-			allPages.push({ scope, name: page.name, path: `${scope}/${page.path}` });
+	function walk(dir: string, prefix: string): void {
+		for (const entry of readdirSync(dir, { withFileTypes: true })) {
+			const entryPath = prefix ? `${prefix}/${entry.name}` : entry.name;
+			if (entry.isDirectory()) {
+				results.push({ name: entry.name, path: entryPath, isDir: true });
+				walk(join(dir, entry.name), entryPath);
+			} else if (entry.name.endsWith('.md')) {
+				results.push({ name: entry.name.replace(/\.md$/, ''), path: entryPath.replace(/\.md$/, '') });
+			}
 		}
 	}
 
-	// Process squad scopes separately to avoid name collisions
-	for (const squadName of listSquadNames()) {
-		const scopePrefix = `squads/${squadName}`;
-		allPages.push({ scope: squadName, name: squadName, path: scopePrefix, isDir: true });
-
-		const dir = scopeDir(squadName);
-		if (existsSync(dir)) {
-			collectDirs(dir, scopePrefix, allPages, squadName);
-		}
-		for (const page of listWikiPages(squadName)) {
-			allPages.push({ scope: squadName, name: page.name, path: `${scopePrefix}/${page.path}` });
-		}
-	}
-
-	return allPages;
-}
-
-/** Recursively collect subdirectories within a scope */
-function collectDirs(
-	dir: string,
-	prefix: string,
-	out: Array<{ scope: string; name: string; path: string; isDir?: boolean }>,
-	scope: string,
-): void {
-	for (const entry of readdirSync(dir, { withFileTypes: true })) {
-		if (entry.isDirectory()) {
-			const subPath = `${prefix}/${entry.name}`;
-			out.push({ scope, name: entry.name, path: subPath, isDir: true });
-			collectDirs(join(dir, entry.name), subPath, out, scope);
-		}
-	}
+	walk(wikiRoot, '');
+	return results;
 }
 
 function scopeDir(scope: WikiScope): string {
