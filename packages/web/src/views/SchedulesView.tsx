@@ -125,7 +125,7 @@ function SchedEditor({
 									}`}
 									style={kind === k ? { background: 'rgba(228,58,156,0.08)' } : undefined}
 								>
-									{k === 'io' ? 'IO Schedule' : 'Squad Schedule'}
+									{k === 'io' ? 'IO' : 'Squad'}
 								</button>
 							))}
 						</div>
@@ -353,31 +353,43 @@ export function SchedulesView() {
 		}
 	}
 
+	const [actionPending, setActionPending] = useState<string | null>(null);
+
 	async function togglePause(id: string, enabled: boolean) {
+		setActionPending(id);
 		try {
 			await api.patch(`/schedules/${id}`, { enabled: !enabled });
+			toast.success(enabled ? 'Schedule paused' : 'Schedule resumed');
 			loadSchedules();
 		} catch {
 			toast.error('Failed to toggle schedule');
+		} finally {
+			setActionPending(null);
 		}
 	}
 
 	async function runNow(id: string) {
+		setActionPending(id);
 		try {
 			await api.post(`/schedules/${id}/run`, {});
 			toast.success('Schedule triggered');
 		} catch {
-			toast.success('Schedule triggered');
+			toast.error('Failed to trigger schedule');
+		} finally {
+			setActionPending(null);
 		}
 	}
 
 	async function deleteSchedule(id: string) {
+		setActionPending(id);
 		try {
 			await api.delete(`/schedules/${id}`);
 			toast.success('Schedule deleted');
 			loadSchedules();
 		} catch {
 			toast.error('Failed to delete');
+		} finally {
+			setActionPending(null);
 		}
 	}
 
@@ -386,7 +398,7 @@ export function SchedulesView() {
 		return <SchedEditPage sched={editingSched} squads={squads} onSave={handleSaveEdit} onBack={() => setEditingSched(null)} />;
 	}
 
-	const cols = tab === 'squad' ? ['Squad', 'Schedule', 'Next Run', 'Status', ''] : ['Prompt', 'Schedule', 'Next Run', 'Status', ''];
+	const cols = tab === 'squad' ? ['Squad', 'Name', 'Cron', 'Next Run', 'Status', ''] : ['Name', 'Cron', 'Next Run', 'Status', ''];
 
 	return (
 		<div className="flex-1 overflow-y-auto p-6">
@@ -426,13 +438,13 @@ export function SchedulesView() {
 				))}
 			</div>
 
-			<div className="overflow-auto rounded-2xl border border-white/[0.07] glass-card">
+			<div className="overflow-x-auto rounded-2xl border border-white/[0.07] glass-card">
 				{rows.length === 0 ? (
 					<div className="px-4 py-12 text-center text-zinc-600 font-mono text-sm">
 						No schedules for this category
 					</div>
 				) : (
-					<table className="w-full text-[11px] font-mono">
+					<table className="w-full text-[11px] font-mono min-w-[640px]">
 						<thead>
 							<tr className="border-b border-white/[0.06]" style={{ background: 'rgba(20,20,20,0.6)' }}>
 								{cols.map((h) => (
@@ -452,15 +464,9 @@ export function SchedulesView() {
 										<td className="px-4 py-3">
 											<SquadChip name={squads.find((sq) => sq.id === s.targetId)?.name ?? 'Unknown'} />
 										</td>
-									) : (
-										<td className="px-4 py-3 text-zinc-300 max-w-[220px]">
-											<p className="truncate">{s.prompt}</p>
-										</td>
-									)}
-									<td className="px-4 py-3">
-										<div className="text-zinc-300">{s.name}</div>
-										<div className="text-zinc-700 text-[10px] mt-0.5">{s.cron}</div>
-									</td>
+									) : null}
+									<td className="px-4 py-3 text-zinc-300">{s.name}</td>
+									<td className="px-4 py-3 text-zinc-600 text-[10px]">{s.cron}</td>
 									<td className="px-4 py-3 text-zinc-600">
 										<span className="flex items-center gap-1">
 											<Clock className="w-3 h-3" />
@@ -484,7 +490,7 @@ export function SchedulesView() {
 										</Chip>
 									</td>
 									<td className="px-4 py-3">
-										<div className="flex items-center gap-1">
+											<div className={`flex items-center gap-1 ${actionPending === s.id ? 'opacity-50 pointer-events-none' : ''}`}>
 											<SecondaryBtn onClick={() => runNow(s.id)}>
 												<Play className="w-3 h-3" />
 												Run now

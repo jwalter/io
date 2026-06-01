@@ -2,7 +2,7 @@ import { IoMark } from '@/components/ui/io-mark';
 import { pushNotification } from '@/components/NotificationPanel';
 import { type WsMessage, useWebSocket } from '@/hooks/use-websocket';
 import { api, getCurrentToken } from '@/lib/api';
-import { MessageCircle, Paperclip, Send, Square } from 'lucide-react';
+import { MessageCircle, Paperclip, Send, Square, X } from 'lucide-react';
 import { marked } from 'marked';
 import {
 	type ChangeEvent,
@@ -186,25 +186,22 @@ export function ChatOverlay() {
 	return (
 		<div className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-3">
 			{open && (
-				<div className="w-[340px] h-[460px] rounded-2xl bg-[#222] border border-white/[0.07] shadow-2xl overflow-hidden flex flex-col">
-					<div className="bg-gradient-to-r from-[#E43A9C] to-[#9333ea] p-3 rounded-t-2xl flex items-center justify-between gap-3">
-						<div className="flex items-center gap-2.5 min-w-0">
-							<div className="w-8 h-8 rounded-xl bg-black/15 border border-white/10 flex items-center justify-center flex-shrink-0">
-								<IoMark height={16} />
-							</div>
-							<div className="min-w-0">
-								<p className="text-sm font-medium text-white leading-none">Quick Chat</p>
-								<p className="text-[10px] font-mono text-white/70 mt-1">
-									{connected ? 'live session' : 'reconnecting...'}
-								</p>
-							</div>
+				<div className="w-[340px] h-[460px] rounded-2xl border border-white/[0.09] shadow-2xl overflow-hidden flex flex-col" style={{ background: '#1c1c1c' }}>
+					<div
+						className="flex items-center justify-between px-4 py-3 border-b border-white/[0.07] flex-shrink-0"
+						style={{ background: 'linear-gradient(135deg, rgba(216,51,51,0.18) 0%, rgba(240,65,255,0.10) 100%)' }}
+					>
+						<div className="flex items-center gap-2.5">
+							<IoMark height={20} />
+							<span className="text-xl text-white tracking-wider leading-none" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>IO</span>
+							<span className="text-[10px] font-mono text-zinc-600 mt-0.5">quick chat</span>
 						</div>
 						<button
 							type="button"
 							onClick={() => setOpen(false)}
-							className="text-xs font-mono text-white/80 hover:text-white transition-colors"
+							className="p-1 rounded-lg hover:bg-white/[0.07] text-zinc-600 hover:text-zinc-300 transition-colors cursor-pointer"
 						>
-							Close
+							<X className="w-3.5 h-3.5" />
 						</button>
 					</div>
 
@@ -271,8 +268,8 @@ export function ChatOverlay() {
 						)}
 					</div>
 
-					<div className="p-3 border-t border-white/[0.07]">
-						<div className="bg-[#1e1e1e] border border-white/[0.08] rounded-2xl overflow-hidden transition-colors focus-within:border-[#E43A9C]/30">
+					<div className="p-2.5 border-t border-white/[0.06]">
+						<div className="bg-[#252525] border border-white/[0.08] rounded-xl overflow-hidden transition-colors focus-within:border-[#E43A9C]/30">
 							<input
 								ref={fileInputRef}
 								type="file"
@@ -282,13 +279,13 @@ export function ChatOverlay() {
 							{selectedFile && (
 								<div className="px-3 pt-2 text-[10px] font-mono text-zinc-400">Attached: {selectedFile.name}</div>
 							)}
-							<div className="flex items-end gap-2 px-2.5 py-2">
+							<div className="flex items-center gap-1.5 px-2.5 py-2">
 								<button
 									type="button"
 									onClick={() => fileInputRef.current?.click()}
-									className="p-2 rounded-xl hover:bg-white/[0.05] text-zinc-600 hover:text-zinc-300 transition-colors flex-shrink-0"
+									className="p-1 rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06] transition-colors flex-shrink-0 cursor-pointer"
 								>
-									<Paperclip className="w-4 h-4" />
+									<Paperclip className="w-3.5 h-3.5" />
 								</button>
 								<textarea
 									ref={textareaRef}
@@ -297,8 +294,8 @@ export function ChatOverlay() {
 									onKeyDown={handleKeyDown}
 									placeholder="Message IO…"
 									rows={1}
-									className="flex-1 bg-transparent py-1 text-sm text-zinc-200 placeholder:text-zinc-700 resize-none focus:outline-none"
-									style={{ minHeight: '36px', maxHeight: '96px', fontFamily: 'Inter, sans-serif' }}
+									className="flex-1 bg-transparent text-xs text-zinc-200 placeholder:text-zinc-700 resize-none focus:outline-none leading-relaxed"
+									style={{ minHeight: '18px', maxHeight: '96px', fontFamily: 'Inter, sans-serif' }}
 								/>
 								<button
 									type="button"
@@ -311,9 +308,10 @@ export function ChatOverlay() {
 										void handleSend();
 									}}
 									disabled={(!input.trim() && !selectedFile) || (!connected && !isStreaming)}
-									className="w-9 h-9 rounded-xl text-white disabled:opacity-30 disabled:cursor-not-allowed transition-opacity hover:opacity-90 primary-btn flex items-center justify-center flex-shrink-0 shadow-lg"
+									className="p-1.5 rounded-lg text-white disabled:opacity-25 disabled:cursor-not-allowed transition-opacity hover:opacity-90 flex-shrink-0 cursor-pointer"
+									style={{ background: 'linear-gradient(135deg, #D83333, #E43A9C)' }}
 								>
-									{isStreaming ? <Square className="w-3.5 h-3.5" /> : <Send className="w-3.5 h-3.5" />}
+									{isStreaming ? <Square className="w-3 h-3" /> : <Send className="w-3 h-3" />}
 								</button>
 							</div>
 						</div>

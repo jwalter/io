@@ -235,12 +235,8 @@ export function WikiView() {
 	useEffect(() => {
 		const directoryPaths = collectDirectoryPaths(tree);
 		setExpandedPaths((previous) => {
-			const next = new Set([...previous].filter((path) => directoryPaths.has(path)));
-			if (next.size === 0) {
-				for (const node of tree) {
-					if (node.isDir) next.add(node.path);
-				}
-			}
+			// Auto-expand all directories on load/change
+			const next = new Set([...previous, ...directoryPaths]);
 			return next;
 		});
 	}, [tree]);

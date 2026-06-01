@@ -434,7 +434,7 @@ export function SkillsView() {
 						})}
 
 						{!loadingList && visibleSkills.length === 0 ? (
-							<div className="rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.02] px-4 py-8 text-center">
+								<div className="px-4 py-8">
 								<p className="font-mono text-[11px] leading-relaxed text-zinc-500">
 									{remoteError
 										? remoteError
