@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { fireSchedule } from '../../scheduler/engine.js';
 import {
 	type ScheduleTargetType,
 	createSchedule,
@@ -101,6 +102,26 @@ export function schedulesRouter(): Router {
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : 'Failed to update schedule';
 			res.status(400).json({ error: msg });
+		}
+	});
+
+	/**
+	 * POST /api/schedules/:id/run
+	 * Manually trigger a schedule to run immediately.
+	 */
+	router.post('/schedules/:id/run', async (req, res) => {
+		try {
+			const schedule = await getSchedule(req.params.id);
+			if (!schedule) {
+				res.status(404).json({ error: 'Schedule not found' });
+				return;
+			}
+
+			// Fire asynchronously — don't block the response
+			fireSchedule(schedule).catch(() => {});
+			res.json({ status: 'ok', message: `Schedule '${schedule.name}' triggered` });
+		} catch {
+			res.status(500).json({ error: 'Failed to trigger schedule' });
 		}
 	});
 

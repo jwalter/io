@@ -62,7 +62,8 @@ async function tick(): Promise<void> {
 	}
 }
 
-async function fireSchedule(schedule: Schedule): Promise<void> {
+/** Manually trigger a schedule to run immediately. */
+export async function fireSchedule(schedule: Schedule): Promise<void> {
 	const log = logger();
 	const bus = getEventBus();
 
