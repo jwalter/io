@@ -137,7 +137,7 @@ export function WarnBtn({
 export function statusToVariant(s: string): BadgeVariant {
 	if (s === 'connected' || s === 'idle') return 'success';
 	if (s === 'active' || s === 'working') return 'warning';
-	if (s === 'reviewing') return 'info';
-	if (s === 'error') return 'error';
+	if (s === 'reviewing' || s === 'in meeting' || s === 'planning' || s === 'meeting') return 'info';
+	if (s === 'error' || s === 'failed') return 'error';
 	return 'muted';
 }

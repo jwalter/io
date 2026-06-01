@@ -81,6 +81,9 @@ export function squadsRouter(): Router {
 
 			// Build a map of role -> current task (from active instances)
 			const currentTasks = new Map<string, string>();
+			// Determine if any active instance is in meeting/planning phase
+			const meetingInstance = activeInstances.find((i) => i.status === 'meeting');
+			const planningInstance = activeInstances.find((i) => i.status === 'planning');
 			for (const inst of activeInstances) {
 				for (const task of inst.tasks) {
 					if (task.status === 'in_progress') {
@@ -103,6 +106,11 @@ export function squadsRouter(): Router {
 				},
 				members: members.map((m) => {
 					const currentTask = currentTasks.get(m.roleName) ?? null;
+					const phaseStatus = meetingInstance
+						? 'in meeting'
+						: planningInstance
+							? 'planning'
+							: null;
 					return {
 						id: m.id,
 						displayName: m.displayName,
@@ -111,7 +119,7 @@ export function squadsRouter(): Router {
 						persona: m.persona,
 						veto: m.isVetoMember,
 						tools: m.toolsAllowed,
-						status: currentTask ? 'working' : 'idle',
+						status: currentTask ? 'working' : phaseStatus ?? 'idle',
 						currentTask,
 					};
 				}),
@@ -213,12 +221,19 @@ export function squadsRouter(): Router {
 				const task = instance.tasks.find(
 					(t) => t.assignedTo === m.roleName && t.status === 'in_progress',
 				);
+				// During meeting/planning phases, all agents are participating
+				const phaseStatus =
+					instance.status === 'meeting'
+						? 'in meeting'
+						: instance.status === 'planning'
+							? 'planning'
+							: null;
 				return {
 					id: m.id,
 					displayName: m.displayName,
 					role: m.roleName,
 					roleName: m.roleName,
-					status: task ? 'working' : 'idle',
+					status: task ? 'working' : phaseStatus ?? 'idle',
 					currentTask: task?.description ?? null,
 				};
 			});
