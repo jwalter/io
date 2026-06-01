@@ -4,6 +4,24 @@ import { api } from '@/lib/api';
 import { Eye, Inbox, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+// Color mapping for known sources
+const SOURCE_COLORS: Record<string, string> = {
+	orchestrator: '#E43A9C',
+	io: '#E43A9C',
+};
+
+function SourceChip({ name }: { name: string }) {
+	const color = SOURCE_COLORS[name.toLowerCase()] ?? '#a78bfa';
+	return (
+		<span
+			className="inline-flex items-center px-1.5 py-px rounded text-[10px] font-mono border"
+			style={{ background: `${color}15`, color, borderColor: `${color}30` }}
+		>
+			{name}
+		</span>
+	);
+}
+
 interface FeedItem {
 	id: string;
 	kind: string;
@@ -172,7 +190,7 @@ export function FeedView() {
 								<div className="flex-1 min-w-0">
 									<div className="flex items-center gap-1.5 mb-0.5">
 										{item.status === 'unread' && <div className="w-1 h-1 rounded-full bg-[#E43A9C] flex-shrink-0" />}
-										<span className="text-[10px] text-zinc-600 font-mono">{item.squadId ?? item.kind}</span>
+											<SourceChip name={item.squadId ?? 'orchestrator'} />
 									</div>
 									<p className={`text-[11px] truncate ${item.status === 'unread' ? 'text-zinc-200' : 'text-zinc-500'}`}>{item.title}</p>
 									<p className="text-[10px] text-zinc-700 font-mono mt-1">{new Date(item.createdAt).toLocaleString()}</p>
@@ -197,11 +215,11 @@ export function FeedView() {
 					<>
 						<div className="px-6 py-4 border-b border-white/[0.06] flex items-start justify-between flex-shrink-0">
 							<div className="flex-1 min-w-0 mr-4">
-								<span className="text-[10px] text-zinc-600 font-mono">{reading.squadId ?? reading.kind}</span>
+								<SourceChip name={reading.squadId ?? 'orchestrator'} />
 								<h3 className="text-sm font-mono text-zinc-100 mt-1.5">{reading.title}</h3>
 								<p className="text-[11px] text-zinc-700 font-mono mt-0.5">{new Date(reading.createdAt).toLocaleString()}</p>
 							</div>
-							<button type="button" onClick={() => deleteSingle(reading.id)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-mono text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors cursor-pointer">
+							<button type="button" onClick={() => deleteSingle(reading.id)} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[11px] text-zinc-400 bg-[#252525] hover:bg-red-500/10 hover:text-red-400 transition-colors cursor-pointer">
 								<Trash2 className="w-3 h-3" />Delete
 							</button>
 						</div>
