@@ -207,6 +207,26 @@ const MIGRATIONS: { version: number; statements: string[] }[] = [
 				'INSERT OR REPLACE INTO schema_version (version) VALUES (8)',
 			],
 	},
+	{
+			version: 9,
+			statements: [
+				"ALTER TABLE squads ADD COLUMN color TEXT NOT NULL DEFAULT '#38bdf8'",
+				// Backfill existing squads with unique colors from the palette
+				`UPDATE squads SET color = CASE
+					WHEN (SELECT COUNT(*) FROM squads s2 WHERE s2.rowid < squads.rowid) % 10 = 0 THEN '#38bdf8'
+					WHEN (SELECT COUNT(*) FROM squads s2 WHERE s2.rowid < squads.rowid) % 10 = 1 THEN '#a78bfa'
+					WHEN (SELECT COUNT(*) FROM squads s2 WHERE s2.rowid < squads.rowid) % 10 = 2 THEN '#34d399'
+					WHEN (SELECT COUNT(*) FROM squads s2 WHERE s2.rowid < squads.rowid) % 10 = 3 THEN '#f59e0b'
+					WHEN (SELECT COUNT(*) FROM squads s2 WHERE s2.rowid < squads.rowid) % 10 = 4 THEN '#f87171'
+					WHEN (SELECT COUNT(*) FROM squads s2 WHERE s2.rowid < squads.rowid) % 10 = 5 THEN '#06b6d4'
+					WHEN (SELECT COUNT(*) FROM squads s2 WHERE s2.rowid < squads.rowid) % 10 = 6 THEN '#fb923c'
+					WHEN (SELECT COUNT(*) FROM squads s2 WHERE s2.rowid < squads.rowid) % 10 = 7 THEN '#4ade80'
+					WHEN (SELECT COUNT(*) FROM squads s2 WHERE s2.rowid < squads.rowid) % 10 = 8 THEN '#c084fc'
+					ELSE '#facc15'
+				END`,
+				'INSERT OR REPLACE INTO schema_version (version) VALUES (9)',
+			],
+	},
 ];
 
 export async function initDatabase(dataDir: string): Promise<Client> {

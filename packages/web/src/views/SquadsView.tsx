@@ -26,12 +26,6 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 
-// Auto-assign colors to squads
-const SQUAD_COLORS = ['#38bdf8', '#a78bfa', '#34d399', '#f59e0b', '#f87171', '#E43A9C'];
-function squadColor(index: number): string {
-	return SQUAD_COLORS[index % SQUAD_COLORS.length] as string;
-}
-
 interface ActivityItem {
 	id: string;
 	status: string;
@@ -44,6 +38,7 @@ interface SquadSummary {
 	id: string;
 	name: string;
 	universe: string;
+	color: string;
 	repoUrl: string;
 	status: string;
 	memberCount: number;
@@ -82,6 +77,7 @@ interface SquadDetail {
 		id: string;
 		name: string;
 		universe: string;
+		color: string;
 		repoUrl: string;
 		status: string;
 		autonomyTier: string;
@@ -109,6 +105,7 @@ interface AgentActivityEvent {
 }
 
 interface InstanceDetail {
+	squadColor?: string;
 	instance: {
 		id: string;
 		status: string;
@@ -172,8 +169,8 @@ function SquadListView() {
 			</div>
 
 			<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-				{squads.map((squad, idx) => {
-					const color = squadColor(idx);
+				{squads.map((squad) => {
+						const color = squad.color || '#38bdf8';
 					return (
 						<button
 							type="button"
@@ -306,7 +303,7 @@ function SquadDetailView({ name }: { name: string }) {
 		);
 	}
 
-	const color = SQUAD_COLORS[0]!; // Could be stored per-squad
+	const color = detail.squad.color || '#38bdf8';
 
 	return (
 		<div className="flex-1 overflow-y-auto p-6" style={{ background: `${color}06` }}>
@@ -492,7 +489,7 @@ function InstanceDetailView({
 		);
 	}
 
-	const color = SQUAD_COLORS[0]!;
+	const color = detail.squadColor || '#38bdf8';;
 
 	// If an agent is selected, show their work timeline
 	if (selectedAgent) {

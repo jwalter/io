@@ -48,14 +48,15 @@ export function squadsRouter(): Router {
 						projectPath: s.projectPath,
 						repoUrl: s.repoUrl,
 						universe: s.universe,
-						autonomyTier: s.autonomyTier,
-						status: activeInstances > 0 ? 'active' : 'idle',
-						memberCount: members.length,
-						activeInstances,
-						totalInstances: instances.length,
-						createdAt: s.createdAt.toISOString(),
-						recentActivity,
-					};
+							color: s.color,
+							autonomyTier: s.autonomyTier,
+							status: activeInstances > 0 ? 'active' : 'idle',
+							memberCount: members.length,
+							activeInstances,
+							totalInstances: instances.length,
+							createdAt: s.createdAt.toISOString(),
+							recentActivity,
+						};
 				}),
 			);
 			res.json({ squads: results });
@@ -100,6 +101,7 @@ export function squadsRouter(): Router {
 					projectPath: squad.projectPath,
 					repoUrl: squad.repoUrl,
 					universe: squad.universe,
+					color: squad.color,
 					autonomyTier: squad.autonomyTier,
 					autonomyConfig: squad.autonomyConfig,
 					status: activeInstances.length > 0 ? 'active' : 'idle',
@@ -240,7 +242,8 @@ export function squadsRouter(): Router {
 			});
 
 			res.json({
-				instance: {
+					squadColor: squad.color,
+					instance: {
 					id: instance.id,
 					status: instance.status,
 					branch: instance.branch,

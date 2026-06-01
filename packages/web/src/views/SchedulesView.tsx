@@ -305,7 +305,7 @@ function SchedEditPage({
 export function SchedulesView() {
 	const [tab, setTab] = useState<SchedKind>('squad');
 	const [schedules, setSchedules] = useState<Schedule[]>([]);
-	const [squads, setSquads] = useState<{ id: string; name: string }[]>([]);
+	const [squads, setSquads] = useState<{ id: string; name: string; color?: string }[]>([]);
 	const [addingNew, setAddingNew] = useState(false);
 	const [editingSched, setEditingSched] = useState<Schedule | null>(null);
 	const timezone = useTimezone();
@@ -465,7 +465,7 @@ export function SchedulesView() {
 								>
 									{tab === 'squad' ? (
 										<td className="px-4 py-3">
-											<SquadChip name={squads.find((sq) => sq.id === s.targetId)?.name ?? 'Unknown'} />
+											<SquadChip name={squads.find((sq) => sq.id === s.targetId)?.name ?? 'Unknown'} color={squads.find((sq) => sq.id === s.targetId)?.color} />
 										</td>
 									) : null}
 									<td className="px-4 py-3 text-zinc-300">{s.name}</td>

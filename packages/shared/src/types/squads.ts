@@ -14,6 +14,7 @@ export interface Squad {
 	projectPath: string;
 	repoUrl?: string;
 	universe?: string;
+	color: string;
 	autonomyTier: AutonomyTier;
 	autonomyConfig: AutonomyConfig;
 	status: 'active' | 'paused' | 'disbanded';

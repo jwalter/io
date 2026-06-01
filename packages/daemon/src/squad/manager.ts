@@ -1,4 +1,4 @@
-import { AUTONOMY_TIERS, type AutonomyConfig, type Squad, type SquadMember } from '@io/shared';
+import { AUTONOMY_TIERS, SQUAD_COLORS, type AutonomyConfig, type Squad, type SquadMember } from '@io/shared';
 import type { AutonomyTier } from '@io/shared';
 import { createChildLogger } from '../logging/logger.js';
 import { getDatabase } from '../store/db.js';
@@ -31,9 +31,14 @@ export async function createSquad(params: {
 	const tier = params.autonomyTier ?? 'medium';
 	const autonomyConfig = AUTONOMY_TIERS[tier];
 
+	// Pick the next color from the palette based on existing squad count
+	const countResult = await db.execute('SELECT COUNT(*) as cnt FROM squads');
+	const existingCount = (countResult.rows[0]?.cnt as number) ?? 0;
+	const color = SQUAD_COLORS[existingCount % SQUAD_COLORS.length]!;
+
 	await db.execute({
-		sql: `INSERT INTO squads (id, name, project_path, repo_url, universe, autonomy_tier, autonomy_config, status)
-		      VALUES (?, ?, ?, ?, ?, ?, ?, 'active')`,
+		sql: `INSERT INTO squads (id, name, project_path, repo_url, universe, autonomy_tier, autonomy_config, color, status)
+		      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
 		args: [
 			id,
 			params.name,
@@ -42,6 +47,7 @@ export async function createSquad(params: {
 			params.universe ?? null,
 			tier,
 			JSON.stringify(autonomyConfig),
+			color,
 		],
 	});
 
@@ -51,6 +57,7 @@ export async function createSquad(params: {
 		projectPath: params.projectPath,
 		repoUrl: params.repoUrl,
 		universe: params.universe,
+		color,
 		autonomyTier: tier,
 		autonomyConfig,
 		status: 'active',
@@ -123,6 +130,7 @@ export async function listSquads(): Promise<Squad[]> {
 		projectPath: row.project_path as string,
 		repoUrl: (row.repo_url as string) || undefined,
 		universe: (row.universe as string) || undefined,
+		color: (row.color as string) || '#38bdf8',
 		autonomyTier: row.autonomy_tier as AutonomyTier,
 		autonomyConfig: JSON.parse((row.autonomy_config as string) || '{}') as AutonomyConfig,
 		status: row.status as Squad['status'],
@@ -147,6 +155,7 @@ export async function getSquadByName(name: string): Promise<Squad | null> {
 		projectPath: row.project_path as string,
 		repoUrl: (row.repo_url as string) || undefined,
 		universe: (row.universe as string) || undefined,
+		color: (row.color as string) || '#38bdf8',
 		autonomyTier: row.autonomy_tier as AutonomyTier,
 		autonomyConfig: JSON.parse((row.autonomy_config as string) || '{}') as AutonomyConfig,
 		status: row.status as Squad['status'],
@@ -361,6 +370,7 @@ export async function getSquadById(squadId: string): Promise<Squad | null> {
 		projectPath: row.project_path as string,
 		repoUrl: (row.repo_url as string) || undefined,
 		universe: (row.universe as string) || undefined,
+		color: (row.color as string) || '#38bdf8',
 		autonomyTier: row.autonomy_tier as AutonomyTier,
 		autonomyConfig: JSON.parse((row.autonomy_config as string) || '{}') as AutonomyConfig,
 		status: row.status as Squad['status'],

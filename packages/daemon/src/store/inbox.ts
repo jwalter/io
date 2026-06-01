@@ -116,7 +116,7 @@ export async function listInboxEntries(filters?: {
 	const limit = filters?.limit ?? 50;
 
 	const result = await db.execute({
-		sql: `SELECT i.id, i.squad_id, i.instance_id, i.kind, i.title, i.content, i.status, i.response, i.created_at, i.resolved_at, s.name as squad_name
+		sql: `SELECT i.id, i.squad_id, i.instance_id, i.kind, i.title, i.content, i.status, i.response, i.created_at, i.resolved_at, s.name as squad_name, s.color as squad_color
 		      FROM inbox_entries i LEFT JOIN squads s ON i.squad_id = s.id
 		      ${where}
 		      ORDER BY i.created_at DESC
@@ -127,6 +127,7 @@ export async function listInboxEntries(filters?: {
 	return result.rows.map((row) => ({
 		...rowToEntry(row),
 		squadName: (row.squad_name as string | null) ?? undefined,
+		squadColor: (row.squad_color as string | null) ?? undefined,
 	}));
 }
 
