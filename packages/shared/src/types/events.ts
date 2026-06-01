@@ -8,6 +8,9 @@ export type AgentEventType =
 	| 'agent:task_started'
 	| 'agent:task_completed'
 	| 'agent:tool_call'
+	| 'agent:tool_result'
+	| 'agent:thought'
+	| 'agent:decision'
 	| 'agent:error'
 	| 'agent:permission_denied';
 

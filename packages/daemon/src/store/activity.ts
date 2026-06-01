@@ -1,12 +1,16 @@
-import type { IOEvent } from '@io/shared';
+import type { IOEvent, WorkEventKind } from '@io/shared';
 import { createChildLogger } from '../logging/logger.js';
 import { getDatabase } from './db.js';
 
 const logger = () => createChildLogger('activity-log');
 
 export type ActivityType =
+	| 'thought'
 	| 'tool_call'
+	| 'tool_result'
 	| 'message'
+	| 'decision'
+	// Legacy types kept for backwards compatibility
 	| 'meeting_contribution'
 	| 'task_start'
 	| 'task_complete'
@@ -21,6 +25,8 @@ export interface ActivityEntry {
 	modelUsed: string | null;
 	content: string | null;
 	tokensUsed: number | null;
+	label: string | null;
+	status: 'ok' | 'error' | null;
 	timestamp: string;
 }
 
@@ -35,12 +41,14 @@ export async function logActivity(entry: {
 	modelUsed?: string;
 	content?: unknown;
 	tokensUsed?: number;
+	label?: string;
+	status?: 'ok' | 'error';
 }): Promise<void> {
 	const db = getDatabase();
 	try {
 		await db.execute({
-			sql: `INSERT INTO agent_activity (squad_id, instance_id, agent_role, activity_type, model_used, content, tokens_used)
-			      VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			sql: `INSERT INTO agent_activity (squad_id, instance_id, agent_role, activity_type, model_used, content, tokens_used, label, status)
+			      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			args: [
 				entry.squadId ?? null,
 				entry.instanceId ?? null,
@@ -49,6 +57,8 @@ export async function logActivity(entry: {
 				entry.modelUsed ?? null,
 				entry.content ? JSON.stringify(entry.content) : null,
 				entry.tokensUsed ?? null,
+				entry.label ?? null,
+				entry.status ?? null,
 			],
 		});
 	} catch (err) {
@@ -93,7 +103,7 @@ export async function queryActivity(filters: {
 	const offset = filters.offset ?? 0;
 
 	const result = await db.execute({
-		sql: `SELECT id, squad_id, instance_id, agent_role, activity_type, model_used, content, tokens_used, timestamp
+		sql: `SELECT id, squad_id, instance_id, agent_role, activity_type, model_used, content, tokens_used, label, status, timestamp
 		      FROM agent_activity ${where}
 		      ORDER BY timestamp DESC
 		      LIMIT ? OFFSET ?`,
@@ -109,6 +119,8 @@ export async function queryActivity(filters: {
 		modelUsed: row.model_used as string | null,
 		content: row.content as string | null,
 		tokensUsed: row.tokens_used as number | null,
+		label: row.label as string | null,
+		status: row.status as 'ok' | 'error' | null,
 		timestamp: row.timestamp as string,
 	}));
 }
@@ -134,7 +146,8 @@ function mapEventToActivity(event: IOEvent): Parameters<typeof logActivity>[0] |
 				squadId: event.squadId,
 				instanceId: event.instanceId,
 				agentRole: event.agentRole,
-				activityType: 'task_start',
+				activityType: 'message',
+				label: 'Task started',
 				content: event.data,
 			};
 		case 'agent:task_completed':
@@ -142,7 +155,8 @@ function mapEventToActivity(event: IOEvent): Parameters<typeof logActivity>[0] |
 				squadId: event.squadId,
 				instanceId: event.instanceId,
 				agentRole: event.agentRole,
-				activityType: 'task_complete',
+				activityType: 'message',
+				label: 'Task completed',
 				content: event.data,
 			};
 		case 'agent:tool_call':
@@ -152,6 +166,33 @@ function mapEventToActivity(event: IOEvent): Parameters<typeof logActivity>[0] |
 				agentRole: event.agentRole,
 				activityType: 'tool_call',
 				modelUsed: event.model,
+				label: (event.data as Record<string, unknown>)?.tool as string ?? undefined,
+				content: event.data,
+			};
+		case 'agent:tool_result':
+			return {
+				squadId: event.squadId,
+				instanceId: event.instanceId,
+				agentRole: event.agentRole,
+				activityType: 'tool_result',
+				label: (event.data as Record<string, unknown>)?.tool as string ?? undefined,
+				content: event.data,
+				status: (event.data as Record<string, unknown>)?.success ? 'ok' : 'error',
+			};
+		case 'agent:thought':
+			return {
+				squadId: event.squadId,
+				instanceId: event.instanceId,
+				agentRole: event.agentRole,
+				activityType: 'thought',
+				content: event.data,
+			};
+		case 'agent:decision':
+			return {
+				squadId: event.squadId,
+				instanceId: event.instanceId,
+				agentRole: event.agentRole,
+				activityType: 'decision',
 				content: event.data,
 			};
 		case 'agent:error':
@@ -159,7 +200,9 @@ function mapEventToActivity(event: IOEvent): Parameters<typeof logActivity>[0] |
 				squadId: event.squadId,
 				instanceId: event.instanceId,
 				agentRole: event.agentRole,
-				activityType: 'error',
+				activityType: 'message',
+				label: 'Error',
+				status: 'error',
 				content: event.data,
 			};
 		case 'meeting:contribution':
@@ -167,7 +210,8 @@ function mapEventToActivity(event: IOEvent): Parameters<typeof logActivity>[0] |
 				squadId: event.squadId,
 				instanceId: event.instanceId,
 				agentRole: event.agentRole,
-				activityType: 'meeting_contribution',
+				activityType: 'message',
+				label: 'Meeting contribution',
 				content: { message: event.content },
 			};
 		case 'meeting:veto':
@@ -175,10 +219,34 @@ function mapEventToActivity(event: IOEvent): Parameters<typeof logActivity>[0] |
 				squadId: event.squadId,
 				instanceId: event.instanceId,
 				agentRole: event.agentRole,
-				activityType: 'meeting_contribution',
+				activityType: 'decision',
+				label: 'Veto',
 				content: { message: event.content, veto: true },
 			};
 		default:
 			return null;
+	}
+}
+
+/**
+ * Map legacy ActivityType values to WorkEventKind for the history API.
+ */
+export function activityTypeToEventKind(activityType: ActivityType): WorkEventKind {
+	switch (activityType) {
+		case 'thought':
+			return 'thought';
+		case 'tool_call':
+			return 'tool_call';
+		case 'tool_result':
+			return 'tool_result';
+		case 'decision':
+			return 'decision';
+		case 'message':
+		case 'meeting_contribution':
+		case 'task_start':
+		case 'task_complete':
+		case 'error':
+		default:
+			return 'message';
 	}
 }

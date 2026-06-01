@@ -95,6 +95,36 @@ export class Agent {
 			}
 		});
 
+		// Capture reasoning/thoughts
+		this.session.on('assistant.reasoning', (event) => {
+			const content = event.data?.content;
+			if (content) {
+				this.emitEvent('agent:thought', { content });
+			}
+		});
+
+		// Capture tool calls
+		this.session.on('tool.execution_start', (event) => {
+			const data = event.data;
+			this.emitEvent('agent:tool_call', {
+				tool: data.toolName,
+				arguments: data.arguments,
+				toolCallId: data.toolCallId,
+			});
+		});
+
+		// Capture tool results
+		this.session.on('tool.execution_complete', (event) => {
+			const data = event.data;
+			this.emitEvent('agent:tool_result', {
+				tool: data.toolDescription?.name ?? 'unknown',
+				toolCallId: data.toolCallId,
+				success: data.success,
+				result: data.result?.content?.slice(0, 500),
+				error: data.error?.message,
+			});
+		});
+
 		this.logger.info('Agent session initialized');
 	}
 
@@ -169,6 +199,35 @@ export class Agent {
 						textResultForLlm: JSON.stringify({
 							acknowledged: true,
 							message: 'Report received by team lead.',
+						}),
+						resultType: 'success' as const,
+					};
+				},
+			}),
+		);
+
+		// Always allow a "record_decision" tool to track explicit decision points
+		tools.push(
+			defineTool('record_decision', {
+				description:
+					'Record an explicit decision you are making. Use this when choosing between alternatives, setting direction, or making architectural/strategic choices.',
+				parameters: z.object({
+					decision: z.string().describe('The decision being made'),
+					rationale: z
+						.string()
+						.optional()
+						.describe('Why this decision was made'),
+				}),
+				handler: async (args: { decision: string; rationale?: string }) => {
+					this.logger.info('Decision recorded');
+					this.emitEvent('agent:decision', {
+						decision: args.decision,
+						rationale: args.rationale,
+					});
+					return {
+						textResultForLlm: JSON.stringify({
+							recorded: true,
+							message: 'Decision recorded.',
 						}),
 						resultType: 'success' as const,
 					};

@@ -11,6 +11,15 @@ export type { AgentRole, AgentStatus } from './types/agents.js';
 export type { TokenUsage, ModelPricing } from './types/tokens.js';
 export type { Attachment } from './types/attachments.js';
 export type {
+	WorkEventKind,
+	WorkEvent,
+	AgentHistoryEntry,
+	HistoryActivityStatus,
+	HistoryActivityType,
+	HistoryActivity,
+	HistoryActivityDetail,
+} from './types/history.js';
+export type {
 	SquadEvent,
 	SquadEventType,
 	AgentEvent,

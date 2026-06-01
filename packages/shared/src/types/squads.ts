@@ -45,6 +45,8 @@ export type InstanceStatus =
 export interface SquadInstance {
 	id: string;
 	squadId: string;
+	type: 'instance' | 'delegation';
+	objective?: string;
 	issueRef?: string;
 	worktreePath?: string;
 	branchName?: string;

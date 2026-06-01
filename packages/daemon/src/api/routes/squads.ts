@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import type { ActivityType } from '../../store/activity.js';
 import { getInstance, getSquadInstances } from '../../squad/execution/instance.js';
 import { runInstance } from '../../squad/execution/runner.js';
 import { getSquadByName, getSquadMembers, listSquads } from '../../squad/manager.js';
@@ -263,6 +264,191 @@ export function squadsRouter(): Router {
 			});
 		} catch (err) {
 			res.status(500).json({ error: 'Failed to get instance detail' });
+		}
+	});
+
+	/**
+	 * GET /api/squads/:name/history
+	 * List completed/errored tasks for a squad (both instances and delegations).
+	 */
+	router.get('/squads/:name/history', async (req, res) => {
+		try {
+			const squad = await getSquadByName(req.params.name);
+			if (!squad) {
+				res.status(404).json({ error: `Squad '${req.params.name}' not found` });
+				return;
+			}
+
+			const limit = Math.min(Number(req.query.limit) || 25, 100);
+			const offset = Number(req.query.offset) || 0;
+
+			const db = getDatabase();
+
+			const countResult = await db.execute({
+				sql: `SELECT COUNT(*) as total FROM squad_instances WHERE squad_id = ? AND status IN ('complete', 'failed')`,
+				args: [squad.id],
+			});
+			const total = (countResult.rows[0]?.total as number) ?? 0;
+
+			const result = await db.execute({
+				sql: `SELECT si.id, si.type, si.objective, si.status, si.created_at, si.completed_at,
+				             (SELECT COUNT(DISTINCT agent_role) FROM agent_activity WHERE instance_id = si.id) as agent_count
+				      FROM squad_instances si
+				      WHERE si.squad_id = ? AND si.status IN ('complete', 'failed')
+				      ORDER BY si.completed_at DESC
+				      LIMIT ? OFFSET ?`,
+				args: [squad.id, limit, offset],
+			});
+
+			const items = result.rows.map((row) => {
+				const createdAt = row.created_at as string;
+				const completedAt = row.completed_at as string;
+				let duration = '';
+				if (createdAt && completedAt) {
+					const ms = new Date(completedAt).getTime() - new Date(createdAt).getTime();
+					const mins = Math.floor(ms / 60000);
+					if (mins >= 60) {
+						duration = `${Math.floor(mins / 60)}h ${mins % 60}m`;
+					} else {
+						duration = `${mins}m`;
+					}
+				}
+				return {
+					id: row.id as string,
+					title: (row.objective as string) ?? 'Untitled task',
+					type: (row.type as string) ?? 'instance',
+					status: row.status === 'complete' ? 'completed' : 'errored',
+					createdAt,
+					completedAt,
+					duration,
+					agentCount: (row.agent_count as number) ?? 0,
+				};
+			});
+
+			res.json({ items, total });
+		} catch (err) {
+			res.status(500).json({ error: 'Failed to get squad history' });
+		}
+	});
+
+	/**
+	 * GET /api/squads/:name/history/:taskId
+	 * Get detailed history for a specific task including agent entries and event timelines.
+	 */
+	router.get('/squads/:name/history/:taskId', async (req, res) => {
+		try {
+			const squad = await getSquadByName(req.params.name);
+			if (!squad) {
+				res.status(404).json({ error: `Squad '${req.params.name}' not found` });
+				return;
+			}
+
+			const db = getDatabase();
+			const { activityTypeToEventKind } = await import('../../store/activity.js');
+
+			// Get the instance/delegation record
+			const instanceResult = await db.execute({
+				sql: `SELECT id, type, objective, status, created_at, completed_at
+				      FROM squad_instances WHERE id = ? AND squad_id = ?`,
+				args: [req.params.taskId, squad.id],
+			});
+
+			if (instanceResult.rows.length === 0) {
+				res.status(404).json({ error: 'Task not found' });
+				return;
+			}
+
+			const row = instanceResult.rows[0];
+			const createdAt = row.created_at as string;
+			const completedAt = row.completed_at as string;
+			let duration = '';
+			if (createdAt && completedAt) {
+				const ms = new Date(completedAt).getTime() - new Date(createdAt).getTime();
+				const mins = Math.floor(ms / 60000);
+				if (mins >= 60) {
+					duration = `${Math.floor(mins / 60)}h ${mins % 60}m`;
+				} else {
+					duration = `${mins}m`;
+				}
+			}
+
+			// Get all activity entries for this task
+			const activityResult = await db.execute({
+				sql: `SELECT id, agent_role, activity_type, content, label, status, timestamp
+				      FROM agent_activity
+				      WHERE instance_id = ?
+				      ORDER BY timestamp ASC`,
+				args: [req.params.taskId],
+			});
+
+			// Get squad members for display names and role types
+			const members = await getSquadMembers(squad.id);
+			const memberMap = new Map(members.map((m) => [m.roleName, m]));
+
+			// Group activity by agent role
+			const agentGroups = new Map<
+				string,
+				{ events: Array<{ id: number; kind: string; timestamp: string; label: string | null; content: string; status: string | null }> }
+			>();
+
+			for (const actRow of activityResult.rows) {
+				const agentRole = actRow.agent_role as string;
+				if (!agentGroups.has(agentRole)) {
+					agentGroups.set(agentRole, { events: [] });
+				}
+				const kind = activityTypeToEventKind(actRow.activity_type as ActivityType);
+				let content = actRow.content as string ?? '';
+				try {
+					const parsed = JSON.parse(content);
+					if (typeof parsed === 'object' && parsed !== null) {
+						content = parsed.message ?? parsed.content ?? parsed.response ?? parsed.decision ?? JSON.stringify(parsed, null, 2);
+					}
+				} catch {
+					// content is already a string
+				}
+				agentGroups.get(agentRole)!.events.push({
+					id: actRow.id as number,
+					kind,
+					timestamp: actRow.timestamp as string,
+					label: actRow.label as string | null,
+					content,
+					status: actRow.status as string | null,
+				});
+			}
+
+			// Build agent entries
+			const agentEntries = Array.from(agentGroups.entries()).map(([role, data]) => {
+				const member = memberMap.get(role);
+				const lastEvent = data.events[data.events.length - 1];
+				const roleType = role.includes('lead') || role === 'technical-pm'
+					? 'lead'
+					: role.includes('qa')
+						? 'qa'
+						: role.includes('scribe')
+							? 'scribe'
+							: 'default';
+				return {
+					agentId: member?.id ?? role,
+					agentName: member?.displayName ?? role,
+					role: member?.roleName ?? role,
+					roleType,
+					summary: lastEvent?.content?.slice(0, 200) ?? '',
+					events: data.events,
+				};
+			});
+
+			res.json({
+				id: row.id as string,
+				title: (row.objective as string) ?? 'Untitled task',
+				type: (row.type as string) ?? 'instance',
+				status: row.status === 'complete' ? 'completed' : 'errored',
+				createdAt,
+				completedAt,
+				duration,
+				agentEntries,
+			});
+		} catch (err) {
+			res.status(500).json({ error: 'Failed to get task detail' });
 		}
 	});
 

@@ -1,13 +1,14 @@
 import { Chip, statusToVariant } from '@/components/ui/shared';
 import { useTimezone } from '@/hooks/use-config';
 import { api } from '@/lib/api';
-import { formatTime } from '@/lib/timezone';
+import { formatDateTime, formatTime } from '@/lib/timezone';
 import {
 	Activity,
 	AlertTriangle,
 	Bot,
 	Bug,
 	CheckCircle,
+	ChevronDown,
 	ChevronLeft,
 	Crown,
 	Cpu,
@@ -22,6 +23,7 @@ import {
 	Users,
 	XCircle,
 } from 'lucide-react';
+import type React from 'react';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
@@ -118,6 +120,39 @@ interface InstanceDetail {
 	};
 	members: SquadMember[];
 	activity: AgentActivityEvent[];
+}
+
+interface HistoryActivity {
+	id: string;
+	title: string;
+	type: string;
+	status: string;
+	createdAt: string;
+	completedAt: string;
+	duration: string;
+	agentCount: number;
+}
+
+interface HistoryWorkEvent {
+	id: number;
+	kind: string;
+	timestamp: string;
+	label: string | null;
+	content: string;
+	status: string | null;
+}
+
+interface HistoryAgentEntry {
+	agentId: string;
+	agentName: string;
+	role: string;
+	roleType: string;
+	summary: string;
+	events: HistoryWorkEvent[];
+}
+
+interface HistoryActivityDetail extends HistoryActivity {
+	agentEntries: HistoryAgentEntry[];
 }
 
 export function SquadsView() {
@@ -287,8 +322,12 @@ function roleIcon(roleName: string, color: string) {
 
 function SquadDetailView({ name }: { name: string }) {
 	const [detail, setDetail] = useState<SquadDetail | null>(null);
-	const [tab, setTab] = useState<'agents' | 'instances'>('agents');
+	const [tab, setTab] = useState<'agents' | 'instances' | 'history'>('agents');
+	const [historyItems, setHistoryItems] = useState<HistoryActivity[]>([]);
+	const [historyTotal, setHistoryTotal] = useState(0);
+	const [selectedActivity, setSelectedActivity] = useState<HistoryActivityDetail | null>(null);
 	const navigate = useNavigate();
+	const timezone = useTimezone();
 
 	useEffect(() => {
 		api
@@ -297,6 +336,25 @@ function SquadDetailView({ name }: { name: string }) {
 			.catch(() => {});
 	}, [name]);
 
+	useEffect(() => {
+		if (tab === 'history') {
+			api
+				.get<{ items: HistoryActivity[]; total: number }>(`/squads/${name}/history`)
+				.then((res) => {
+					setHistoryItems(res.items);
+					setHistoryTotal(res.total);
+				})
+				.catch(() => {});
+		}
+	}, [tab, name]);
+
+	const drillIntoActivity = (activity: HistoryActivity) => {
+		api
+			.get<HistoryActivityDetail>(`/squads/${name}/history/${activity.id}`)
+			.then(setSelectedActivity)
+			.catch(() => toast.error('Failed to load activity detail'));
+	};
+
 	if (!detail) {
 		return (
 			<div className="h-full flex items-center justify-center text-zinc-600">Loading...</div>
@@ -304,6 +362,17 @@ function SquadDetailView({ name }: { name: string }) {
 	}
 
 	const color = detail.squad.color || '#38bdf8';
+
+	if (selectedActivity) {
+		return (
+			<ActivityDetailView
+				activity={selectedActivity}
+				squadColor={color}
+				squadName={detail.squad.name}
+				onBack={() => setSelectedActivity(null)}
+			/>
+		);
+	}
 
 	return (
 		<div className="flex-1 overflow-y-auto p-6" style={{ background: `${color}06` }}>
@@ -343,7 +412,7 @@ function SquadDetailView({ name }: { name: string }) {
 
 			{/* Tabs */}
 			<div className="flex gap-0 mb-5 border-b border-white/[0.06]">
-				{(['agents', 'instances'] as const).map((t) => (
+				{(['agents', 'instances', 'history'] as const).map((t) => (
 					<button
 						key={t}
 						type="button"
@@ -457,6 +526,296 @@ function SquadDetailView({ name }: { name: string }) {
 					)}
 				</div>
 			)}
+
+			{tab === 'history' && (
+				<div className="space-y-2">
+					{historyItems.length === 0 ? (
+						<div className="text-center py-16 text-zinc-700 font-mono text-sm">
+							No history yet
+						</div>
+					) : (
+						historyItems.map((activity) => (
+							<div
+								key={activity.id}
+								className="glass-card border border-white/[0.07] rounded-2xl px-4 py-3.5 flex items-center gap-3"
+							>
+								<div className="flex-shrink-0">
+									{activity.status === 'completed' ? (
+										<CheckCircle className="w-4 h-4" style={{ color: '#34d399' }} />
+									) : (
+										<XCircle className="w-4 h-4" style={{ color: '#f87171' }} />
+									)}
+								</div>
+								<div className="flex-1 min-w-0">
+									<p className="text-[12px] text-zinc-300 font-mono truncate">
+										{activity.title}
+									</p>
+									<div className="flex items-center gap-3 mt-0.5">
+										<span className="text-[10px] text-zinc-700 font-mono">
+											{formatDateTime(activity.completedAt || activity.createdAt, timezone)}
+										</span>
+										<span className="text-[10px] text-zinc-700 font-mono flex items-center gap-1">
+											<Activity className="w-2.5 h-2.5" />
+											{activity.duration || '—'}
+										</span>
+										<span className="text-[10px] text-zinc-700 font-mono flex items-center gap-1">
+											<Bot className="w-2.5 h-2.5" />
+											{activity.agentCount} agent{activity.agentCount !== 1 ? 's' : ''}
+										</span>
+									</div>
+								</div>
+								<Chip
+									variant={activity.status === 'completed' ? 'success' : 'error'}
+								>
+									{activity.status}
+								</Chip>
+								<button
+									type="button"
+									onClick={() => drillIntoActivity(activity)}
+									title="View activity detail"
+									className="p-2 rounded-xl hover:bg-white/[0.06] transition-colors flex-shrink-0 cursor-pointer"
+									style={{ color }}
+								>
+									<Activity className="w-4 h-4" />
+								</button>
+							</div>
+						))
+					)}
+					{historyItems.length < historyTotal && (
+						<button
+							type="button"
+							onClick={() => {
+								api
+									.get<{ items: HistoryActivity[]; total: number }>(
+										`/squads/${name}/history?offset=${historyItems.length}`,
+									)
+									.then((res) => {
+										setHistoryItems((prev) => [...prev, ...res.items]);
+									})
+									.catch(() => {});
+							}}
+							className="w-full text-center py-3 text-[11px] font-mono text-zinc-600 hover:text-zinc-300 transition-colors cursor-pointer"
+						>
+							Load more
+						</button>
+					)}
+				</div>
+			)}
+		</div>
+	);
+}
+
+// ─── Activity Detail View (History Drill-down) ───────────────────────────────
+
+function ActivityDetailView({
+	activity,
+	squadColor,
+	squadName,
+	onBack,
+}: {
+	activity: HistoryActivityDetail;
+	squadColor: string;
+	squadName: string;
+	onBack: () => void;
+}) {
+	const [openAgent, setOpenAgent] = useState<string | null>(null);
+	const timezone = useTimezone();
+
+	const kindMeta = {
+		thought: {
+			label: 'Thinking',
+			icon: MessageSquare,
+			color: '#a78bfa',
+			bg: 'rgba(167,139,250,0.1)',
+		},
+		tool_call: {
+			label: 'Tool Call',
+			icon: Terminal,
+			color: '#38bdf8',
+			bg: 'rgba(56,189,248,0.1)',
+		},
+		tool_result: {
+			label: 'Tool Result',
+			icon: Hash,
+			color: '#34d399',
+			bg: 'rgba(52,211,153,0.1)',
+		},
+		message: {
+			label: 'Message',
+			icon: Bot,
+			color: squadColor,
+			bg: `${squadColor}15`,
+		},
+		decision: {
+			label: 'Decision',
+			icon: Crown,
+			color: '#fbbf24',
+			bg: 'rgba(251,191,36,0.1)',
+		},
+	} as const satisfies Record<string, { label: string; icon: React.ElementType; color: string; bg: string }>;
+
+	type KindKey = keyof typeof kindMeta;
+	const getKindMeta = (kind: string) =>
+		kindMeta[kind as KindKey] ?? kindMeta.message;
+
+	return (
+		<div className="flex-1 overflow-y-auto p-6" style={{ background: `${squadColor}06` }}>
+			<button
+				type="button"
+				onClick={onBack}
+				className="flex items-center gap-1.5 text-[11px] text-zinc-600 hover:text-zinc-300 font-mono mb-5 transition-colors cursor-pointer"
+			>
+				<ChevronLeft className="w-3.5 h-3.5" /> Back to {squadName}
+			</button>
+
+			<div className="flex items-start justify-between mb-6">
+				<div>
+					<h2
+						className="text-2xl tracking-wide"
+						style={{ fontFamily: "'Bebas Neue', sans-serif", color: squadColor }}
+					>
+						{activity.title}
+					</h2>
+					<div className="flex items-center gap-3 mt-1">
+						<span className="text-[11px] text-zinc-600 font-mono">
+							{formatDateTime(activity.completedAt || activity.createdAt, timezone)}
+						</span>
+						<span className="text-[11px] text-zinc-700 font-mono flex items-center gap-1">
+							<Activity className="w-3 h-3" />
+							{activity.duration || '—'}
+						</span>
+					</div>
+				</div>
+				<Chip variant={activity.status === 'completed' ? 'success' : 'error'}>
+					{activity.status}
+				</Chip>
+			</div>
+
+			<div className="space-y-2">
+				{activity.agentEntries.map((entry) => {
+					const isOpen = openAgent === entry.agentId;
+					return (
+						<div
+							key={entry.agentId}
+							className="glass-card border border-white/[0.07] rounded-2xl overflow-hidden"
+						>
+							{/* Agent header row */}
+							<div className="flex items-center gap-3 px-4 py-3.5">
+								<div
+									className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+									style={{
+										border: `1px solid ${squadColor}30`,
+										background: `${squadColor}12`,
+									}}
+								>
+									{roleIcon(entry.roleType || entry.role, squadColor)}
+								</div>
+								<div className="flex-1 min-w-0">
+									<div className="flex items-center gap-2">
+										<span className="text-sm font-mono text-zinc-200">
+											{entry.agentName}
+										</span>
+										<span className="text-[10px] font-mono text-zinc-600">
+											{entry.role}
+										</span>
+									</div>
+									<p className="text-[11px] text-zinc-600 mt-0.5 truncate">
+										{entry.summary}
+									</p>
+								</div>
+								<button
+									type="button"
+									onClick={() =>
+										setOpenAgent(isOpen ? null : entry.agentId)
+									}
+									className="p-2 rounded-xl hover:bg-white/[0.06] text-zinc-600 hover:text-zinc-300 transition-colors cursor-pointer"
+								>
+									<ChevronDown
+										className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+									/>
+								</button>
+							</div>
+
+							{/* Timeline — expanded */}
+							{isOpen && (
+								<div className="border-t border-white/[0.06] px-4 py-4">
+									<div className="relative pl-8">
+										<div className="absolute left-[11px] top-0 bottom-0 w-px bg-white/[0.06]" />
+										<div className="space-y-3">
+											{entry.events.map((ev) => {
+												const meta = getKindMeta(ev.kind);
+												const Icon = meta.icon;
+												const isCode =
+													ev.kind === 'tool_call' ||
+													ev.kind === 'tool_result';
+												return (
+													<div key={ev.id} className="relative">
+														<div
+															className="absolute -left-8 top-2 w-[22px] h-[22px] rounded-full flex items-center justify-center"
+															style={{
+																background: meta.bg,
+																border: `1px solid ${meta.color}30`,
+															}}
+														>
+															<Icon
+																className="w-3 h-3"
+																style={{ color: meta.color }}
+															/>
+														</div>
+														<div className="bg-white/[0.02] border border-white/[0.05] rounded-xl px-3 py-2">
+															<div className="flex items-center justify-between mb-1">
+																<div className="flex items-center gap-1.5">
+																	<span
+																		className="text-[10px] font-mono uppercase tracking-wider"
+																		style={{
+																			color: meta.color,
+																		}}
+																	>
+																		{meta.label}
+																	</span>
+																	{ev.label && (
+																		<span className="text-[10px] font-mono text-zinc-700 border border-white/[0.07] rounded px-1.5 py-px">
+																			{ev.label}
+																		</span>
+																	)}
+																	{ev.status === 'error' && (
+																		<Chip variant="error">
+																			failed
+																		</Chip>
+																	)}
+																	{ev.status === 'ok' &&
+																		ev.kind ===
+																			'tool_result' && (
+																			<Chip variant="success">
+																				ok
+																			</Chip>
+																		)}
+																</div>
+																<span className="text-[10px] font-mono text-zinc-700">
+																	{formatTime(ev.timestamp, timezone)}
+																</span>
+															</div>
+															{isCode ? (
+																<pre className="text-[11px] font-mono text-zinc-400 whitespace-pre-wrap leading-relaxed overflow-x-auto rounded-lg p-2 bg-black/20">
+																	{ev.content}
+																</pre>
+															) : (
+																<p className="text-[11px] text-zinc-400 leading-relaxed">
+																	{ev.content}
+																</p>
+															)}
+														</div>
+													</div>
+												);
+											})}
+										</div>
+									</div>
+								</div>
+							)}
+						</div>
+					);
+				})}
+			</div>
 		</div>
 	);
 }

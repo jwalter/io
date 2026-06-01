@@ -474,16 +474,57 @@ export function createOrchestratorTools() {
 						await bootSquad(squad);
 					}
 
+					// Create a delegation history record
+					const delegationId = crypto.randomUUID();
+					const db = (await import('../store/db.js')).getDatabase();
+					await db.execute({
+						sql: `INSERT INTO squad_instances (id, squad_id, type, objective, status)
+						      VALUES (?, ?, 'delegation', ?, 'working')`,
+						args: [delegationId, squad.id, args.message.slice(0, 500)],
+					});
+
 					// Fire-and-forget: send message to team lead with inbox delivery instruction
 					const delegationMessage = `${args.message}\n\nIMPORTANT: When you have completed this work or have results to share, deliver them to the user's inbox using the add_to_inbox tool. Include a clear title and your findings/deliverables in the content.`;
 
-					delegateToSquad(squad.id, delegationMessage).catch((err) => {
-						// Log but don't block — squad will deliver via inbox
-						createChildLogger('orchestrator').warn(
-							{ err, squadName: args.squadName },
-							'Background delegation failed',
-						);
-					});
+					delegateToSquad(squad.id, delegationMessage)
+						.then(async (response) => {
+							// Log the team lead's response as activity
+							const { logActivity } = await import('../store/activity.js');
+							await logActivity({
+								squadId: squad.id,
+								instanceId: delegationId,
+								agentRole: 'technical-pm',
+								activityType: 'message',
+								label: 'Delegation response',
+								content: { response: response.slice(0, 1000) },
+							});
+							// Mark delegation complete
+							await db.execute({
+								sql: `UPDATE squad_instances SET status = 'complete', completed_at = CURRENT_TIMESTAMP WHERE id = ?`,
+								args: [delegationId],
+							});
+						})
+						.catch(async (err) => {
+							// Mark delegation as failed
+							const { logActivity } = await import('../store/activity.js');
+							await logActivity({
+								squadId: squad.id,
+								instanceId: delegationId,
+								agentRole: 'technical-pm',
+								activityType: 'message',
+								label: 'Error',
+								status: 'error',
+								content: { error: err instanceof Error ? err.message : String(err) },
+							});
+							await db.execute({
+								sql: `UPDATE squad_instances SET status = 'failed', completed_at = CURRENT_TIMESTAMP WHERE id = ?`,
+								args: [delegationId],
+							});
+							createChildLogger('orchestrator').warn(
+								{ err, squadName: args.squadName },
+								'Background delegation failed',
+							);
+						});
 
 					return {
 						textResultForLlm: JSON.stringify({

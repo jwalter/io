@@ -227,6 +227,21 @@ const MIGRATIONS: { version: number; statements: string[] }[] = [
 				'INSERT OR REPLACE INTO schema_version (version) VALUES (9)',
 			],
 	},
+	{
+			version: 10,
+			statements: [
+				// Add type column to squad_instances (instance vs delegation)
+				"ALTER TABLE squad_instances ADD COLUMN type TEXT NOT NULL DEFAULT 'instance'",
+				// Add label column to agent_activity (tool name, event label)
+				'ALTER TABLE agent_activity ADD COLUMN label TEXT',
+				// Add status column to agent_activity (ok/error for tool results)
+				'ALTER TABLE agent_activity ADD COLUMN status TEXT',
+				// Index for history queries
+				'CREATE INDEX IF NOT EXISTS idx_instances_status ON squad_instances(squad_id, status)',
+				'CREATE INDEX IF NOT EXISTS idx_activity_instance ON agent_activity(instance_id, timestamp)',
+				'INSERT OR REPLACE INTO schema_version (version) VALUES (10)',
+			],
+	},
 ];
 
 export async function initDatabase(dataDir: string): Promise<Client> {
