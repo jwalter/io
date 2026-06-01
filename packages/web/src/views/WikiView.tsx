@@ -21,6 +21,7 @@ interface WikiPage {
 	name: string;
 	path: string;
 	scope?: string;
+	isDir?: boolean;
 }
 
 interface TreeNode {
@@ -46,6 +47,25 @@ function buildTree(pages: WikiPage[]): TreeNode[] {
 		const segments = page.path.split('/').filter(Boolean);
 		let currentLevel = root;
 		let currentPath = '';
+
+		// If this is a directory-only entry, ensure the directory path exists
+		if (page.isDir) {
+			for (const segment of segments) {
+				currentPath = currentPath ? `${currentPath}/${segment}` : segment;
+				let node = currentLevel.find((candidate) => candidate.path === currentPath);
+				if (!node) {
+					node = {
+						name: segment,
+						path: currentPath,
+						isDir: true,
+						children: [],
+					};
+					currentLevel.push(node);
+				}
+				currentLevel = node.children;
+			}
+			continue;
+		}
 
 		for (const [index, segment] of segments.entries()) {
 			const isFile = index === segments.length - 1;

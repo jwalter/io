@@ -62,12 +62,19 @@ export function listWikiScopes(): string[] {
 
 /**
  * List all pages across all scopes, with scope prefix in the path.
+ * Always includes scope directories even if they are empty.
  */
-export function listAllWikiPages(): Array<{ scope: string; name: string; path: string }> {
-	const allPages: Array<{ scope: string; name: string; path: string }> = [];
-	for (const scope of listWikiScopes()) {
+export function listAllWikiPages(): Array<{ scope: string; name: string; path: string; isDir?: boolean }> {
+	const allPages: Array<{ scope: string; name: string; path: string; isDir?: boolean }> = [];
+	const scopes = listWikiScopes();
+
+	for (const scope of scopes) {
 		const pages = listWikiPages(scope);
 		const scopePrefix = scope === 'io' ? 'io' : scope === 'shared' ? 'shared' : `squads/${scope}`;
+
+		// Always include the scope directory itself
+		allPages.push({ scope, name: scopePrefix, path: scopePrefix, isDir: true });
+
 		for (const page of pages) {
 			allPages.push({
 				scope,
