@@ -157,7 +157,7 @@ export function createOrchestratorTools() {
 			handler: async (args: { repoUrl: string; name?: string; universe?: string }) => {
 				try {
 					const { ensureCloned } = await import('../squad/source-resolver.js');
-					const projectPath = ensureCloned(args.repoUrl);
+					const projectPath = await ensureCloned(args.repoUrl);
 					const proposal = await proposeSquad({
 						projectPath,
 						repoUrl: args.repoUrl,

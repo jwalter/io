@@ -1,11 +1,13 @@
-import { execSync } from 'node:child_process';
-import { writeFileSync, unlinkSync } from 'node:fs';
-import { join } from 'node:path';
+import { exec as execCb } from 'node:child_process';
+import { unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { promisify } from 'node:util';
 import { createChildLogger } from '../../logging/logger.js';
 import type { Instance } from './instance.js';
 import { transitionInstance } from './instance.js';
 
+const exec = promisify(execCb);
 const logger = () => createChildLogger('pr');
 
 export interface PrResult {
@@ -35,21 +37,21 @@ export async function createPullRequest(params: {
 
 	try {
 		// Check if there are changes to commit
-		const status = execSync('git status --porcelain', { cwd, encoding: 'utf-8' }).trim();
-		if (!status) {
+		const { stdout: status } = await exec('git status --porcelain', { cwd });
+		if (!status.trim()) {
 			log.info({ instanceId: instance.id }, 'No changes to commit');
 			await transitionInstance(instance.id, 'complete');
 			return null;
 		}
 
 		// Stage and commit all changes
-		execSync('git add -A', { cwd, stdio: 'pipe' });
+		await exec('git add -A', { cwd });
 
 		const commitMessage = buildCommitMessage(title, instance, squadName);
-		execSync(`git commit -m "${escapeShell(commitMessage)}"`, { cwd, stdio: 'pipe' });
+		await exec(`git commit -m "${escapeShell(commitMessage)}"`, { cwd });
 
 		// Push the branch
-		execSync(`git push -u origin "${instance.branch}"`, { cwd, stdio: 'pipe' });
+		await exec(`git push -u origin "${instance.branch}"`, { cwd });
 
 		// Create the PR using gh CLI with --body-file to avoid shell escaping issues
 		const prBody = buildPrBody(instance, squadName);
@@ -57,13 +59,13 @@ export async function createPullRequest(params: {
 		writeFileSync(bodyFile, prBody, 'utf-8');
 
 		try {
-			const prOutput = execSync(
+			const { stdout: prOutput } = await exec(
 				`gh pr create --title "${escapeShell(title)}" --body-file "${bodyFile}" --head "${instance.branch}"`,
-				{ cwd, encoding: 'utf-8', stdio: 'pipe' },
-			).trim();
+				{ cwd },
+			);
 
 			// Parse the PR URL to get the number
-			const prUrl = prOutput;
+			const prUrl = prOutput.trim();
 			const prNumber = Number.parseInt(prUrl.split('/').pop() ?? '0', 10);
 
 			await transitionInstance(instance.id, 'complete');

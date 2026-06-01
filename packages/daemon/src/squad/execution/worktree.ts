@@ -1,8 +1,10 @@
-import { execSync } from 'node:child_process';
+import { exec as execCb } from 'node:child_process';
 import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { promisify } from 'node:util';
 import { createChildLogger } from '../../logging/logger.js';
 
+const exec = promisify(execCb);
 const logger = () => createChildLogger('worktree');
 
 export interface WorktreeInfo {
@@ -15,11 +17,11 @@ export interface WorktreeInfo {
  * Branch naming: io/{squad-name}/{short-id}
  * Always fetches latest from remote before creating the worktree.
  */
-export function createWorktree(params: {
+export async function createWorktree(params: {
 	repoPath: string;
 	squadName: string;
 	instanceId: string;
-}): WorktreeInfo {
+}): Promise<WorktreeInfo> {
 	const log = logger();
 	const shortId = params.instanceId.slice(0, 8);
 	const branch = `io/${params.squadName}/${shortId}`;
@@ -36,23 +38,19 @@ export function createWorktree(params: {
 	}
 
 	// Fetch latest from remote to ensure we branch from up-to-date code
-	const startPoint = fetchLatestMainRef(params.repoPath);
+	const startPoint = await fetchLatestMainRef(params.repoPath);
 	log.info({ startPoint }, 'Fetched latest remote ref for worktree');
 
 	// Create the worktree with a new branch from the latest remote HEAD
 	try {
-		execSync(`git worktree add -b "${branch}" "${worktreePath}" "${startPoint}"`, {
+		await exec(`git worktree add -b "${branch}" "${worktreePath}" "${startPoint}"`, {
 			cwd: params.repoPath,
-			stdio: 'pipe',
-			encoding: 'utf-8',
 		});
-	} catch (err) {
+	} catch {
 		// Branch might already exist — try without -b
 		try {
-			execSync(`git worktree add "${worktreePath}" "${branch}"`, {
+			await exec(`git worktree add "${worktreePath}" "${branch}"`, {
 				cwd: params.repoPath,
-				stdio: 'pipe',
-				encoding: 'utf-8',
 			});
 		} catch (innerErr) {
 			throw new Error(
@@ -69,14 +67,9 @@ export function createWorktree(params: {
  * Fetch the latest from the remote and return the ref to branch from.
  * Detects the default branch (main/master) from the remote HEAD.
  */
-function fetchLatestMainRef(repoPath: string): string {
+async function fetchLatestMainRef(repoPath: string): Promise<string> {
 	try {
-		// Fetch all remote updates
-		execSync('git fetch origin', {
-			cwd: repoPath,
-			stdio: 'pipe',
-			encoding: 'utf-8',
-		});
+		await exec('git fetch origin', { cwd: repoPath });
 	} catch {
 		// Fetch failed (offline, no remote, etc.) — fall back to local HEAD
 		return 'HEAD';
@@ -84,12 +77,10 @@ function fetchLatestMainRef(repoPath: string): string {
 
 	// Determine the default branch from the remote
 	try {
-		const remoteHead = execSync('git symbolic-ref refs/remotes/origin/HEAD', {
+		const { stdout } = await exec('git symbolic-ref refs/remotes/origin/HEAD', {
 			cwd: repoPath,
-			stdio: 'pipe',
-			encoding: 'utf-8',
-		}).trim();
-		// Returns something like "refs/remotes/origin/main"
+		});
+		const remoteHead = stdout.trim();
 		if (remoteHead) {
 			return remoteHead;
 		}
@@ -100,11 +91,7 @@ function fetchLatestMainRef(repoPath: string): string {
 	// Fallback: try origin/main, then origin/master
 	for (const candidate of ['origin/main', 'origin/master']) {
 		try {
-			execSync(`git rev-parse --verify ${candidate}`, {
-				cwd: repoPath,
-				stdio: 'pipe',
-				encoding: 'utf-8',
-			});
+			await exec(`git rev-parse --verify ${candidate}`, { cwd: repoPath });
 			return candidate;
 		} catch {
 			continue;
@@ -118,18 +105,16 @@ function fetchLatestMainRef(repoPath: string): string {
 /**
  * Remove a git worktree and delete its branch.
  */
-export function removeWorktree(params: {
+export async function removeWorktree(params: {
 	repoPath: string;
 	worktreePath: string;
 	branch: string;
-}): void {
+}): Promise<void> {
 	const log = logger();
 
 	try {
-		execSync(`git worktree remove "${params.worktreePath}" --force`, {
+		await exec(`git worktree remove "${params.worktreePath}" --force`, {
 			cwd: params.repoPath,
-			stdio: 'pipe',
-			encoding: 'utf-8',
 		});
 	} catch {
 		// Worktree might already be removed; try cleaning up the directory
@@ -138,7 +123,7 @@ export function removeWorktree(params: {
 		}
 		// Prune worktree references
 		try {
-			execSync('git worktree prune', { cwd: params.repoPath, stdio: 'pipe' });
+			await exec('git worktree prune', { cwd: params.repoPath });
 		} catch {
 			// ignore
 		}
@@ -146,11 +131,7 @@ export function removeWorktree(params: {
 
 	// Delete the branch
 	try {
-		execSync(`git branch -D "${params.branch}"`, {
-			cwd: params.repoPath,
-			stdio: 'pipe',
-			encoding: 'utf-8',
-		});
+		await exec(`git branch -D "${params.branch}"`, { cwd: params.repoPath });
 	} catch {
 		// Branch might not exist or be checked out elsewhere
 	}
@@ -161,16 +142,12 @@ export function removeWorktree(params: {
 /**
  * List all IO-managed worktrees for a repository.
  */
-export function listWorktrees(repoPath: string): WorktreeInfo[] {
+export async function listWorktrees(repoPath: string): Promise<WorktreeInfo[]> {
 	try {
-		const output = execSync('git worktree list --porcelain', {
-			cwd: repoPath,
-			stdio: 'pipe',
-			encoding: 'utf-8',
-		});
+		const { stdout } = await exec('git worktree list --porcelain', { cwd: repoPath });
 
 		const worktrees: WorktreeInfo[] = [];
-		const blocks = output.split('\n\n');
+		const blocks = stdout.split('\n\n');
 
 		for (const block of blocks) {
 			const lines = block.trim().split('\n');

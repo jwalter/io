@@ -57,7 +57,7 @@ export async function createInstance(params: {
 	// Create worktree if project has git
 	let worktree: WorktreeInfo | null = null;
 	try {
-		worktree = createWorktree({
+		worktree = await createWorktree({
 			repoPath: params.squad.projectPath,
 			squadName: params.squad.name,
 			instanceId: id,
@@ -169,7 +169,7 @@ export async function cleanupInstance(instanceId: string, squad: Squad): Promise
 	if (!instance) return;
 
 	if (instance.worktree && instance.branch) {
-		removeWorktree({
+		await removeWorktree({
 			repoPath: squad.projectPath,
 			worktreePath: instance.worktree.path,
 			branch: instance.branch,

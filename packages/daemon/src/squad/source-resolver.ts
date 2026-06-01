@@ -1,9 +1,11 @@
-import { execSync } from 'node:child_process';
+import { exec as execCb } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { promisify } from 'node:util';
 import { loadConfig } from '@io/shared';
 import { createChildLogger } from '../logging/logger.js';
 
+const exec = promisify(execCb);
 const logger = () => createChildLogger('source-resolver');
 
 /**
@@ -32,7 +34,7 @@ export function getSourcePath(repoUrl: string): string | null {
  * a .git folder, it is assumed valid and left alone. Otherwise, it clones the repo.
  * Returns the absolute path to the local clone.
  */
-export function ensureCloned(repoUrl: string): string {
+export async function ensureCloned(repoUrl: string): Promise<string> {
 	const log = logger();
 	const sourcePath = getSourcePath(repoUrl);
 	if (!sourcePath) {
@@ -47,10 +49,7 @@ export function ensureCloned(repoUrl: string): string {
 	log.info({ repoUrl, sourcePath }, 'Cloning repository');
 	mkdirSync(sourcePath, { recursive: true });
 
-	execSync(`git clone "${repoUrl}" "${sourcePath}"`, {
-		stdio: 'pipe',
-		timeout: 120_000,
-	});
+	await exec(`git clone "${repoUrl}" "${sourcePath}"`, { timeout: 120_000 });
 
 	log.info({ sourcePath }, 'Clone complete');
 	return sourcePath;
