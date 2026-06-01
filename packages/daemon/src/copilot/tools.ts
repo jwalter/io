@@ -452,7 +452,7 @@ export function createOrchestratorTools() {
 
 		defineTool('delegate_to_squad', {
 			description:
-				"Delegate a message or task to a specific squad's team lead. The squad will work on it in the background and deliver results to the user's inbox. Returns immediately after dispatching.",
+				"Delegate a message or task to a specific squad's team lead. Use this for planning, research, questions, analysis, or any task that does NOT require writing/committing code. The squad will work on it in the background and deliver results to the user's inbox. Returns immediately after dispatching.",
 			parameters: z.object({
 				squadName: z.string().describe('Name of the squad to delegate to'),
 				message: z.string().describe('The full message or task to delegate'),
@@ -506,7 +506,7 @@ export function createOrchestratorTools() {
 
 		defineTool('run_squad_instance', {
 			description:
-				'Start a new work instance for a squad. This kicks off the full lifecycle: meeting → task execution → PR creation. Use when the user asks a squad to work on something specific.',
+				'Start a new work instance for a squad. This kicks off the full lifecycle: meeting → task execution → PR creation. ONLY use this when the user explicitly wants code written, committed, and a pull request created. Do NOT use for planning, research, analysis, or questions — use delegate_to_squad for those instead.',
 			parameters: z.object({
 				squadName: z.string().describe('Name of the squad'),
 				objective: z.string().describe('What the squad should accomplish'),
