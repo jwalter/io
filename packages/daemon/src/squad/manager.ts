@@ -225,10 +225,10 @@ export async function deleteSquad(squadId: string): Promise<void> {
 	const squadName = squad?.name;
 
 	// Delete all associated data (order matters for FK constraints)
+	// Note: token_usage is intentionally preserved for historical usage reporting
 	await db.execute({ sql: 'DELETE FROM inbox_entries WHERE squad_id = ?', args: [squadId] });
 	await db.execute({ sql: 'DELETE FROM agent_activity WHERE squad_id = ?', args: [squadId] });
 	await db.execute({ sql: 'DELETE FROM decisions WHERE squad_id = ?', args: [squadId] });
-	await db.execute({ sql: 'DELETE FROM token_usage WHERE squad_id = ?', args: [squadId] });
 	await db.execute({ sql: 'DELETE FROM squad_instances WHERE squad_id = ?', args: [squadId] });
 	await db.execute({ sql: 'DELETE FROM squad_members WHERE squad_id = ?', args: [squadId] });
 	await db.execute({

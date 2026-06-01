@@ -65,6 +65,14 @@ function StatCard({ label, value, sub, accent }: { label: string; value: string;
 	);
 }
 
+const TAB_LABELS: Record<string, string> = {
+	summary: 'Summary',
+	'by squad': 'By Squad',
+	'by agent': 'By Agent',
+	io: 'IO',
+	timeline: 'Timeline',
+};
+
 function TabBar({ tabs, active, onChange }: { tabs: string[]; active: string; onChange: (t: string) => void }) {
 	return (
 		<div className="flex gap-0 border-b border-white/[0.06] mb-5">
@@ -73,13 +81,13 @@ function TabBar({ tabs, active, onChange }: { tabs: string[]; active: string; on
 					key={t}
 					type="button"
 					onClick={() => onChange(t)}
-					className={`px-4 py-2 text-[11px] font-mono capitalize transition-colors border-b-2 -mb-px cursor-pointer ${
+					className={`px-4 py-2 text-[11px] font-mono transition-colors border-b-2 -mb-px cursor-pointer ${
 						active === t
 							? 'text-[#E43A9C] border-[#E43A9C]'
 							: 'text-zinc-600 hover:text-zinc-300 border-transparent'
 					}`}
 				>
-					{t}
+					{TAB_LABELS[t] ?? t}
 				</button>
 			))}
 		</div>
@@ -95,7 +103,7 @@ function SummaryTab({ records, totals }: { records: UsageEntry[]; totals: UsageR
 	const byEntity = new Map<string, { name: string; inputTokens: number; outputTokens: number; calls: number; cost: number }>();
 	for (const r of records) {
 		const key = r.squadId ?? '__io__';
-		const name = r.squadName ?? (r.squadId ? r.squadId.slice(0, 8) : 'IO Orchestrator');
+		const name = r.squadName ?? (r.squadId ? `${r.squadId.slice(0, 8)} (deleted)` : 'IO Orchestrator');
 		const existing = byEntity.get(key) ?? { name, inputTokens: 0, outputTokens: 0, calls: 0, cost: 0 };
 		existing.inputTokens += r.inputTokens;
 		existing.outputTokens += r.outputTokens;
@@ -217,7 +225,7 @@ function BySquadTab({ records }: { records: UsageEntry[] }) {
 		const map = new Map<string, { id: string; name: string; agents: Map<string, { role: string; model: string; inputTokens: number; outputTokens: number; calls: number; cost: number }>; inputTokens: number; outputTokens: number; calls: number; cost: number }>();
 		for (const r of records) {
 			if (!r.squadId) continue;
-			const existing = map.get(r.squadId) ?? { id: r.squadId, name: r.squadName ?? r.squadId.slice(0, 8), agents: new Map(), inputTokens: 0, outputTokens: 0, calls: 0, cost: 0 };
+			const existing = map.get(r.squadId) ?? { id: r.squadId, name: r.squadName ?? `${r.squadId.slice(0, 8)} (deleted)`, agents: new Map(), inputTokens: 0, outputTokens: 0, calls: 0, cost: 0 };
 			existing.inputTokens += r.inputTokens;
 			existing.outputTokens += r.outputTokens;
 			existing.calls += 1;
