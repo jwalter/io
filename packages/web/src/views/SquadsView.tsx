@@ -1,4 +1,5 @@
 import { Chip, statusToVariant } from '@/components/ui/shared';
+import { MarkdownRenderer } from '@/components/ui/markdown';
 import { useTimezone } from '@/hooks/use-config';
 import { api } from '@/lib/api';
 import { formatDateTime, formatTime } from '@/lib/timezone';
@@ -800,9 +801,7 @@ function ActivityDetailView({
 																	{ev.content}
 																</pre>
 															) : (
-																<p className="text-[11px] text-zinc-400 leading-relaxed">
-																	{ev.content}
-																</p>
+																<MarkdownRenderer content={ev.content} className="text-[11px] [&_pre]:text-[10px]" />
 															)}
 														</div>
 													</div>
@@ -969,7 +968,7 @@ function InstanceDetailView({
 							{detail.instance.meetingLog.map((entry, i) => {
 								const match = entry.match(/^\[([^\]]+)\]\s*(.*)/s);
 								const role = match ? match[1] : 'unknown';
-								const message = match ? match[2] : entry;
+								const message = match ? (match[2] ?? entry) : entry;
 								return (
 									<div
 										key={`meeting-${i}`}
@@ -981,9 +980,7 @@ function InstanceDetailView({
 												{role}
 											</span>
 										</div>
-										<p className="text-xs text-zinc-400 whitespace-pre-wrap leading-relaxed">
-											{message}
-										</p>
+										<MarkdownRenderer content={message} className="text-xs [&_pre]:text-[10px]" />
 									</div>
 								);
 							})}
