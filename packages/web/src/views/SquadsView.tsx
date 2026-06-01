@@ -9,8 +9,8 @@ import {
 	Bot,
 	Bug,
 	CheckCircle,
-	ChevronDown,
 	ChevronLeft,
+	Clock,
 	Crown,
 	Cpu,
 	ExternalLink,
@@ -25,7 +25,7 @@ import {
 	XCircle,
 } from 'lucide-react';
 import type React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 
@@ -154,6 +154,28 @@ interface HistoryAgentEntry {
 
 interface HistoryActivityDetail extends HistoryActivity {
 	agentEntries: HistoryAgentEntry[];
+}
+
+interface SquadSchedule {
+	id: string;
+	name: string;
+	cron: string;
+	enabled: boolean;
+	nextRun: string | null;
+	prompt: string;
+}
+
+/**
+ * Generate a deterministic HSL color from a string (agent name).
+ * Produces visually distinct, readable colors on dark backgrounds.
+ */
+function agentColor(name: string): string {
+	let hash = 0;
+	for (let i = 0; i < name.length; i++) {
+		hash = name.charCodeAt(i) + ((hash << 5) - hash);
+	}
+	const hue = ((hash % 360) + 360) % 360;
+	return `hsl(${hue}, 70%, 65%)`;
 }
 
 export function SquadsView() {
@@ -323,10 +345,11 @@ function roleIcon(roleName: string, color: string) {
 
 function SquadDetailView({ name }: { name: string }) {
 	const [detail, setDetail] = useState<SquadDetail | null>(null);
-	const [tab, setTab] = useState<'agents' | 'instances' | 'history'>('agents');
+	const [tab, setTab] = useState<'agents' | 'instances' | 'schedules' | 'history'>('agents');
 	const [historyItems, setHistoryItems] = useState<HistoryActivity[]>([]);
 	const [historyTotal, setHistoryTotal] = useState(0);
 	const [selectedActivity, setSelectedActivity] = useState<HistoryActivityDetail | null>(null);
+	const [schedules, setSchedules] = useState<SquadSchedule[]>([]);
 	const navigate = useNavigate();
 	const timezone = useTimezone();
 
@@ -347,7 +370,13 @@ function SquadDetailView({ name }: { name: string }) {
 				})
 				.catch(() => {});
 		}
-	}, [tab, name]);
+		if (tab === 'schedules' && detail) {
+			api
+				.get<{ schedules: SquadSchedule[] }>(`/schedules?targetId=${detail.squad.id}`)
+				.then((res) => setSchedules(res.schedules))
+				.catch(() => {});
+		}
+	}, [tab, name, detail]);
 
 	const drillIntoActivity = (activity: HistoryActivity) => {
 		api
@@ -413,7 +442,7 @@ function SquadDetailView({ name }: { name: string }) {
 
 			{/* Tabs */}
 			<div className="flex gap-0 mb-5 border-b border-white/[0.06]">
-				{(['agents', 'instances', 'history'] as const).map((t) => (
+				{(['agents', 'instances', 'schedules', 'history'] as const).map((t) => (
 					<button
 						key={t}
 						type="button"
@@ -528,6 +557,64 @@ function SquadDetailView({ name }: { name: string }) {
 				</div>
 			)}
 
+			{tab === 'schedules' && (
+				<div className="overflow-auto rounded-2xl border border-white/[0.07] glass-card">
+					{schedules.length === 0 ? (
+						<div className="text-center py-16 text-zinc-700 font-mono text-sm">
+							No schedules for this squad
+						</div>
+					) : (
+						<table className="w-full text-[11px] font-mono">
+							<thead>
+								<tr
+									className="border-b border-white/[0.06]"
+									style={{ background: 'rgba(20,20,20,0.6)' }}
+								>
+									{['Schedule', 'Next Run', 'Status'].map((h) => (
+										<th
+											key={h}
+											className="text-left px-4 py-2.5 text-zinc-600 font-medium"
+										>
+											{h}
+										</th>
+									))}
+								</tr>
+							</thead>
+							<tbody>
+								{schedules.map((s) => (
+									<tr
+										key={s.id}
+										className={`border-b border-white/[0.04] hover:bg-white/[0.015] transition-colors ${!s.enabled ? 'opacity-50' : ''}`}
+									>
+										<td className="px-4 py-3">
+											<div className="text-zinc-300">{s.name || s.prompt}</div>
+											<div className="text-zinc-700 text-[10px] mt-0.5">
+												{s.cron}
+											</div>
+										</td>
+										<td className="px-4 py-3 text-zinc-600">
+											<span className="flex items-center gap-1">
+												<Clock className="w-3 h-3" />
+												{!s.enabled
+													? '—'
+													: s.nextRun
+														? formatDateTime(s.nextRun, timezone)
+														: '—'}
+											</span>
+										</td>
+										<td className="px-4 py-3">
+											<Chip variant={!s.enabled ? 'muted' : 'success'}>
+												{s.enabled ? 'active' : 'paused'}
+											</Chip>
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					)}
+				</div>
+			)}
+
 			{tab === 'history' && (
 				<div className="space-y-2">
 					{historyItems.length === 0 ? (
@@ -606,7 +693,7 @@ function SquadDetailView({ name }: { name: string }) {
 	);
 }
 
-// ─── Activity Detail View (History Drill-down) ───────────────────────────────
+// ─── Activity Detail View (Unified Timeline) ────────────────────────────────
 
 function ActivityDetailView({
 	activity,
@@ -619,45 +706,37 @@ function ActivityDetailView({
 	squadName: string;
 	onBack: () => void;
 }) {
-	const [openAgent, setOpenAgent] = useState<string | null>(null);
 	const timezone = useTimezone();
 
-	const kindMeta = {
-		thought: {
-			label: 'Thinking',
-			icon: MessageSquare,
-			color: '#a78bfa',
-			bg: 'rgba(167,139,250,0.1)',
-		},
-		tool_call: {
-			label: 'Tool Call',
-			icon: Terminal,
-			color: '#38bdf8',
-			bg: 'rgba(56,189,248,0.1)',
-		},
-		tool_result: {
-			label: 'Tool Result',
-			icon: Hash,
-			color: '#34d399',
-			bg: 'rgba(52,211,153,0.1)',
-		},
-		message: {
-			label: 'Message',
-			icon: Bot,
-			color: squadColor,
-			bg: `${squadColor}15`,
-		},
-		decision: {
-			label: 'Decision',
-			icon: Crown,
-			color: '#fbbf24',
-			bg: 'rgba(251,191,36,0.1)',
-		},
-	} as const satisfies Record<string, { label: string; icon: React.ElementType; color: string; bg: string }>;
+	// Assign a deterministic color to each agent
+	const agentColors = useMemo(() => {
+		const map: Record<string, string> = {};
+		for (const entry of activity.agentEntries) {
+			map[entry.agentId] = agentColor(entry.agentName);
+		}
+		return map;
+	}, [activity]);
 
-	type KindKey = keyof typeof kindMeta;
-	const getKindMeta = (kind: string) =>
-		kindMeta[kind as KindKey] ?? kindMeta.message;
+	const kindMeta: Record<string, { label: string; icon: React.ElementType }> = {
+		thought: { label: 'Thinking', icon: MessageSquare },
+		tool_call: { label: 'Tool Call', icon: Terminal },
+		tool_result: { label: 'Tool Result', icon: Hash },
+		message: { label: 'Message', icon: Bot },
+		decision: { label: 'Decision', icon: Crown },
+	};
+
+	const defaultMeta = { label: 'Message', icon: Bot };
+	const getKindMeta = (kind: string): { label: string; icon: React.ElementType } =>
+		kindMeta[kind] ?? defaultMeta;
+
+	// Flatten all events into a unified timeline sorted by timestamp
+	const timeline = useMemo(() => {
+		const flat = activity.agentEntries.flatMap((entry) =>
+			entry.events.map((ev) => ({ ev, entry })),
+		);
+		flat.sort((a, b) => a.ev.timestamp.localeCompare(b.ev.timestamp));
+		return flat;
+	}, [activity]);
 
 	return (
 		<div className="flex-1 overflow-y-auto p-6" style={{ background: `${squadColor}06` }}>
@@ -669,7 +748,8 @@ function ActivityDetailView({
 				<ChevronLeft className="w-3.5 h-3.5" /> Back to {squadName}
 			</button>
 
-			<div className="flex items-start justify-between mb-6">
+			{/* Header */}
+			<div className="flex items-start justify-between mb-5">
 				<div>
 					<h2
 						className="text-2xl tracking-wide"
@@ -682,7 +762,7 @@ function ActivityDetailView({
 							{formatDateTime(activity.completedAt || activity.createdAt, timezone)}
 						</span>
 						<span className="text-[11px] text-zinc-700 font-mono flex items-center gap-1">
-							<Activity className="w-3 h-3" />
+							<Clock className="w-3 h-3" />
 							{activity.duration || '—'}
 						</span>
 					</div>
@@ -692,128 +772,98 @@ function ActivityDetailView({
 				</Chip>
 			</div>
 
-			<div className="space-y-2">
+			{/* Agent legend */}
+			<div className="flex flex-wrap gap-2 mb-6">
 				{activity.agentEntries.map((entry) => {
-					const isOpen = openAgent === entry.agentId;
+					const color = agentColors[entry.agentId];
 					return (
 						<div
 							key={entry.agentId}
-							className="glass-card border border-white/[0.07] rounded-2xl overflow-hidden"
+							className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border"
+							style={{ borderColor: `${color}30`, background: `${color}10` }}
 						>
-							{/* Agent header row */}
-							<div className="flex items-center gap-3 px-4 py-3.5">
-								<div
-									className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-									style={{
-										border: `1px solid ${squadColor}30`,
-										background: `${squadColor}12`,
-									}}
-								>
-									{roleIcon(entry.roleType || entry.role, squadColor)}
-								</div>
-								<div className="flex-1 min-w-0">
-									<div className="flex items-center gap-2">
-										<span className="text-sm font-mono text-zinc-200">
-											{entry.agentName}
-										</span>
-										<span className="text-[10px] font-mono text-zinc-600">
-											{entry.role}
-										</span>
-									</div>
-									<p className="text-[11px] text-zinc-600 mt-0.5 truncate">
-										{entry.summary}
-									</p>
-								</div>
-								<button
-									type="button"
-									onClick={() =>
-										setOpenAgent(isOpen ? null : entry.agentId)
-									}
-									className="p-2 rounded-xl hover:bg-white/[0.06] text-zinc-600 hover:text-zinc-300 transition-colors cursor-pointer"
-								>
-									<ChevronDown
-										className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-									/>
-								</button>
-							</div>
-
-							{/* Timeline — expanded */}
-							{isOpen && (
-								<div className="border-t border-white/[0.06] px-4 py-4">
-									<div className="relative pl-8">
-										<div className="absolute left-[11px] top-0 bottom-0 w-px bg-white/[0.06]" />
-										<div className="space-y-3">
-											{entry.events.map((ev) => {
-												const meta = getKindMeta(ev.kind);
-												const Icon = meta.icon;
-												const isCode =
-													ev.kind === 'tool_call' ||
-													ev.kind === 'tool_result';
-												return (
-													<div key={ev.id} className="relative">
-														<div
-															className="absolute -left-8 top-2 w-[22px] h-[22px] rounded-full flex items-center justify-center"
-															style={{
-																background: meta.bg,
-																border: `1px solid ${meta.color}30`,
-															}}
-														>
-															<Icon
-																className="w-3 h-3"
-																style={{ color: meta.color }}
-															/>
-														</div>
-														<div className="bg-white/[0.02] border border-white/[0.05] rounded-xl px-3 py-2">
-															<div className="flex items-center justify-between mb-1">
-																<div className="flex items-center gap-1.5">
-																	<span
-																		className="text-[10px] font-mono uppercase tracking-wider"
-																		style={{
-																			color: meta.color,
-																		}}
-																	>
-																		{meta.label}
-																	</span>
-																	{ev.label && (
-																		<span className="text-[10px] font-mono text-zinc-700 border border-white/[0.07] rounded px-1.5 py-px">
-																			{ev.label}
-																		</span>
-																	)}
-																	{ev.status === 'error' && (
-																		<Chip variant="error">
-																			failed
-																		</Chip>
-																	)}
-																	{ev.status === 'ok' &&
-																		ev.kind ===
-																			'tool_result' && (
-																			<Chip variant="success">
-																				ok
-																			</Chip>
-																		)}
-																</div>
-																<span className="text-[10px] font-mono text-zinc-700">
-																	{formatTime(ev.timestamp, timezone)}
-																</span>
-															</div>
-															{isCode ? (
-																<pre className="text-[11px] font-mono text-zinc-400 whitespace-pre-wrap leading-relaxed overflow-x-auto rounded-lg p-2 bg-black/20">
-																	{ev.content}
-																</pre>
-															) : (
-																<MarkdownRenderer content={ev.content} className="text-[11px] [&_pre]:text-[10px]" />
-															)}
-														</div>
-													</div>
-												);
-											})}
-										</div>
-									</div>
-								</div>
-							)}
+							{roleIcon(entry.roleType || entry.role, color!)}
+							<span className="text-[11px] font-mono" style={{ color }}>
+								{entry.agentName}
+							</span>
+							<span className="text-[10px] font-mono text-zinc-500">
+								— {entry.role}
+							</span>
 						</div>
 					);
 				})}
+			</div>
+
+			{/* Unified timeline */}
+			<div className="relative pl-10">
+				<div className="absolute left-[15px] top-0 bottom-0 w-px bg-white/[0.06]" />
+				<div className="space-y-3">
+					{timeline.map(({ ev, entry }) => {
+						const color = agentColors[entry.agentId]!;
+						const { label, icon: KindIcon } = getKindMeta(ev.kind);
+						const isCode = ev.kind === 'tool_call' || ev.kind === 'tool_result';
+						return (
+							<div key={ev.id} className="relative">
+								{/* Spine node — agent color */}
+								<div
+									className="absolute -left-10 top-3 w-[30px] h-[30px] rounded-full flex items-center justify-center"
+									style={{
+										background: `${color}15`,
+										border: `1px solid ${color}35`,
+									}}
+								>
+									<KindIcon className="w-3.5 h-3.5" style={{ color }} />
+								</div>
+
+								<div className="glass-card border border-white/[0.07] rounded-2xl px-4 py-3">
+									<div className="flex items-center justify-between mb-1.5">
+										<div className="flex items-center gap-2 flex-wrap">
+											{/* Agent tag */}
+											<div className="flex items-center gap-1">
+												{roleIcon(entry.roleType || entry.role, color)}
+												<span
+													className="text-[10px] font-mono"
+													style={{ color }}
+												>
+													{entry.agentName}
+												</span>
+											</div>
+											<span className="text-zinc-700 text-[10px]">·</span>
+											{/* Event kind */}
+											<span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">
+												{label}
+											</span>
+											{ev.label && (
+												<span className="text-[10px] font-mono text-zinc-600 border border-white/[0.08] rounded px-1.5 py-px bg-white/[0.03]">
+													{ev.label}
+												</span>
+											)}
+											{ev.status === 'error' && (
+												<Chip variant="error">failed</Chip>
+											)}
+											{ev.status === 'ok' && ev.kind === 'tool_result' && (
+												<Chip variant="success">ok</Chip>
+											)}
+										</div>
+										<span className="text-[10px] font-mono text-zinc-700 flex-shrink-0 ml-2">
+											{formatTime(ev.timestamp, timezone)}
+										</span>
+									</div>
+									{isCode ? (
+										<pre className="text-[11px] font-mono text-zinc-400 whitespace-pre-wrap leading-relaxed overflow-x-auto rounded-lg p-2 mt-1 bg-black/20">
+											{ev.content}
+										</pre>
+									) : (
+										<MarkdownRenderer
+											content={ev.content}
+											className="text-[12px] [&_pre]:text-[10px]"
+										/>
+									)}
+								</div>
+							</div>
+						);
+					})}
+				</div>
 			</div>
 		</div>
 	);
