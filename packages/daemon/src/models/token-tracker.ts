@@ -79,6 +79,7 @@ export async function queryUsage(filters?: {
 		estimatedCostUsd: number | null;
 		timestamp: string;
 		squadId: string | null;
+		squadName: string | null;
 		agentRole: string | null;
 	}>;
 	totals: {
@@ -93,31 +94,31 @@ export async function queryUsage(filters?: {
 	const args: (string | null)[] = [];
 
 	if (filters?.squadId) {
-		conditions.push('squad_id = ?');
+		conditions.push('t.squad_id = ?');
 		args.push(filters.squadId);
 	}
 	if (filters?.agentRole) {
-		conditions.push('agent_role = ?');
+		conditions.push('t.agent_role = ?');
 		args.push(filters.agentRole);
 	}
 	if (filters?.model) {
-		conditions.push('model = ?');
+		conditions.push('t.model = ?');
 		args.push(filters.model);
 	}
 	if (filters?.since) {
-		conditions.push('timestamp >= ?');
+		conditions.push('t.timestamp >= ?');
 		args.push(filters.since);
 	}
 	if (filters?.until) {
-		conditions.push('timestamp <= ?');
+		conditions.push('t.timestamp <= ?');
 		args.push(filters.until);
 	}
 
 	const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
 	const result = await db.execute({
-		sql: `SELECT model, input_tokens, output_tokens, estimated_cost_usd, timestamp, squad_id, agent_role
-		      FROM token_usage ${where} ORDER BY timestamp DESC LIMIT 500`,
+		sql: `SELECT t.model, t.input_tokens, t.output_tokens, t.estimated_cost_usd, t.timestamp, t.squad_id, t.agent_role, s.name as squad_name
+		      FROM token_usage t LEFT JOIN squads s ON t.squad_id = s.id ${where} ORDER BY t.timestamp DESC LIMIT 500`,
 		args,
 	});
 
@@ -128,14 +129,15 @@ export async function queryUsage(filters?: {
 		estimatedCostUsd: row.estimated_cost_usd as number | null,
 		timestamp: row.timestamp as string,
 		squadId: row.squad_id as string | null,
+		squadName: (row.squad_name as string | null) ?? null,
 		agentRole: row.agent_role as string | null,
 	}));
 
 	// Totals
 	const totalsResult = await db.execute({
-		sql: `SELECT COUNT(*) as cnt, COALESCE(SUM(input_tokens), 0) as total_in,
-		      COALESCE(SUM(output_tokens), 0) as total_out, COALESCE(SUM(estimated_cost_usd), 0) as total_cost
-		      FROM token_usage ${where}`,
+		sql: `SELECT COUNT(*) as cnt, COALESCE(SUM(t.input_tokens), 0) as total_in,
+		      COALESCE(SUM(t.output_tokens), 0) as total_out, COALESCE(SUM(t.estimated_cost_usd), 0) as total_cost
+		      FROM token_usage t ${where}`,
 		args,
 	});
 

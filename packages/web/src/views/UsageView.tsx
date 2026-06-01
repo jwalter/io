@@ -20,6 +20,7 @@ interface UsageEntry {
 	estimatedCostUsd: number | null;
 	timestamp: string;
 	squadId: string | null;
+	squadName: string | null;
 	agentRole: string | null;
 }
 
@@ -51,7 +52,7 @@ function fmt(n: number): string {
 }
 
 function fmtCost(n: number): string {
-	return `$${n.toFixed(4)}`;
+	return `$${n.toFixed(2)}`;
 }
 
 function StatCard({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: boolean }) {
@@ -93,18 +94,19 @@ function SummaryTab({ records, totals }: { records: UsageEntry[]; totals: UsageR
 	// Aggregate by entity (squad or IO)
 	const byEntity = new Map<string, { name: string; inputTokens: number; outputTokens: number; calls: number; cost: number }>();
 	for (const r of records) {
-		const name = r.squadId ?? 'IO Orchestrator';
-		const existing = byEntity.get(name) ?? { name, inputTokens: 0, outputTokens: 0, calls: 0, cost: 0 };
+		const key = r.squadId ?? '__io__';
+		const name = r.squadName ?? (r.squadId ? r.squadId.slice(0, 8) : 'IO Orchestrator');
+		const existing = byEntity.get(key) ?? { name, inputTokens: 0, outputTokens: 0, calls: 0, cost: 0 };
 		existing.inputTokens += r.inputTokens;
 		existing.outputTokens += r.outputTokens;
 		existing.calls += 1;
 		existing.cost += r.estimatedCostUsd ?? 0;
-		byEntity.set(name, existing);
+		byEntity.set(key, existing);
 	}
 	const entities = Array.from(byEntity.values()).sort((a, b) => b.cost - a.cost);
 	const barData = entities.map((e) => ({
 		name: e.name.length > 12 ? `${e.name.slice(0, 12)}…` : e.name,
-		cost: Number.parseFloat(e.cost.toFixed(4)),
+		cost: Number.parseFloat(e.cost.toFixed(2)),
 		tokens: Math.round((e.inputTokens + e.outputTokens) / 1000),
 	}));
 
@@ -126,7 +128,7 @@ function SummaryTab({ records, totals }: { records: UsageEntry[]; totals: UsageR
 								<CartesianGrid vertical={false} stroke="rgba(255,255,255,0.04)" />
 								<XAxis dataKey="name" tick={{ fill: '#52525b', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }} axisLine={false} tickLine={false} />
 								<YAxis tick={{ fill: '#52525b', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} width={40} />
-								<Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [`$${v.toFixed(4)}`, 'Cost']} />
+								<Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: "rgba(255,255,255,0.03)" }} formatter={(v: number) => [`$${v.toFixed(2)}`, 'Cost']} />
 								<Bar dataKey="cost" fill="url(#costGrad)" radius={[6, 6, 0, 0]} />
 								<defs>
 									<linearGradient id="costGrad" x1="0" y1="0" x2="0" y2="1">
@@ -149,7 +151,7 @@ function SummaryTab({ records, totals }: { records: UsageEntry[]; totals: UsageR
 								<CartesianGrid vertical={false} stroke="rgba(255,255,255,0.04)" />
 								<XAxis dataKey="name" tick={{ fill: '#52525b', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }} axisLine={false} tickLine={false} />
 								<YAxis tick={{ fill: '#52525b', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}k`} width={40} />
-								<Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [`${v}k`, 'Tokens']} />
+								<Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: "rgba(255,255,255,0.03)" }} formatter={(v: number) => [`${v}k`, 'Tokens']} />
 								<Bar dataKey="tokens" fill="url(#tokenGrad)" radius={[6, 6, 0, 0]} />
 								<defs>
 									<linearGradient id="tokenGrad" x1="0" y1="0" x2="0" y2="1">
@@ -203,12 +205,19 @@ function SummaryTab({ records, totals }: { records: UsageEntry[]; totals: UsageR
 
 function BySquadTab({ records }: { records: UsageEntry[] }) {
 	const [expanded, setExpanded] = useState<string[]>([]);
+	const [sortKey, setSortKey] = useState<'name' | 'inputTokens' | 'outputTokens' | 'calls' | 'cost'>('cost');
+	const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
+	function toggleSort(key: typeof sortKey) {
+		if (key === sortKey) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+		else { setSortKey(key); setSortDir('desc'); }
+	}
 
 	const squads = useMemo(() => {
 		const map = new Map<string, { id: string; name: string; agents: Map<string, { role: string; model: string; inputTokens: number; outputTokens: number; calls: number; cost: number }>; inputTokens: number; outputTokens: number; calls: number; cost: number }>();
 		for (const r of records) {
 			if (!r.squadId) continue;
-			const existing = map.get(r.squadId) ?? { id: r.squadId, name: r.squadId, agents: new Map(), inputTokens: 0, outputTokens: 0, calls: 0, cost: 0 };
+			const existing = map.get(r.squadId) ?? { id: r.squadId, name: r.squadName ?? r.squadId.slice(0, 8), agents: new Map(), inputTokens: 0, outputTokens: 0, calls: 0, cost: 0 };
 			existing.inputTokens += r.inputTokens;
 			existing.outputTokens += r.outputTokens;
 			existing.calls += 1;
@@ -223,10 +232,24 @@ function BySquadTab({ records }: { records: UsageEntry[] }) {
 			existing.agents.set(agentKey, agent);
 			map.set(r.squadId, existing);
 		}
-		return Array.from(map.values()).sort((a, b) => b.cost - a.cost);
-	}, [records]);
+		const arr = Array.from(map.values());
+		return [...arr].sort((a, b) => {
+			const va = a[sortKey] as number | string;
+			const vb = b[sortKey] as number | string;
+			const cmp = typeof va === 'string' ? (va as string).localeCompare(vb as string) : (va as number) - (vb as number);
+			return sortDir === 'desc' ? -cmp : cmp;
+		});
+	}, [records, sortKey, sortDir]);
 
 	const toggle = (id: string) => setExpanded((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
+
+	const sortCols: { key: typeof sortKey; label: string }[] = [
+		{ key: 'name', label: 'Squad' },
+		{ key: 'inputTokens', label: 'In' },
+		{ key: 'outputTokens', label: 'Out' },
+		{ key: 'calls', label: 'Calls' },
+		{ key: 'cost', label: 'Cost' },
+	];
 
 	if (squads.length === 0) {
 		return <div className="text-center py-12 text-zinc-700 text-[11px] font-mono">No squad usage data</div>;
@@ -234,6 +257,23 @@ function BySquadTab({ records }: { records: UsageEntry[] }) {
 
 	return (
 		<div className="space-y-2">
+			{/* Sort bar */}
+			<div className="flex items-center gap-1 px-1 mb-1">
+				<span className="text-[10px] font-mono text-zinc-700 mr-1">sort by</span>
+				{sortCols.map((c) => (
+					<button
+						key={c.key}
+						type="button"
+						onClick={() => toggleSort(c.key)}
+						className={`flex items-center gap-0.5 px-2 py-1 rounded-lg text-[10px] font-mono transition-colors ${sortKey === c.key ? 'text-[#E43A9C]' : 'text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.04]'}`}
+						style={sortKey === c.key ? { background: 'rgba(228,58,156,0.1)' } : undefined}
+					>
+						{c.label}
+						{sortKey === c.key && <span className="text-[9px]">{sortDir === 'desc' ? '↓' : '↑'}</span>}
+					</button>
+				))}
+			</div>
+
 			{squads.map((sq) => {
 				const open = expanded.includes(sq.id);
 				const agents = Array.from(sq.agents.values());
@@ -291,7 +331,7 @@ function ByAgentTab({ records }: { records: UsageEntry[] }) {
 		const map = new Map<string, { name: string; squad: string; model: string; inputTokens: number; outputTokens: number; calls: number; cost: number }>();
 		for (const r of records) {
 			const key = `${r.squadId ?? 'io'}:${r.agentRole ?? 'orchestrator'}`;
-			const existing = map.get(key) ?? { name: r.agentRole ?? 'orchestrator', squad: r.squadId ?? 'IO', model: r.model, inputTokens: 0, outputTokens: 0, calls: 0, cost: 0 };
+			const existing = map.get(key) ?? { name: r.agentRole ?? 'orchestrator', squad: r.squadName ?? (r.squadId ? r.squadId.slice(0, 8) : 'IO'), model: r.model, inputTokens: 0, outputTokens: 0, calls: 0, cost: 0 };
 			existing.inputTokens += r.inputTokens;
 			existing.outputTokens += r.outputTokens;
 			existing.calls += 1;
@@ -431,7 +471,7 @@ function TimelineTab({ records }: { records: UsageEntry[] }) {
 							<CartesianGrid vertical={false} stroke="rgba(255,255,255,0.04)" />
 							<XAxis dataKey="label" tick={{ fill: '#52525b', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }} axisLine={false} tickLine={false} />
 							<YAxis tick={{ fill: '#52525b', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }} axisLine={false} tickLine={false} tickFormatter={fmt} width={44} />
-							<Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [fmt(v), 'Tokens']} />
+							<Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: "rgba(255,255,255,0.03)" }} formatter={(v: number) => [fmt(v), 'Tokens']} />
 							<Line type="monotone" dataKey="tokens" stroke="#E43A9C" strokeWidth={2} dot={false} />
 						</LineChart>
 					</ResponsiveContainer>
@@ -448,7 +488,7 @@ function TimelineTab({ records }: { records: UsageEntry[] }) {
 							<CartesianGrid vertical={false} stroke="rgba(255,255,255,0.04)" />
 							<XAxis dataKey="label" tick={{ fill: '#52525b', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }} axisLine={false} tickLine={false} />
 							<YAxis tick={{ fill: '#52525b', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v.toFixed(2)}`} width={44} />
-							<Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [fmtCost(v), 'Cost']} />
+							<Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: "rgba(255,255,255,0.03)" }} formatter={(v: number) => [fmtCost(v), 'Cost']} />
 							<Bar dataKey="cost" fill="url(#costGradTl)" radius={[4, 4, 0, 0]} />
 							<defs>
 								<linearGradient id="costGradTl" x1="0" y1="0" x2="0" y2="1">
