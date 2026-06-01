@@ -8,8 +8,8 @@ import { useEffect, useState } from 'react';
 
 // Color mapping for known sources
 const SOURCE_COLORS: Record<string, string> = {
-	orchestrator: '#E43A9C',
-	io: '#E43A9C',
+	orchestrator: '#71717a',
+	io: '#71717a',
 };
 
 function SourceChip({ name }: { name: string }) {
@@ -194,7 +194,7 @@ export function FeedView() {
 								<div className="flex-1 min-w-0">
 									<div className="flex items-center gap-1.5 mb-0.5">
 										{item.status === 'unread' && <div className="w-1 h-1 rounded-full bg-[#E43A9C] flex-shrink-0" />}
-											<SourceChip name={item.squadName ?? (item.squadId ? item.squadId.slice(0, 8) : 'IO')} />
+											<SourceChip name={item.squadName ?? (item.squadId ? item.squadId.slice(0, 8) : 'Orchestrator')} />
 									</div>
 									<p className={`text-[11px] truncate ${item.status === 'unread' ? 'text-zinc-200' : 'text-zinc-500'}`}>{item.title}</p>
 									<p className="text-[10px] text-zinc-700 font-mono mt-1">{formatDateTime(item.createdAt, timezone)}</p>
@@ -219,7 +219,7 @@ export function FeedView() {
 					<>
 						<div className="px-6 py-4 border-b border-white/[0.06] flex items-start justify-between flex-shrink-0">
 							<div className="flex-1 min-w-0 mr-4">
-								<SourceChip name={reading.squadName ?? (reading.squadId ? reading.squadId.slice(0, 8) : 'IO')} />
+								<SourceChip name={reading.squadName ?? (reading.squadId ? reading.squadId.slice(0, 8) : 'Orchestrator')} />
 								<h3 className="text-sm font-mono text-zinc-100 mt-1.5">{reading.title}</h3>
 								<p className="text-[11px] text-zinc-700 font-mono mt-0.5">{formatDateTime(reading.createdAt, timezone)}</p>
 							</div>
