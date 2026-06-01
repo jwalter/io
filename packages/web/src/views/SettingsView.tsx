@@ -1,5 +1,6 @@
 import { PrimaryBtn } from '@/components/ui/shared';
 import { api } from '@/lib/api';
+import { TIMEZONE_OPTIONS } from '@/lib/timezone';
 import { Eye, EyeOff } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
@@ -10,6 +11,7 @@ interface Config {
 	defaultModel: string;
 	maxInstancesPerSquad: number;
 	dataDir: string;
+	timezone: string;
 	pricing: { refreshIntervalHours: number };
 	telegram: { botToken: string | null; allowedChatIds: number[] };
 	supabase: { projectUrl: string | null; anonKey: string | null; jwtSecret: string | null };
@@ -117,6 +119,19 @@ export function SettingsView() {
 									className={FI_MD}
 								/>
 							</FormRow>
+								<FormRow label="Timezone">
+									<select
+										value={config.timezone}
+										onChange={(e) => update({ timezone: e.target.value })}
+										className={`${FI_BASE} w-[200px] appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%2371717a%22%20d%3D%22M3%204.5L6%208l3-3.5H3z%22%2F%3E%3C%2Fsvg%3E')] bg-[position:right_10px_center] bg-no-repeat pr-8`}
+									>
+										{TIMEZONE_OPTIONS.map((tz) => (
+											<option key={tz.value} value={tz.value}>
+												{tz.label}
+											</option>
+										))}
+									</select>
+								</FormRow>
 							<FormRow label="Max Instances">
 								<input
 									type="number"

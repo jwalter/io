@@ -620,14 +620,14 @@ export function createOrchestratorTools() {
 
 		defineTool('create_schedule', {
 			description:
-				'Create a cron-based schedule that triggers a squad or the orchestrator with a predefined prompt at specified times. Use standard cron syntax (e.g., "0 9 * * 1-5" for weekdays at 9am).',
+				'Create a cron-based schedule that triggers a squad or the orchestrator with a predefined prompt at specified times. Use standard cron syntax in UTC (e.g., "0 9 * * 1-5" for weekdays at 9am UTC). IMPORTANT: The user speaks in their configured timezone — convert their stated times to UTC before writing the cron expression.',
 			parameters: z.object({
 				name: z.string().describe('Human-readable name for the schedule (e.g., "Daily Standup")'),
 				targetType: z
 					.enum(['squad', 'orchestrator'])
 					.describe('Whether to target a squad or the orchestrator'),
 				targetId: z.string().optional().describe('Squad name (required if targetType is "squad")'),
-				cron: z.string().describe('Cron expression (e.g., "0 9 * * 1-5" for weekdays at 9am)'),
+				cron: z.string().describe('Cron expression in UTC (e.g., "0 14 * * 1-5" for weekdays at 9am US Central)'),
 				prompt: z.string().describe('The prompt/message to send when the schedule fires'),
 			}),
 			handler: async (args: {

@@ -1,5 +1,7 @@
 import { Chip, statusToVariant } from '@/components/ui/shared';
+import { useTimezone } from '@/hooks/use-config';
 import { api } from '@/lib/api';
+import { formatTime } from '@/lib/timezone';
 import {
 	Activity,
 	AlertTriangle,
@@ -689,6 +691,7 @@ function AgentWorkView({
 	onBack: () => void;
 	squadName: string;
 }) {
+	const timezone = useTimezone();
 	return (
 		<div className="flex-1 overflow-y-auto p-6" style={{ background: `${color}06` }}>
 			<button
@@ -759,12 +762,8 @@ function AgentWorkView({
 											{isError && <Chip variant="error">failed</Chip>}
 										</div>
 										<span className="text-[10px] font-mono text-zinc-700">
-											{new Date(ev.timestamp).toLocaleTimeString([], {
-												hour: '2-digit',
-												minute: '2-digit',
-												second: '2-digit',
-											})}
-										</span>
+												{formatTime(ev.timestamp, timezone)}
+											</span>
 									</div>
 									{isCode ? (
 										<pre className="text-[11px] font-mono text-zinc-400 whitespace-pre-wrap leading-relaxed overflow-x-auto rounded-lg p-2.5 bg-black/20">

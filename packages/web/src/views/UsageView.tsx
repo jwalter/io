@@ -1,4 +1,6 @@
+import { useTimezone } from '@/hooks/use-config';
 import { api } from '@/lib/api';
+import { formatDate } from '@/lib/timezone';
 import { ChevronRight } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -449,6 +451,7 @@ function IOTab({ records }: { records: UsageEntry[] }) {
 // ─── Timeline Tab ─────────────────────────────────────────────────────────────
 
 function TimelineTab({ records }: { records: UsageEntry[] }) {
+	const timezone = useTimezone();
 	const dailyData = useMemo(() => {
 		const byDay = new Map<string, { date: string; inputTokens: number; outputTokens: number; cost: number; calls: number }>();
 		for (const r of records) {
@@ -465,7 +468,7 @@ function TimelineTab({ records }: { records: UsageEntry[] }) {
 
 	const chartData = dailyData.map((d) => ({
 		...d,
-		label: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+		label: formatDate(d.date, timezone),
 		tokens: d.inputTokens + d.outputTokens,
 	}));
 

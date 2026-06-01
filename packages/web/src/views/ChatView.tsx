@@ -1,22 +1,16 @@
 import { IoMark } from '@/components/ui/io-mark';
 import { Chip } from '@/components/ui/shared';
 import { useChat } from '@/hooks/use-chat';
+import { useTimezone } from '@/hooks/use-config';
 import { useAuth } from '@/lib/auth';
+import { formatTime as fmtTime } from '@/lib/timezone';
 import { Activity, ChevronDown, Paperclip, Send, Square } from 'lucide-react';
 import { marked } from 'marked';
 import { useLayoutEffect, useRef, useState } from 'react';
 
-function formatTime(ts: string | Date): string {
-	return new Date(ts).toLocaleTimeString('en-US', {
-		hour: 'numeric',
-		minute: '2-digit',
-		hour12: true,
-		timeZone: 'America/Chicago',
-	});
-}
-
 export function ChatView() {
 	const { session } = useAuth();
+	const timezone = useTimezone();
 	const { messages, streaming, isStreaming, isThinking, sendChatMessage, addUserMessage, uploadAttachment } = useChat();
 	const [input, setInput] = useState('');
 	const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -167,7 +161,7 @@ export function ChatView() {
 							)}
 
 							{/* Timestamp */}
-							<span className="text-[11px] text-zinc-700 font-mono px-0.5">{formatTime(msg.timestamp)}</span>
+							<span className="text-[11px] text-zinc-700 font-mono px-0.5">{fmtTime(msg.timestamp, timezone)}</span>
 						</div>
 					</div>
 				))}

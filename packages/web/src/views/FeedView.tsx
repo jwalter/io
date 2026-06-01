@@ -1,6 +1,8 @@
 import { MarkdownRenderer } from '@/components/ui/markdown';
 import { Chip } from '@/components/ui/shared';
+import { useTimezone } from '@/hooks/use-config';
 import { api } from '@/lib/api';
+import { formatDateTime } from '@/lib/timezone';
 import { Eye, Inbox, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -39,6 +41,7 @@ export function FeedView() {
 	const [reading, setReading] = useState<FeedItem | null>(null);
 	const [checked, setChecked] = useState<Set<string>>(new Set());
 	const [filter, setFilter] = useState<'all' | 'unread'>('all');
+	const timezone = useTimezone();
 
 	useEffect(() => {
 		api
@@ -194,7 +197,7 @@ export function FeedView() {
 											<SourceChip name={item.squadName ?? (item.squadId ? item.squadId.slice(0, 8) : 'IO')} />
 									</div>
 									<p className={`text-[11px] truncate ${item.status === 'unread' ? 'text-zinc-200' : 'text-zinc-500'}`}>{item.title}</p>
-									<p className="text-[10px] text-zinc-700 font-mono mt-1">{new Date(item.createdAt).toLocaleString()}</p>
+									<p className="text-[10px] text-zinc-700 font-mono mt-1">{formatDateTime(item.createdAt, timezone)}</p>
 								</div>
 							</div>
 						);
@@ -218,7 +221,7 @@ export function FeedView() {
 							<div className="flex-1 min-w-0 mr-4">
 								<SourceChip name={reading.squadName ?? (reading.squadId ? reading.squadId.slice(0, 8) : 'IO')} />
 								<h3 className="text-sm font-mono text-zinc-100 mt-1.5">{reading.title}</h3>
-								<p className="text-[11px] text-zinc-700 font-mono mt-0.5">{new Date(reading.createdAt).toLocaleString()}</p>
+								<p className="text-[11px] text-zinc-700 font-mono mt-0.5">{formatDateTime(reading.createdAt, timezone)}</p>
 							</div>
 							<button type="button" onClick={() => deleteSingle(reading.id)} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[11px] text-zinc-400 bg-[#252525] hover:bg-red-500/10 hover:text-red-400 transition-colors cursor-pointer">
 								<Trash2 className="w-3 h-3" />Delete

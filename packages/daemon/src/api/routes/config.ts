@@ -27,17 +27,18 @@ export function configRouter(): Router {
 				defaultModel: config.defaultModel,
 				maxInstancesPerSquad: config.maxInstancesPerSquad,
 				dataDir: config.dataDir,
-				pricing: config.pricing,
-				telegram: {
-						botToken: config.telegram.botToken,
-					allowedChatIds: config.telegram.allowedChatIds,
-				},
-				supabase: {
-					projectUrl: config.supabase.projectUrl,
-					anonKey: config.supabase.anonKey,
-						jwtSecret: config.supabase.jwtSecret,
-				},
-			};
+					timezone: config.timezone,
+					pricing: config.pricing,
+					telegram: {
+							botToken: config.telegram.botToken,
+						allowedChatIds: config.telegram.allowedChatIds,
+					},
+					supabase: {
+						projectUrl: config.supabase.projectUrl,
+						anonKey: config.supabase.anonKey,
+							jwtSecret: config.supabase.jwtSecret,
+					},
+				};
 			res.json({ config: redacted });
 		} catch (err) {
 			res.status(500).json({ error: 'Failed to load config' });

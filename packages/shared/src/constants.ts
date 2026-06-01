@@ -30,6 +30,7 @@ export const DEFAULT_CONFIG = {
 	defaultModel: 'claude-opus-4.6',
 	maxInstancesPerSquad: 3,
 	dataDir: '~/.io',
+	timezone: 'UTC',
 	pricing: {
 		refreshIntervalHours: 24,
 	},

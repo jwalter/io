@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Bell } from 'lucide-react';
+import { useTimezone } from '@/hooks/use-config';
+import { formatTime } from '@/lib/timezone';
 
 export interface Notification {
 	id: string;
@@ -37,6 +39,7 @@ export function NotificationBell() {
 	const notifications = useNotifications();
 	const panelRef = useRef<HTMLDivElement>(null);
 	const [lastSeenCount, setLastSeenCount] = useState(0);
+	const timezone = useTimezone();
 
 	const unreadCount = notifications.length - lastSeenCount;
 
@@ -98,12 +101,7 @@ export function NotificationBell() {
 								<div key={n.id} className="px-4 py-3 hover:bg-white/[0.03]">
 									<p className="text-xs text-zinc-300 leading-relaxed">{n.message}</p>
 									<p className="text-[10px] text-zinc-600 font-mono mt-1">
-										{new Date(n.timestamp).toLocaleTimeString('en-US', {
-											hour: 'numeric',
-											minute: '2-digit',
-											hour12: true,
-											timeZone: 'America/Chicago',
-										})}
+										{formatTime(n.timestamp, timezone)}
 									</p>
 								</div>
 							))}

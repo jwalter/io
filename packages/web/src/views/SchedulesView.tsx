@@ -1,5 +1,7 @@
 import { Chip, DangerBtn, PrimaryBtn, SecondaryBtn, SquadChip, WarnBtn } from '@/components/ui/shared';
+import { useTimezone } from '@/hooks/use-config';
 import { api } from '@/lib/api';
+import { formatDateTime } from '@/lib/timezone';
 import { Activity, ChevronLeft, Clock, Edit2, Pause, Play, Plus, Save, Trash2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -306,6 +308,7 @@ export function SchedulesView() {
 	const [squads, setSquads] = useState<{ id: string; name: string }[]>([]);
 	const [addingNew, setAddingNew] = useState(false);
 	const [editingSched, setEditingSched] = useState<Schedule | null>(null);
+	const timezone = useTimezone();
 
 	useEffect(() => {
 		loadSchedules();
@@ -473,14 +476,7 @@ export function SchedulesView() {
 											{!s.enabled
 												? '—'
 												: s.nextRun
-													? new Date(s.nextRun).toLocaleString('en-US', {
-															hour: 'numeric',
-															minute: '2-digit',
-															hour12: true,
-															month: 'short',
-															day: 'numeric',
-															timeZone: 'America/Chicago',
-														})
+													? formatDateTime(s.nextRun, timezone)
 													: '—'}
 										</span>
 									</td>

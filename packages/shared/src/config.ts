@@ -9,6 +9,7 @@ export interface IOConfig {
 	defaultModel: string;
 	maxInstancesPerSquad: number;
 	dataDir: string;
+	timezone: string;
 	pricing: {
 		refreshIntervalHours: number;
 	};
@@ -62,6 +63,7 @@ export function loadConfig(): IOConfig {
 		defaultModel: process.env.IO_MODEL || fileConfig.defaultModel || DEFAULT_CONFIG.defaultModel,
 		maxInstancesPerSquad: fileConfig.maxInstancesPerSquad || DEFAULT_CONFIG.maxInstancesPerSquad,
 		dataDir,
+		timezone: process.env.IO_TIMEZONE || fileConfig.timezone || DEFAULT_CONFIG.timezone,
 		pricing: {
 			refreshIntervalHours:
 				fileConfig.pricing?.refreshIntervalHours || DEFAULT_CONFIG.pricing.refreshIntervalHours,

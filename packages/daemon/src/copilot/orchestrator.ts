@@ -62,14 +62,17 @@ const SYSTEM_MESSAGE_BASE = `You are IO, an AI orchestrator daemon. You help use
  */
 async function buildSystemMessage(): Promise<string> {
 	try {
+		const config = loadConfig();
 		const squads = await listSquads();
 		const wikiListing = getPageListing(getOrchestratorScopes());
 		const skillsContent = await getActiveSkillsContent('orchestrator');
 
+		const timezoneSection = `\n## User Timezone\nThe user's configured timezone is **${config.timezone}**. When the user mentions times (e.g., "at 3pm", "every morning at 9"), interpret them in this timezone. When creating schedules with cron expressions, convert from the user's timezone to UTC.\n`;
+
 		const wikiSection = `\n## Wiki Knowledge\n${wikiListing}\n\nUse read_wiki to access page content. Use write_wiki to record important knowledge.\n`;
 
 		if (squads.length === 0) {
-			return `${SYSTEM_MESSAGE_BASE}\n## Active Squads\n(No squads currently active)${wikiSection}${skillsContent}`;
+			return `${SYSTEM_MESSAGE_BASE}${timezoneSection}\n## Active Squads\n(No squads currently active)${wikiSection}${skillsContent}`;
 		}
 
 		const squadList = squads
@@ -79,7 +82,7 @@ async function buildSystemMessage(): Promise<string> {
 			)
 			.join('\n');
 
-		return `${SYSTEM_MESSAGE_BASE}\n## Active Squads\n${squadList}\n\nWhen a user's message mentions any of the above projects (by name, path, or related topic), delegate to the corresponding squad.${wikiSection}${skillsContent}`;
+		return `${SYSTEM_MESSAGE_BASE}${timezoneSection}\n## Active Squads\n${squadList}\n\nWhen a user's message mentions any of the above projects (by name, path, or related topic), delegate to the corresponding squad.${wikiSection}${skillsContent}`;
 	} catch {
 		return `${SYSTEM_MESSAGE_BASE}\n## Active Squads\n(Unable to load squad registry)\n`;
 	}

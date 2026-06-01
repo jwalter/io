@@ -2,6 +2,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router';
 import { ChatOverlay } from './components/ChatOverlay';
 import { Layout } from './components/Layout';
 import { ChatProvider } from './hooks/use-chat';
+import { ConfigProvider } from './hooks/use-config';
 import { AuthProvider, useAuth } from './lib/auth';
 import { ChatView } from './views/ChatView';
 import { FeedView } from './views/FeedView';
@@ -67,9 +68,11 @@ export function App() {
 	return (
 		<AuthProvider>
 			<AuthGate>
-				<ChatProvider>
-					<ProtectedApp />
-				</ChatProvider>
+				<ConfigProvider>
+					<ChatProvider>
+						<ProtectedApp />
+					</ChatProvider>
+				</ConfigProvider>
 			</AuthGate>
 		</AuthProvider>
 	);
