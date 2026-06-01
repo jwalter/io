@@ -13,6 +13,7 @@ export interface WorktreeInfo {
 /**
  * Create a git worktree for an instance.
  * Branch naming: io/{squad-name}/{short-id}
+ * Always fetches latest from remote before creating the worktree.
  */
 export function createWorktree(params: {
 	repoPath: string;
@@ -34,9 +35,13 @@ export function createWorktree(params: {
 		throw new Error(`Not a git repository: ${params.repoPath}`);
 	}
 
-	// Create the worktree with a new branch from HEAD
+	// Fetch latest from remote to ensure we branch from up-to-date code
+	const startPoint = fetchLatestMainRef(params.repoPath);
+	log.info({ startPoint }, 'Fetched latest remote ref for worktree');
+
+	// Create the worktree with a new branch from the latest remote HEAD
 	try {
-		execSync(`git worktree add -b "${branch}" "${worktreePath}"`, {
+		execSync(`git worktree add -b "${branch}" "${worktreePath}" "${startPoint}"`, {
 			cwd: params.repoPath,
 			stdio: 'pipe',
 			encoding: 'utf-8',
@@ -58,6 +63,56 @@ export function createWorktree(params: {
 
 	log.info({ worktreePath, branch }, 'Worktree created');
 	return { path: worktreePath, branch };
+}
+
+/**
+ * Fetch the latest from the remote and return the ref to branch from.
+ * Detects the default branch (main/master) from the remote HEAD.
+ */
+function fetchLatestMainRef(repoPath: string): string {
+	try {
+		// Fetch all remote updates
+		execSync('git fetch origin', {
+			cwd: repoPath,
+			stdio: 'pipe',
+			encoding: 'utf-8',
+		});
+	} catch {
+		// Fetch failed (offline, no remote, etc.) — fall back to local HEAD
+		return 'HEAD';
+	}
+
+	// Determine the default branch from the remote
+	try {
+		const remoteHead = execSync('git symbolic-ref refs/remotes/origin/HEAD', {
+			cwd: repoPath,
+			stdio: 'pipe',
+			encoding: 'utf-8',
+		}).trim();
+		// Returns something like "refs/remotes/origin/main"
+		if (remoteHead) {
+			return remoteHead;
+		}
+	} catch {
+		// symbolic-ref not set — try common branch names
+	}
+
+	// Fallback: try origin/main, then origin/master
+	for (const candidate of ['origin/main', 'origin/master']) {
+		try {
+			execSync(`git rev-parse --verify ${candidate}`, {
+				cwd: repoPath,
+				stdio: 'pipe',
+				encoding: 'utf-8',
+			});
+			return candidate;
+		} catch {
+			continue;
+		}
+	}
+
+	// Last resort: local HEAD
+	return 'HEAD';
 }
 
 /**
