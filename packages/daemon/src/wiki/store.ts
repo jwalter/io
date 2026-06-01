@@ -60,42 +60,52 @@ export function listWikiScopes(): string[] {
 	return scopes;
 }
 
+/** Return just the squad names that have wiki folders */
+function listSquadNames(): string[] {
+	const squadsDir = join(wikiRoot, 'squads');
+	if (!existsSync(squadsDir)) return [];
+	return readdirSync(squadsDir, { withFileTypes: true })
+		.filter((e) => e.isDirectory())
+		.map((e) => e.name);
+}
+
 /**
  * List all pages across all scopes, with scope prefix in the path.
  * Always includes scope directories even if they are empty.
  */
 export function listAllWikiPages(): Array<{ scope: string; name: string; path: string; isDir?: boolean }> {
 	const allPages: Array<{ scope: string; name: string; path: string; isDir?: boolean }> = [];
-	const scopes = listWikiScopes();
 
 	// Always include top-level directories
 	allPages.push({ scope: 'io', name: 'io', path: 'io', isDir: true });
 	allPages.push({ scope: 'shared', name: 'shared', path: 'shared', isDir: true });
 	allPages.push({ scope: 'squads', name: 'squads', path: 'squads', isDir: true });
 
-	for (const scope of scopes) {
-		const pages = listWikiPages(scope);
-		const scopePrefix = scope === 'io' ? 'io' : scope === 'shared' ? 'shared' : `squads/${scope}`;
-
-		// For squad scopes, also emit the squad directory
-		if (scope !== 'io' && scope !== 'shared') {
-			allPages.push({ scope, name: scope, path: scopePrefix, isDir: true });
-		}
-
-		// Also emit any subdirectories found within the scope
+	// Process built-in scopes (io, shared)
+	for (const scope of ['io', 'shared'] as const) {
 		const dir = scopeDir(scope);
 		if (existsSync(dir)) {
-			collectDirs(dir, scopePrefix, allPages, scope);
+			collectDirs(dir, scope, allPages, scope);
 		}
-
-		for (const page of pages) {
-			allPages.push({
-				scope,
-				name: page.name,
-				path: `${scopePrefix}/${page.path}`,
-			});
+		for (const page of listWikiPages(scope)) {
+			allPages.push({ scope, name: page.name, path: `${scope}/${page.path}` });
 		}
 	}
+
+	// Process squad scopes separately to avoid name collisions
+	for (const squadName of listSquadNames()) {
+		const scopePrefix = `squads/${squadName}`;
+		allPages.push({ scope: squadName, name: squadName, path: scopePrefix, isDir: true });
+
+		const dir = scopeDir(squadName);
+		if (existsSync(dir)) {
+			collectDirs(dir, scopePrefix, allPages, squadName);
+		}
+		for (const page of listWikiPages(squadName)) {
+			allPages.push({ scope: squadName, name: page.name, path: `${scopePrefix}/${page.path}` });
+		}
+	}
+
 	return allPages;
 }
 
