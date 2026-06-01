@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
-import { type WebSocket, WebSocketServer } from 'ws';
+import { type RawData, type WebSocket, WebSocketServer } from 'ws';
 import type { IOConfig } from '../config.js';
 import { sendMessage } from '../copilot/orchestrator.js';
 import { createChildLogger } from '../logging/logger.js';
@@ -28,6 +28,10 @@ export interface ApiServer {
 
 // Connected WebSocket clients keyed by connection ID
 const wsClients = new Map<string, WebSocket>();
+// Track which clients are alive (responded to last ping)
+const wsAlive = new Map<string, boolean>();
+
+const PING_INTERVAL_MS = 30_000; // 30 seconds — keeps Cloudflare Tunnel alive
 
 export function createApiServer(config: IOConfig): ApiServer {
 	const logger = createChildLogger('api');
@@ -114,13 +118,19 @@ export function createApiServer(config: IOConfig): ApiServer {
 		}
 		const connectionId = crypto.randomUUID();
 		wsClients.set(connectionId, ws);
+		wsAlive.set(connectionId, true);
 		subscribeClient(connectionId, ws);
-		logger.info({ connectionId }, 'WebSocket client connected');
+		logger.debug({ connectionId }, 'WebSocket client connected');
 
 		// Send the connection ID to the client
 		ws.send(JSON.stringify({ type: 'connected', connectionId }));
 
-		ws.on('message', (data) => {
+		// Mark alive on pong response
+		ws.on('pong', () => {
+			wsAlive.set(connectionId, true);
+		});
+
+		ws.on('message', (data: RawData) => {
 			try {
 				const parsed = JSON.parse(data.toString()) as {
 					type?: string;
@@ -156,10 +166,29 @@ export function createApiServer(config: IOConfig): ApiServer {
 
 		ws.on('close', () => {
 			wsClients.delete(connectionId);
+			wsAlive.delete(connectionId);
 			unsubscribeClient(connectionId);
-			logger.info({ connectionId }, 'WebSocket client disconnected');
+			logger.debug({ connectionId }, 'WebSocket client disconnected');
 		});
 	});
+
+	// Ping all clients periodically to keep Cloudflare Tunnel connections alive
+	// and detect dead clients
+	const pingInterval = setInterval(() => {
+		for (const [id, ws] of wsClients) {
+			if (!wsAlive.get(id)) {
+				// Client didn't respond to last ping — terminate
+				logger.debug({ connectionId: id }, 'Terminating unresponsive WebSocket client');
+				ws.terminate();
+				wsClients.delete(id);
+				wsAlive.delete(id);
+				unsubscribeClient(id);
+				continue;
+			}
+			wsAlive.set(id, false);
+			ws.ping();
+		}
+	}, PING_INTERVAL_MS);
 
 	return {
 		async start() {
@@ -172,11 +201,13 @@ export function createApiServer(config: IOConfig): ApiServer {
 		},
 
 		async stop() {
+			clearInterval(pingInterval);
 			return new Promise<void>((resolve, reject) => {
 				for (const ws of wsClients.values()) {
 					ws.close();
 				}
 				wsClients.clear();
+				wsAlive.clear();
 				wss.close();
 				server.close((err) => {
 					if (err) reject(err);
