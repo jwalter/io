@@ -39,6 +39,13 @@ export function getProposal(id: string): SquadProposal | undefined {
 	return proposals.get(id);
 }
 
+export function getProposalByRepo(repoUrl: string): SquadProposal | undefined {
+	for (const proposal of proposals.values()) {
+		if (proposal.repoUrl === repoUrl) return proposal;
+	}
+	return undefined;
+}
+
 export function deleteProposal(id: string): void {
 	proposals.delete(id);
 }

@@ -19,5 +19,6 @@ export {
 	confirmSquad,
 	addMemberToExistingSquad,
 	getProposal,
+	getProposalByRepo,
 	deleteProposal,
 } from './hiring.js';

@@ -13,7 +13,7 @@ import { runInstance } from '../squad/execution/runner.js';
 import {
 	addMemberToExistingSquad,
 	confirmSquad,
-	getProposal,
+	getProposalByRepo,
 	proposeSquad,
 } from '../squad/hiring.js';
 import {
@@ -141,9 +141,9 @@ export function createOrchestratorTools() {
 			},
 		}),
 
-		defineTool('propose_squad', {
+		defineTool('hire_squad', {
 			description:
-				'Propose a new squad for a project. Clones the repo, uses AI to deeply analyze the codebase, recommends senior/principal-level specialist roles, and generates themed character names. Returns a proposal for the user to review before creation. ALWAYS present the proposal conversationally to the user and ask for their feedback before confirming.',
+				'Hire a squad for a project. If no proposal exists for this repo yet, analyzes the codebase and proposes a team for user review. If a proposal already exists (user previously reviewed and approved), confirms it and creates the squad. Call this BOTH when the user wants to start hiring AND when they say "hire them" / "looks good" / "approved".',
 			parameters: z.object({
 				repoUrl: z.string().describe('GitHub repository URL (e.g. https://github.com/owner/repo)'),
 				name: z.string().optional().describe('Name for the squad (auto-generated if omitted)'),
@@ -153,9 +153,43 @@ export function createOrchestratorTools() {
 					.describe(
 						'Pop-culture universe for member names (e.g. "The A-Team", "Star Wars", "Lord of the Rings"). Random if omitted.',
 					),
+				removedRoles: z
+					.array(z.string())
+					.optional()
+					.describe(
+						'Role IDs to remove from the proposal when confirming (e.g. ["tester", "senior-react-engineer"])',
+					),
 			}),
-			handler: async (args: { repoUrl: string; name?: string; universe?: string }) => {
+			handler: async (args: {
+				repoUrl: string;
+				name?: string;
+				universe?: string;
+				removedRoles?: string[];
+			}) => {
 				try {
+					// Check if a proposal already exists for this repo
+					const existingProposal = getProposalByRepo(args.repoUrl);
+
+					if (existingProposal) {
+						// Confirm the existing proposal
+						const result = await confirmSquad({
+							proposalId: existingProposal.id,
+							name: args.name,
+							removedRoles: args.removedRoles,
+						});
+
+						return {
+							textResultForLlm: JSON.stringify({
+								message: 'Squad created successfully!',
+								squadId: result.squadId,
+								universe: result.universe,
+								members: result.members,
+							}),
+							resultType: 'success' as const,
+						};
+					}
+
+					// No existing proposal — create a new one
 					const { ensureCloned } = await import('../squad/source-resolver.js');
 					const projectPath = await ensureCloned(args.repoUrl);
 					const proposal = await proposeSquad({
@@ -181,68 +215,14 @@ export function createOrchestratorTools() {
 							universe: proposal.universe,
 							members: memberSummary,
 							instructions:
-								'Present this squad proposal conversationally. Show each member with their character name, role title, and why they were chosen. Ask the user if they want to approve, modify, or reject the squad. Use confirm_squad with the proposalId to finalize.',
+								'Present this squad proposal conversationally. Show each member with their character name, role title, and why they were chosen. Ask the user if they want to approve, modify, or reject the squad. Call hire_squad again with the same repoUrl to finalize when approved.',
 						}),
 						resultType: 'success' as const,
 					};
 				} catch (err) {
 					return {
 						textResultForLlm: JSON.stringify({
-							error: `Failed to propose squad: ${err instanceof Error ? err.message : String(err)}`,
-						}),
-						resultType: 'success' as const,
-					};
-				}
-			},
-		}),
-
-		defineTool('confirm_squad', {
-			description:
-				'Confirm a squad proposal and create the actual squad. Use after the user has reviewed and approved a proposal from propose_squad. Can optionally remove roles the user rejected.',
-			parameters: z.object({
-				proposalId: z.string().describe('The proposal ID from propose_squad'),
-				name: z
-					.string()
-					.optional()
-					.describe('Override the squad name (uses project name if omitted)'),
-				removedRoles: z
-					.array(z.string())
-					.optional()
-					.describe(
-						'Role IDs to remove from the proposal (e.g. ["tester", "senior-react-engineer"])',
-					),
-			}),
-			handler: async (args: { proposalId: string; name?: string; removedRoles?: string[] }) => {
-				try {
-					const proposal = getProposal(args.proposalId);
-					if (!proposal) {
-						return {
-							textResultForLlm: JSON.stringify({
-								error: 'Proposal not found or has expired. Use propose_squad to create a new one.',
-							}),
-							resultType: 'success' as const,
-						};
-					}
-
-					const result = await confirmSquad({
-						proposalId: args.proposalId,
-						name: args.name,
-						removedRoles: args.removedRoles,
-					});
-
-					return {
-						textResultForLlm: JSON.stringify({
-							message: 'Squad created successfully!',
-							squadId: result.squadId,
-							universe: result.universe,
-							members: result.members,
-						}),
-						resultType: 'success' as const,
-					};
-				} catch (err) {
-					return {
-						textResultForLlm: JSON.stringify({
-							error: `Failed to confirm squad: ${err instanceof Error ? err.message : String(err)}`,
+							error: `Failed to hire squad: ${err instanceof Error ? err.message : String(err)}`,
 						}),
 						resultType: 'success' as const,
 					};
