@@ -167,7 +167,7 @@ export function Layout() {
 						</div>
 					<div className="border-t border-white/[0.05] py-1.5 px-1.5 space-y-0.5">
 						<a
-							href="https://github.com/michaeljolley/io"
+							href={`https://github.com/michaeljolley/io/releases/tag/v${version}`}
 							target="_blank"
 							rel="noreferrer"
 							title="GitHub"
