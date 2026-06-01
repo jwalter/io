@@ -967,11 +967,20 @@ function InstanceDetailView({
 			// Agent activity events
 			if (ev.type.startsWith('agent:') && ev.instanceId === instanceId) {
 				const data = ev.data as Record<string, unknown> | undefined;
+				let content = (data?.content as string) || (data?.tool as string) || '';
+				try {
+					const parsed = JSON.parse(content);
+					if (typeof parsed === 'object' && parsed !== null) {
+						content = parsed.message ?? parsed.content ?? parsed.response ?? parsed.decision ?? JSON.stringify(parsed, null, 2);
+					}
+				} catch {
+					// already a plain string
+				}
 				const newEvent: AgentActivityEvent = {
 					id: ev.id,
 					agent: (data?.agentRole as string) || 'unknown',
 					type: ev.type.replace('agent:', ''),
-					content: (data?.content as string) || (data?.tool as string) || '',
+					content,
 					model: (data?.model as string) || null,
 					tokensUsed: null,
 					timestamp: ev.timestamp,

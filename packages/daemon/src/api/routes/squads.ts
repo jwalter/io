@@ -218,15 +218,26 @@ export function squadsRouter(): Router {
 				args: [instance.id],
 			});
 
-			const activity = activityResult.rows.map((row) => ({
-				id: row.id as string,
-				agent: row.agent_role as string,
-				type: row.activity_type as string,
-				content: row.content as string,
-				model: row.model_used as string | null,
-				tokensUsed: row.tokens_used as number | null,
-				timestamp: row.timestamp as string,
-			}));
+			const activity = activityResult.rows.map((row) => {
+				let content = row.content as string ?? '';
+				try {
+					const parsed = JSON.parse(content);
+					if (typeof parsed === 'object' && parsed !== null) {
+						content = parsed.message ?? parsed.content ?? parsed.response ?? parsed.decision ?? JSON.stringify(parsed, null, 2);
+					}
+				} catch {
+					// content is already a plain string
+				}
+				return {
+					id: row.id as string,
+					agent: row.agent_role as string,
+					type: row.activity_type as string,
+					content,
+					model: row.model_used as string | null,
+					tokensUsed: row.tokens_used as number | null,
+					timestamp: row.timestamp as string,
+				};
+			});
 
 			// Build member status from tasks
 			const memberDetails = members.map((m) => {
