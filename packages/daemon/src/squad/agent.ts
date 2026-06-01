@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { getClient } from '../copilot/client.js';
 import { createChildLogger } from '../logging/logger.js';
 import { recordTokenUsage } from '../models/token-tracker.js';
+import { addInboxEntry } from '../store/inbox.js';
 import {
 	getSquadScopes,
 	listWikiPages,
@@ -314,6 +315,59 @@ export class Agent {
 						textResultForLlm: JSON.stringify({ results }),
 						resultType: 'success' as const,
 					};
+				},
+			}),
+		);
+
+		// Inbox tool — always available so agents can deliver work to user
+		tools.push(
+			defineTool('add_to_inbox', {
+				description:
+					'Create an inbox entry for the user. Use to deliver completed work, ask a blocking question, or leave an informational note.',
+				parameters: z.object({
+					kind: z
+						.enum(['deliverable', 'question', 'note'])
+						.describe(
+							'Type: deliverable (work product), question (blocks until user responds), note (informational)',
+						),
+					title: z.string().describe('Short title for the inbox entry'),
+					content: z.string().describe('Full content/body of the entry (markdown supported)'),
+				}),
+				handler: async (args: {
+					kind: 'deliverable' | 'question' | 'note';
+					title: string;
+					content: string;
+				}) => {
+					try {
+						const { entry } = await addInboxEntry({
+							squadId: this.squadId,
+							instanceId: this.instanceId,
+							kind: args.kind,
+							title: args.title,
+							content: args.content,
+						});
+						this.logger.info(
+							{ entryId: entry.id, kind: args.kind },
+							'Agent created inbox entry',
+						);
+						return {
+							textResultForLlm: JSON.stringify({
+								created: true,
+								id: entry.id,
+								kind: entry.kind,
+								title: entry.title,
+								source: `squad:${this.squadName}:${this.role}`,
+							}),
+							resultType: 'success' as const,
+						};
+					} catch (err) {
+						return {
+							textResultForLlm: JSON.stringify({
+								error: `Failed to create inbox entry: ${err instanceof Error ? err.message : String(err)}`,
+							}),
+							resultType: 'success' as const,
+						};
+					}
 				},
 			}),
 		);
