@@ -87,12 +87,13 @@ export async function runInstance(params: {
 			pr,
 		};
 	} catch (err) {
-		log.error({ err, instanceId: instance.id }, 'Instance run failed');
+		const errMsg = err instanceof Error ? err.message : String(err);
+		log.error({ instanceId: instance.id, error: errMsg.slice(0, 300) }, 'Instance run failed');
 		await cleanupInstance(instance.id, squad);
 		return {
 			instanceId: instance.id,
 			success: false,
-			error: err instanceof Error ? err.message : String(err),
+			error: errMsg.slice(0, 500),
 		};
 	}
 }

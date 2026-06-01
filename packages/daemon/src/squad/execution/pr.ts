@@ -1,4 +1,7 @@
 import { execSync } from 'node:child_process';
+import { writeFileSync, unlinkSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { createChildLogger } from '../../logging/logger.js';
 import type { Instance } from './instance.js';
 import { transitionInstance } from './instance.js';
@@ -48,23 +51,31 @@ export async function createPullRequest(params: {
 		// Push the branch
 		execSync(`git push -u origin "${instance.branch}"`, { cwd, stdio: 'pipe' });
 
-		// Create the PR using gh CLI
+		// Create the PR using gh CLI with --body-file to avoid shell escaping issues
 		const prBody = buildPrBody(instance, squadName);
-		const prOutput = execSync(
-			`gh pr create --title "${escapeShell(title)}" --body "${escapeShell(prBody)}" --head "${instance.branch}"`,
-			{ cwd, encoding: 'utf-8', stdio: 'pipe' },
-		).trim();
+		const bodyFile = join(tmpdir(), `io-pr-body-${instance.id}.md`);
+		writeFileSync(bodyFile, prBody, 'utf-8');
 
-		// Parse the PR URL to get the number
-		const prUrl = prOutput;
-		const prNumber = Number.parseInt(prUrl.split('/').pop() ?? '0', 10);
+		try {
+			const prOutput = execSync(
+				`gh pr create --title "${escapeShell(title)}" --body-file "${bodyFile}" --head "${instance.branch}"`,
+				{ cwd, encoding: 'utf-8', stdio: 'pipe' },
+			).trim();
 
-		await transitionInstance(instance.id, 'complete');
-		log.info({ instanceId: instance.id, prUrl, prNumber }, 'PR created');
+			// Parse the PR URL to get the number
+			const prUrl = prOutput;
+			const prNumber = Number.parseInt(prUrl.split('/').pop() ?? '0', 10);
 
-		return { url: prUrl, number: prNumber };
+			await transitionInstance(instance.id, 'complete');
+			log.info({ instanceId: instance.id, prUrl, prNumber }, 'PR created');
+
+			return { url: prUrl, number: prNumber };
+		} finally {
+			try { unlinkSync(bodyFile); } catch {}
+		}
 	} catch (err) {
-		log.error({ err, instanceId: instance.id }, 'Failed to create PR');
+		const errMsg = err instanceof Error ? err.message : String(err);
+		log.error({ instanceId: instance.id, error: errMsg.slice(0, 200) }, 'Failed to create PR');
 		await transitionInstance(instance.id, 'failed');
 		return null;
 	}
