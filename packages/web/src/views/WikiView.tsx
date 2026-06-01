@@ -6,6 +6,7 @@ import {
 	FileText,
 	Folder,
 	FolderOpen,
+	Loader2,
 	Pencil,
 	Plus,
 	Save,
@@ -202,6 +203,7 @@ export function WikiView() {
 	const [newPageName, setNewPageName] = useState('');
 	const [search, setSearch] = useState('');
 	const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+	const [creating, setCreating] = useState(false);
 
 	useEffect(() => {
 		loadPages();
@@ -320,6 +322,7 @@ export function WikiView() {
 			? path
 			: `shared/${path}`;
 
+		setCreating(true);
 		try {
 			const { scope, relativePath } = parseScopePath(fullPath);
 			const title = relativePath.split('/').slice(-1)[0] ?? relativePath;
@@ -330,6 +333,8 @@ export function WikiView() {
 			await loadPage(fullPath);
 		} catch {
 			toast.error('Failed to create page');
+		} finally {
+			setCreating(false);
 		}
 	}
 
@@ -395,10 +400,18 @@ export function WikiView() {
 						/>
 						<PrimaryBtn
 							onClick={createPage}
-							disabled={!newPageName.trim()}
+							disabled={!newPageName.trim() || creating}
 							className="w-full justify-center px-3 py-2"
 						>
-							<Plus size={13} /> Add Page
+							{creating ? (
+								<>
+									<Loader2 size={13} className="animate-spin" /> Creating...
+								</>
+							) : (
+								<>
+									<Plus size={13} /> Add Page
+								</>
+							)}
 						</PrimaryBtn>
 					</div>
 				</div>
@@ -445,7 +458,7 @@ export function WikiView() {
 							</div>
 						</div>
 
-						<div className="flex-1 overflow-y-auto bg-[#111111] p-6">
+						<div className="flex-1 overflow-y-auto p-6">
 							{editing ? (
 								<textarea
 									value={editContent}
@@ -453,7 +466,7 @@ export function WikiView() {
 									className="h-full min-h-[320px] w-full resize-none rounded-xl border border-white/[0.07] bg-[#181818] p-4 font-mono text-sm text-zinc-300 outline-none focus:border-[#E43A9C]/50"
 								/>
 							) : (
-								<div className="mx-auto max-w-4xl rounded-xl border border-white/[0.07] bg-[#181818] p-6">
+								<div className="mx-auto max-w-4xl">
 									<div
 										className="prose-io text-sm text-zinc-300"
 										// biome-ignore lint: markdown rendering

@@ -37,10 +37,10 @@ marked.use({
 			const text = tokens.map((t: { raw: string }) => t.raw).join('');
 			const tag = `h${depth}`;
 			const sizes: Record<number, string> = {
-				1: '1.5rem',
-				2: '1.25rem',
-				3: '1.125rem',
-				4: '1rem',
+				1: '2rem',
+				2: '1.625rem',
+				3: '1.375rem',
+				4: '1.125rem',
 			};
 			return `<${tag} style="font-size:${sizes[depth] ?? '1rem'};font-weight:500;color:#e4e4e7;margin:1.1em 0 0.4em;line-height:1.5;">${text}</${tag}>`;
 		},
