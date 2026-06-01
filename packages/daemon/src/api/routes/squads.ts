@@ -9,6 +9,14 @@ function isActiveInstance(status: string): boolean {
 	return status !== 'complete' && status !== 'failed';
 }
 
+/** Condense a potentially long objective into a short title (first line, max 80 chars). */
+function condensedTitle(objective: string | null | undefined): string {
+	if (!objective) return 'Untitled task';
+	const firstLine = objective.split('\n')[0]?.trim() || objective.trim();
+	if (firstLine.length <= 80) return firstLine;
+	return `${firstLine.slice(0, 77)}…`;
+}
+
 export function squadsRouter(): Router {
 	const router = Router();
 
@@ -315,7 +323,7 @@ export function squadsRouter(): Router {
 				}
 				return {
 					id: row.id as string,
-					title: (row.objective as string) ?? 'Untitled task',
+					title: condensedTitle(row.objective as string),
 					type: (row.type as string) ?? 'instance',
 					status: row.status === 'complete' ? 'completed' : 'errored',
 					createdAt,
@@ -439,7 +447,7 @@ export function squadsRouter(): Router {
 
 			res.json({
 				id: row.id as string,
-				title: (row.objective as string) ?? 'Untitled task',
+					title: condensedTitle(row.objective as string),
 				type: (row.type as string) ?? 'instance',
 				status: row.status === 'complete' ? 'completed' : 'errored',
 				createdAt,
