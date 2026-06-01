@@ -3,6 +3,7 @@ import { createChildLogger } from '../../logging/logger.js';
 import { getDatabase } from '../../store/db.js';
 import { getEventBus } from '../event-bus.js';
 import { type SquadRuntime, getSquadMembers, getSquadRuntime } from '../manager.js';
+import type { ModelTier } from '../model-selector.js';
 import { type WorktreeInfo, createWorktree, removeWorktree } from './worktree.js';
 
 const logger = () => createChildLogger('instance');
@@ -13,6 +14,8 @@ export interface InstanceTask {
 	assignedTo: string; // agent role
 	status: 'pending' | 'in_progress' | 'done' | 'failed';
 	result?: string;
+	modelTier?: ModelTier;
+	retryCount: number;
 }
 
 export interface Instance {

@@ -4,6 +4,7 @@ import { createChildLogger } from '../logging/logger.js';
 import { getDatabase } from '../store/db.js';
 import { Agent, type AgentConfig } from './agent.js';
 import { getEventBus } from './event-bus.js';
+import { selectModelForRole } from './model-selector.js';
 import { type SkillDefinition, parseSkillContent, parseSkillFile } from './skill-parser.js';
 
 const logger = () => createChildLogger('squad-manager');
@@ -395,7 +396,7 @@ export async function bootSquad(squad: Squad): Promise<SquadRuntime> {
 			skill,
 			squadId: squad.id,
 			squadName: squad.name,
-			model: 'claude-opus-4.6',
+			model: selectModelForRole(member.roleName, 'meeting'),
 			identity: {
 				displayName: member.displayName,
 				persona: member.persona,

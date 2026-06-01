@@ -53,7 +53,7 @@ export class Agent {
 		this.squadId = config.squadId;
 		this.squadName = config.squadName;
 		this.instanceId = config.instanceId;
-		this.model = config.model ?? 'claude-opus-4.6';
+		this.model = config.model ?? 'claude-sonnet-4.6';
 		this.identity = config.identity;
 		this.logger = createChildLogger(
 			`agent:${config.squadName}:${config.identity?.displayName ?? this.role}`,
@@ -121,6 +121,23 @@ export class Agent {
 			});
 			throw err;
 		}
+	}
+
+	/** Switch to a different model (reinitializes session) */
+	async switchModel(newModel: string, squadContext?: string): Promise<void> {
+		if (this.model === newModel) return;
+		this.logger.info({ from: this.model, to: newModel }, 'Switching model');
+		this.model = newModel;
+		if (this.session) {
+			await this.session.disconnect().catch(() => {});
+			this.session = null;
+		}
+		await this.init(squadContext);
+	}
+
+	/** Get the current model */
+	getModel(): string {
+		return this.model;
 	}
 
 	/** Destroy the agent's session */

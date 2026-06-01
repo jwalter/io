@@ -2,6 +2,7 @@ import { createChildLogger } from '../../logging/logger.js';
 import type { Agent } from '../agent.js';
 import { getEventBus } from '../event-bus.js';
 import type { SquadRuntime } from '../manager.js';
+import { parseTierHint } from '../model-selector.js';
 import type { Instance, InstanceTask } from './instance.js';
 import { transitionInstance } from './instance.js';
 
@@ -120,7 +121,7 @@ export async function runMeeting(params: {
 	let tasks: InstanceTask[] = [];
 	if (consensusReached) {
 		const taskPlan = await teamLead.send(
-			`Consensus reached. Now formalize the work into specific tasks. For each task, specify:\n1. A brief description\n2. Which team member role should do it\n\nFormat each task as: "TASK: <description> | ASSIGN: <role>"\n\nList all tasks needed to complete the objective.`,
+			`Consensus reached. Now formalize the work into specific tasks. For each task, specify:\n1. A brief description\n2. Which team member role should do it\n3. The model tier needed (fast for simple work, standard for typical coding, reasoning for complex architecture/analysis)\n\nFormat each task as: "TASK: <description> | ASSIGN: <role> | MODEL_TIER: <fast|standard|reasoning>"\n\nChoose the lowest tier that can handle each task to minimize cost. Use 'fast' for documentation/simple edits, 'standard' for typical coding, 'reasoning' only for complex analysis.\n\nList all tasks needed to complete the objective.`,
 		);
 		meetingLog.push(`[team-lead] Task plan: ${taskPlan}`);
 		tasks = parseTaskList(taskPlan, instance.id);
@@ -152,13 +153,16 @@ function parseTaskList(taskPlan: string, instanceId: string): InstanceTask[] {
 	const lines = taskPlan.split('\n');
 
 	for (const line of lines) {
-		const match = line.match(/TASK:\s*(.+?)\s*\|\s*ASSIGN:\s*(.+)/i);
+		const match = line.match(/TASK:\s*(.+?)\s*\|\s*ASSIGN:\s*([^|]+)(?:\s*\|\s*MODEL_TIER:\s*(\w+))?/i);
 		if (match) {
+			const tierHint = parseTierHint(match[3]);
 			tasks.push({
 				id: crypto.randomUUID(),
 				description: match[1].trim(),
 				assignedTo: match[2].trim().toLowerCase().replace(/\s+/g, '-'),
 				status: 'pending',
+				modelTier: tierHint,
+				retryCount: 0,
 			});
 		}
 	}

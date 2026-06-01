@@ -1,5 +1,5 @@
 import { approveAll } from '@github/copilot-sdk';
-import type { IOConfig } from '../config.js';
+import { loadConfig, type IOConfig } from '../config.js';
 import { createChildLogger } from '../logging/logger.js';
 import { recordTokenUsage } from '../models/token-tracker.js';
 import { getActiveSkillsContent } from '../skills/index.js';
@@ -16,6 +16,7 @@ let logger: ReturnType<typeof createChildLogger>;
 
 let session: Session | undefined;
 let sessionId: string | undefined;
+let currentModel: string = '';
 
 interface QueuedMessage {
 	prompt: string;
@@ -81,6 +82,7 @@ async function buildSystemMessage(): Promise<string> {
 export async function initOrchestrator(config: IOConfig): Promise<void> {
 	logger = createChildLogger('orchestrator');
 	const client = await getClient();
+	currentModel = config.defaultModel;
 
 	const systemMessage = await buildSystemMessage();
 
@@ -165,6 +167,34 @@ async function processQueue(): Promise<void> {
 async function processMessage(msg: QueuedMessage): Promise<string> {
 	if (!session) {
 		throw new Error('Orchestrator session not initialized');
+	}
+
+	// Check if the configured model has changed — if so, recreate the session
+	const freshConfig = loadConfig();
+	if (freshConfig.defaultModel !== currentModel) {
+		logger.info(
+			{ from: currentModel, to: freshConfig.defaultModel },
+			'Default model changed, recreating orchestrator session',
+		);
+		currentModel = freshConfig.defaultModel;
+		const client = await getClient();
+		const systemMessage = await buildSystemMessage();
+		session = await client.createSession({
+			model: currentModel,
+			streaming: true,
+			tools: createOrchestratorTools(),
+			systemMessage: { mode: 'replace' as const, content: systemMessage },
+			onPermissionRequest: approveAll,
+			infiniteSessions: {
+				enabled: true,
+				backgroundCompactionThreshold: 0.8,
+				bufferExhaustionThreshold: 0.95,
+			},
+		});
+		sessionId = session.sessionId;
+		subscribeToUsage(session);
+		await saveSessionId(sessionId);
+		logger.info({ sessionId, model: currentModel }, 'Orchestrator session recreated with new model');
 	}
 
 	await appendConversationMessage({

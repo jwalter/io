@@ -2,6 +2,7 @@ import { createChildLogger } from '../../logging/logger.js';
 import type { Agent } from '../agent.js';
 import { getEventBus } from '../event-bus.js';
 import type { SquadRuntime } from '../manager.js';
+import { selectModelForRole, selectModelForTask } from '../model-selector.js';
 import { type Instance, type InstanceTask, transitionInstance } from './instance.js';
 
 const logger = () => createChildLogger('task-exec');
@@ -25,7 +26,7 @@ export async function executeTasks(params: {
 	for (const task of instance.tasks) {
 		if (task.status === 'done') continue;
 
-		log.info({ taskId: task.id, assignedTo: task.assignedTo }, 'Executing task');
+		log.info({ taskId: task.id, assignedTo: task.assignedTo, modelTier: task.modelTier }, 'Executing task');
 		task.status = 'in_progress';
 
 		const agent = runtime.members.get(task.assignedTo);
@@ -37,6 +38,12 @@ export async function executeTasks(params: {
 			continue;
 		}
 
+		// Select model based on task tier and retry count
+		const taskModel = selectModelForTask(task.modelTier, task.retryCount);
+		if (agent.getModel() !== taskModel) {
+			await agent.switchModel(taskModel);
+		}
+
 		try {
 			// Agent executes the task
 			const workingDir = instance.worktree?.path ?? '';
@@ -45,7 +52,12 @@ export async function executeTasks(params: {
 			const result = await agent.send(taskPrompt);
 			task.result = result;
 
-			// Team lead reviews
+			// Team lead reviews (switch to reasoning for review)
+			const reviewModel = selectModelForRole('technical-pm', 'review');
+			if (teamLead.getModel() !== reviewModel) {
+				await teamLead.switchModel(reviewModel);
+			}
+
 			const review = await teamLead.send(
 				`An agent (${task.assignedTo}) completed a task. Review their work:\n\nTask: ${task.description}\n\nAgent's report:\n${result.slice(0, 2000)}\n\nIs this satisfactory? Reply with:\n- "APPROVED" if the work meets requirements\n- "REDO: <feedback>" if it needs changes`,
 			);
@@ -54,14 +66,25 @@ export async function executeTasks(params: {
 				task.status = 'done';
 				log.info({ taskId: task.id }, 'Task approved');
 			} else if (review.toUpperCase().includes('REDO:')) {
-				// Give agent one more attempt with feedback
+				// Retry with escalated model
+				task.retryCount++;
+				const escalatedModel = selectModelForTask(task.modelTier, task.retryCount);
+				log.info(
+					{ taskId: task.id, retryCount: task.retryCount, model: escalatedModel },
+					'Task needs revision, escalating model',
+				);
+
+				if (agent.getModel() !== escalatedModel) {
+					await agent.switchModel(escalatedModel);
+				}
+
 				const feedback = review.replace(/^.*REDO:\s*/i, '');
 				const retry = await agent.send(
 					`Your work on "${task.description}" needs revision. Feedback from team lead:\n\n${feedback}\n\nPlease address this feedback and report your updated results.`,
 				);
 				task.result = retry;
 				task.status = 'done'; // Accept after one retry
-				log.info({ taskId: task.id }, 'Task completed after revision');
+				log.info({ taskId: task.id }, 'Task completed after revision with escalated model');
 			} else {
 				task.status = 'done';
 			}
