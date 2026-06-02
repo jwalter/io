@@ -8,7 +8,8 @@ import {
 	createInstance,
 	createPullRequest,
 	executeTasks,
-	runMeeting,
+	planInstance,
+	reviewWork,
 } from './index.js';
 
 const logger = () => createChildLogger('runner');
@@ -23,10 +24,11 @@ export interface RunResult {
 /**
  * Run a full instance lifecycle:
  * 1. Create instance (with worktree)
- * 2. Hold round-table meeting
- * 3. Execute tasks
- * 4. Create PR
- * 5. Clean up
+ * 2. Team Lead plans tasks (1 LLM call)
+ * 3. Execute tasks in parallel
+ * 4. Gated review/rework cycles (lead → QA)
+ * 5. Create PR
+ * 6. Clean up
  */
 export async function runInstance(params: {
 	squad: Squad;
@@ -48,35 +50,38 @@ export async function runInstance(params: {
 	log.info({ instanceId: instance.id }, 'Starting instance run');
 
 	try {
-		// 2. Run meeting
-		const meetingResult = await runMeeting({ instance, runtime, objective, attachments });
-
-		if (!meetingResult.consensus) {
-			log.warn({ instanceId: instance.id }, 'Meeting did not reach consensus');
-			return {
-				instanceId: instance.id,
-				success: false,
-				error: `Meeting failed to reach consensus${meetingResult.vetoReason ? `: ${meetingResult.vetoReason}` : ''}`,
-			};
-		}
+		// 2. Team Lead plans
+		const planResult = await planInstance({ instance, runtime, objective, attachments });
 
 		if (instance.tasks.length === 0) {
-			log.warn({ instanceId: instance.id }, 'No tasks generated from meeting');
+			log.warn({ instanceId: instance.id }, 'No tasks generated from planning');
 			return {
 				instanceId: instance.id,
 				success: false,
-				error: 'Meeting produced no actionable tasks',
+				error: 'Planning produced no actionable tasks',
 			};
 		}
 
-		// 3. Execute tasks
+		// 3. Execute tasks in parallel
 		await executeTasks({ instance, runtime });
 
-		// 4. Create PR
+		// 4. Gated review/rework cycles
+		const reviewResult = await reviewWork({ instance, runtime, objective });
+
+		if (!reviewResult.approved) {
+			await cleanupInstance(instance.id, squad);
+			return {
+				instanceId: instance.id,
+				success: false,
+				error: reviewResult.failureReason ?? 'Review failed',
+			};
+		}
+
+		// 5. Create PR
 		const prTitle = objective.slice(0, 72);
 		const pr = await createPullRequest({ instance, title: prTitle, squadName: squad.name });
 
-		// 5. Cleanup (if no PR was created — otherwise keep the branch for review)
+		// 6. Cleanup (if no PR was created — otherwise keep the branch for review)
 		if (!pr) {
 			await cleanupInstance(instance.id, squad);
 		}
@@ -97,3 +102,4 @@ export async function runInstance(params: {
 		};
 	}
 }
+

@@ -1,15 +1,13 @@
 import { createChildLogger } from '../../logging/logger.js';
-import type { Agent } from '../agent.js';
-import { getEventBus } from '../event-bus.js';
 import type { SquadRuntime } from '../manager.js';
-import { selectModelForRole, selectModelForTask } from '../model-selector.js';
+import { selectModelForTask } from '../model-selector.js';
 import { type Instance, type InstanceTask, transitionInstance } from './instance.js';
 
 const logger = () => createChildLogger('task-exec');
 
 /**
- * Execute all tasks in an instance sequentially.
- * Team lead reviews each completed task before moving to the next.
+ * Execute all tasks in parallel.
+ * No per-task review — that's handled by the review phase.
  */
 export async function executeTasks(params: {
 	instance: Instance;
@@ -23,95 +21,95 @@ export async function executeTasks(params: {
 	const teamLead = runtime.members.get('technical-pm');
 	if (!teamLead) throw new Error('No team lead for task execution');
 
-	for (const task of instance.tasks) {
-		if (task.status === 'done') continue;
+	// Execute all tasks concurrently
+	await Promise.all(
+		instance.tasks
+			.filter((task) => task.status !== 'done')
+			.map((task) => executeTask(task, instance, runtime, log)),
+	);
+}
 
-		log.info({ taskId: task.id, assignedTo: task.assignedTo, modelTier: task.modelTier }, 'Executing task');
-		task.status = 'in_progress';
+/**
+ * Execute tasks that need rework (called during review cycles).
+ */
+export async function executeRework(params: {
+	instance: Instance;
+	runtime: SquadRuntime;
+	reworkTasks: Array<{ taskId: string; feedback: string }>;
+}): Promise<void> {
+	const log = logger();
+	const { instance, runtime, reworkTasks } = params;
 
-		const agent = runtime.members.get(task.assignedTo);
-		if (!agent) {
-			log.warn({ role: task.assignedTo }, 'No agent for assigned role, team lead will handle');
-			// Reassign to team lead for delegation decision
-			task.result = `No agent with role '${task.assignedTo}' available.`;
-			task.status = 'failed';
-			continue;
-		}
+	await Promise.all(
+		reworkTasks.map(async ({ taskId, feedback }) => {
+			const task = instance.tasks.find((t) => t.id === taskId);
+			if (!task) return;
 
-		// Select model based on task tier and retry count
-		const taskModel = selectModelForTask(task.modelTier, task.retryCount);
-		if (agent.getModel() !== taskModel) {
-			await agent.switchModel(taskModel);
-		}
+			task.retryCount++;
+			task.status = 'in_progress';
 
-		try {
-			// Agent executes the task
-			const workingDir = instance.worktree?.path ?? '';
-			const taskPrompt = buildTaskPrompt(task, workingDir, instance);
-
-			const result = await agent.send(taskPrompt);
-			task.result = result;
-
-			// Team lead reviews (switch to reasoning for review)
-			const reviewModel = selectModelForRole('technical-pm', 'review');
-			if (teamLead.getModel() !== reviewModel) {
-				await teamLead.switchModel(reviewModel);
+			const agent = runtime.members.get(task.assignedTo);
+			if (!agent) {
+				task.status = 'failed';
+				task.result = `No agent with role '${task.assignedTo}' available.`;
+				return;
 			}
 
-			const review = await teamLead.send(
-				`An agent (${task.assignedTo}) completed a task. Review their work:\n\nTask: ${task.description}\n\nAgent's report:\n${result.slice(0, 2000)}\n\nIs this satisfactory? Reply with:\n- "APPROVED" if the work meets requirements\n- "REDO: <feedback>" if it needs changes`,
-			);
-
-			if (review.toUpperCase().includes('APPROVED')) {
-				task.status = 'done';
-				log.info({ taskId: task.id }, 'Task approved');
-			} else if (review.toUpperCase().includes('REDO:')) {
-				// Retry with escalated model
-				task.retryCount++;
-				const escalatedModel = selectModelForTask(task.modelTier, task.retryCount);
-				log.info(
-					{ taskId: task.id, retryCount: task.retryCount, model: escalatedModel },
-					'Task needs revision, escalating model',
-				);
-
-				if (agent.getModel() !== escalatedModel) {
-					await agent.switchModel(escalatedModel);
-				}
-
-				const feedback = review.replace(/^.*REDO:\s*/i, '');
-				const retry = await agent.send(
-					`Your work on "${task.description}" needs revision. Feedback from team lead:\n\n${feedback}\n\nPlease address this feedback and report your updated results.`,
-				);
-				task.result = retry;
-				task.status = 'done'; // Accept after one retry
-				log.info({ taskId: task.id }, 'Task completed after revision with escalated model');
-			} else {
-				task.status = 'done';
+			const model = selectModelForTask(task.modelTier, task.retryCount);
+			if (agent.getModel() !== model) {
+				await agent.switchModel(model);
 			}
-		} catch (err) {
-			log.error({ err, taskId: task.id }, 'Task execution failed');
-			task.status = 'failed';
-			task.result = `Error: ${err instanceof Error ? err.message : String(err)}`;
-		}
+
+			try {
+				const workingDir = instance.worktree?.path ?? '';
+				const result = await agent.send(
+					`Your previous work on "${task.description}" needs revision.\n\nFeedback: ${feedback}\n\n${workingDir ? `Working directory: ${workingDir}\n\n` : ''}Please address this feedback and report your updated results.`,
+				);
+				task.result = result;
+				task.status = 'done';
+				log.info({ taskId: task.id, retryCount: task.retryCount }, 'Rework task completed');
+			} catch (err) {
+				log.error({ err, taskId: task.id }, 'Rework task failed');
+				task.status = 'failed';
+				task.result = `Error: ${err instanceof Error ? err.message : String(err)}`;
+			}
+		}),
+	);
+}
+
+async function executeTask(
+	task: InstanceTask,
+	instance: Instance,
+	runtime: SquadRuntime,
+	log: ReturnType<typeof logger>,
+): Promise<void> {
+	log.info({ taskId: task.id, assignedTo: task.assignedTo, modelTier: task.modelTier }, 'Executing task');
+	task.status = 'in_progress';
+
+	const agent = runtime.members.get(task.assignedTo);
+	if (!agent) {
+		log.warn({ role: task.assignedTo }, 'No agent for assigned role');
+		task.result = `No agent with role '${task.assignedTo}' available.`;
+		task.status = 'failed';
+		return;
 	}
 
-	// Move to reviewing phase
-	await transitionInstance(instance.id, 'reviewing');
+	const model = selectModelForTask(task.modelTier, task.retryCount);
+	if (agent.getModel() !== model) {
+		await agent.switchModel(model);
+	}
 
-	// Team lead does final review
-	const taskSummary = instance.tasks
-		.map((t) => `- [${t.status}] ${t.description} (${t.assignedTo})`)
-		.join('\n');
-
-	const finalReview = await teamLead.send(
-		`All tasks have been executed. Here's the summary:\n\n${taskSummary}\n\nProvide a final assessment. Should we proceed to create a PR, or are there critical issues? Reply with:\n- "READY_FOR_PR: <PR title>" if ready\n- "NEEDS_WORK: <what's missing>" if not ready`,
-	);
-
-	if (finalReview.toUpperCase().includes('READY_FOR_PR:')) {
-		instance.meetingLog.push(`[technical-pm] Final review: ${finalReview}`);
-	} else {
-		// Mark complete anyway — we don't loop indefinitely
-		instance.meetingLog.push(`[technical-pm] Final review (issues noted): ${finalReview}`);
+	try {
+		const workingDir = instance.worktree?.path ?? '';
+		const taskPrompt = buildTaskPrompt(task, workingDir, instance);
+		const result = await agent.send(taskPrompt);
+		task.result = result;
+		task.status = 'done';
+		log.info({ taskId: task.id }, 'Task completed');
+	} catch (err) {
+		log.error({ err, taskId: task.id }, 'Task execution failed');
+		task.status = 'failed';
+		task.result = `Error: ${err instanceof Error ? err.message : String(err)}`;
 	}
 }
 
@@ -132,3 +130,4 @@ function buildTaskPrompt(task: InstanceTask, workingDir: string, instance: Insta
 
 	return parts.join('');
 }
+

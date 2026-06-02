@@ -8,9 +8,11 @@ export {
 	getSquadInstances,
 } from './instance.js';
 export type { Instance, InstanceTask } from './instance.js';
-export { runMeeting } from './meeting.js';
-export type { MeetingResult } from './meeting.js';
-export { executeTasks } from './tasks.js';
+export { planInstance } from './planning.js';
+export type { PlanResult } from './planning.js';
+export { executeTasks, executeRework } from './tasks.js';
+export { reviewWork } from './review.js';
+export type { ReviewResult } from './review.js';
 export { createPullRequest } from './pr.js';
 export type { PrResult } from './pr.js';
 export { runInstance } from './runner.js';

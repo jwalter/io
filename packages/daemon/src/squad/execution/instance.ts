@@ -118,7 +118,7 @@ export async function transitionInstance(
 	if (!instance) throw new Error(`Instance ${instanceId} not found`);
 
 	const validTransitions: Record<InstanceStatus, InstanceStatus[]> = {
-		planning: ['meeting', 'failed'],
+		planning: ['meeting', 'working', 'failed'],
 		meeting: ['working', 'failed'],
 		working: ['reviewing', 'failed'],
 		reviewing: ['complete', 'working', 'failed'],

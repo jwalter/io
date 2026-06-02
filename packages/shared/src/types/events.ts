@@ -18,6 +18,8 @@ export type InstanceEventType =
 	| 'instance:created'
 	| 'instance:meeting_started'
 	| 'instance:meeting_complete'
+	| 'instance:planning_complete'
+	| 'instance:review_cycle'
 	| 'instance:work_started'
 	| 'instance:pr_created'
 	| 'instance:complete'
