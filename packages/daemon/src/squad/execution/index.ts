@@ -15,5 +15,5 @@ export { reviewWork } from './review.js';
 export type { ReviewResult } from './review.js';
 export { createPullRequest } from './pr.js';
 export type { PrResult } from './pr.js';
-export { runInstance } from './runner.js';
-export type { RunResult } from './runner.js';
+export { runInstance, initInstance, executeInstance } from './runner.js';
+export type { RunResult, InitResult } from './runner.js';

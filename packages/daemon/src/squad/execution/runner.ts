@@ -21,23 +21,21 @@ export interface RunResult {
 	error?: string;
 }
 
+export interface InitResult {
+	instance: Instance;
+	runtime: SquadRuntime;
+}
+
 /**
- * Run a full instance lifecycle:
- * 1. Create instance (with worktree)
- * 2. Team Lead plans tasks (1 LLM call)
- * 3. Execute tasks in parallel
- * 4. Gated review/rework cycles (lead → QA)
- * 5. Create PR
- * 6. Clean up
+ * Initialize an instance: boot the squad runtime and persist the instance to DB.
+ * This is the critical part that MUST succeed before we tell the user "started."
  */
-export async function runInstance(params: {
+export async function initInstance(params: {
 	squad: Squad;
 	objective: string;
 	issueRef?: string;
-	attachments?: Array<{ type: 'file'; path: string; displayName?: string }>;
-}): Promise<RunResult> {
-	const log = logger();
-	const { squad, objective, issueRef, attachments } = params;
+}): Promise<InitResult> {
+	const { squad, objective, issueRef } = params;
 
 	// Ensure squad is booted
 	let runtime: SquadRuntime | undefined = getSquadRuntime(squad.id);
@@ -45,13 +43,31 @@ export async function runInstance(params: {
 		runtime = await bootSquad(squad);
 	}
 
-	// 1. Create instance
+	// Create instance (persists to DB + creates worktree)
 	const instance = await createInstance({ squad, issueRef, objective });
-	log.info({ instanceId: instance.id }, 'Starting instance run');
+
+	return { instance, runtime };
+}
+
+/**
+ * Execute an already-initialized instance through its full lifecycle:
+ * planning → tasks → review → PR → cleanup
+ */
+export async function executeInstance(params: {
+	instance: Instance;
+	runtime: SquadRuntime;
+	squad: Squad;
+	objective: string;
+	attachments?: Array<{ type: 'file'; path: string; displayName?: string }>;
+}): Promise<RunResult> {
+	const log = logger();
+	const { instance, runtime, squad, objective, attachments } = params;
+
+	log.info({ instanceId: instance.id }, 'Starting instance execution');
 
 	try {
-		// 2. Team Lead plans
-		const planResult = await planInstance({ instance, runtime, objective, attachments });
+		// Team Lead plans
+		await planInstance({ instance, runtime, objective, attachments });
 
 		if (instance.tasks.length === 0) {
 			log.warn({ instanceId: instance.id }, 'No tasks generated from planning');
@@ -62,10 +78,10 @@ export async function runInstance(params: {
 			};
 		}
 
-		// 3. Execute tasks in parallel
+		// Execute tasks in parallel
 		await executeTasks({ instance, runtime });
 
-		// 4. Gated review/rework cycles
+		// Gated review/rework cycles
 		const reviewResult = await reviewWork({ instance, runtime, objective });
 
 		if (!reviewResult.approved) {
@@ -77,11 +93,11 @@ export async function runInstance(params: {
 			};
 		}
 
-		// 5. Create PR
+		// Create PR
 		const prTitle = objective.slice(0, 72);
 		const pr = await createPullRequest({ instance, title: prTitle, squadName: squad.name });
 
-		// 6. Cleanup (if no PR was created — otherwise keep the branch for review)
+		// Cleanup (if no PR was created — otherwise keep the branch for review)
 		if (!pr) {
 			await cleanupInstance(instance.id, squad);
 		}
@@ -93,7 +109,7 @@ export async function runInstance(params: {
 		};
 	} catch (err) {
 		const errMsg = err instanceof Error ? err.message : String(err);
-		log.error({ instanceId: instance.id, error: errMsg.slice(0, 300) }, 'Instance run failed');
+		log.error({ instanceId: instance.id, error: errMsg.slice(0, 300) }, 'Instance execution failed');
 		await cleanupInstance(instance.id, squad);
 		return {
 			instanceId: instance.id,
@@ -101,5 +117,22 @@ export async function runInstance(params: {
 			error: errMsg.slice(0, 500),
 		};
 	}
+}
+
+/**
+ * Run a full instance lifecycle (init + execute).
+ * Convenience wrapper for callers that don't need to split the phases.
+ */
+export async function runInstance(params: {
+	squad: Squad;
+	objective: string;
+	issueRef?: string;
+	attachments?: Array<{ type: 'file'; path: string; displayName?: string }>;
+}): Promise<RunResult> {
+	const { squad, objective, issueRef, attachments } = params;
+
+	const { instance, runtime } = await initInstance({ squad, objective, issueRef });
+
+	return executeInstance({ instance, runtime, squad, objective, attachments });
 }
 

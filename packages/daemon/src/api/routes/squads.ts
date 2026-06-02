@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { ActivityType } from '../../store/activity.js';
 import { getInstance, getSquadInstances } from '../../squad/execution/instance.js';
-import { runInstance } from '../../squad/execution/runner.js';
+import { executeInstance, initInstance } from '../../squad/execution/runner.js';
 import { getSquadByName, getSquadMembers, listSquads } from '../../squad/manager.js';
 import { getDatabase } from '../../store/db.js';
 
@@ -172,15 +172,15 @@ export function squadsRouter(): Router {
 				return;
 			}
 
-			// Run asynchronously — return immediately with instance ID
-			const instancePromise = runInstance({ squad, objective, issueRef });
+			// Await init to ensure instance is persisted before responding
+			const { instance, runtime } = await initInstance({ squad, objective, issueRef });
 
-			// We don't await — return accepted status
-			// The client can poll /api/squads/:name for progress
-			instancePromise.catch(() => {}); // prevent unhandled rejection
+			// Fire-and-forget execution phase
+			executeInstance({ instance, runtime, squad, objective }).catch(() => {});
 
 			res.status(202).json({
 				message: `Instance starting for squad '${squad.name}'`,
+				instanceId: instance.id,
 				objective,
 			});
 		} catch (err) {

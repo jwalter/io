@@ -9,7 +9,7 @@ import {
 	listInstalledSkills,
 	removeSkill,
 } from '../skills/index.js';
-import { runInstance } from '../squad/execution/runner.js';
+import { executeInstance, initInstance } from '../squad/execution/runner.js';
 import {
 	addMemberToExistingSquad,
 	confirmSquad,
@@ -585,11 +585,19 @@ export function createOrchestratorTools() {
 						? await resolveAttachmentPaths(args.attachmentIds)
 						: undefined;
 
-					// Fire-and-forget: run instance in background so orchestrator returns immediately
-					runInstance({
+					// Await init: boot squad + persist instance to DB
+					const { instance, runtime } = await initInstance({
 						squad,
 						objective: args.objective,
 						issueRef: args.issueRef,
+					});
+
+					// Fire-and-forget: execute the instance lifecycle in background
+					executeInstance({
+						instance,
+						runtime,
+						squad,
+						objective: args.objective,
 						attachments: fileAttachments,
 					})
 						.then((result) => {
@@ -607,23 +615,24 @@ export function createOrchestratorTools() {
 						})
 						.catch((err) => {
 							createChildLogger('orchestrator').error(
-								{ err, squadName: args.squadName },
-								'Background instance run failed',
+								{ err: err instanceof Error ? err.message : String(err), squadName: args.squadName },
+								'Background instance execution failed',
 							);
 						});
 
 					return {
 						textResultForLlm: JSON.stringify({
 							started: true,
+							instanceId: instance.id,
 							squadName: args.squadName,
-							message: `Instance started for ${args.squadName}. The squad will run through the full lifecycle (meeting → tasks → PR) and deliver results to the inbox when complete.`,
+							message: `Instance ${instance.id.slice(0, 8)} started for ${args.squadName}. The squad will run through the full lifecycle (meeting → tasks → PR) and deliver results to the inbox when complete.`,
 						}),
 						resultType: 'success' as const,
 					};
 				} catch (err) {
 					return {
 						textResultForLlm: JSON.stringify({
-							error: `Failed to run instance: ${err instanceof Error ? err.message : String(err)}`,
+							error: `Failed to start instance: ${err instanceof Error ? err.message : String(err)}`,
 						}),
 						resultType: 'success' as const,
 					};
