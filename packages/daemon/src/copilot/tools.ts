@@ -472,11 +472,6 @@ export function createOrchestratorTools() {
 				}
 
 				try {
-					// Boot squad if not already running
-					if (!getSquadRuntime(squad.id)) {
-						await bootSquad(squad);
-					}
-
 					// Resolve attachment IDs to disk paths
 					const fileAttachments = args.attachmentIds?.length
 						? await resolveAttachmentPaths(args.attachmentIds)
@@ -491,11 +486,16 @@ export function createOrchestratorTools() {
 						args: [delegationId, squad.id, args.message.slice(0, 500)],
 					});
 
-					// Fire-and-forget: send message to team lead with inbox delivery instruction
+					// Fire-and-forget: boot squad if needed, then send message to team lead
 					const delegationMessage = `${args.message}\n\nIMPORTANT: When you have completed this work or have results to share, deliver them to the user's inbox using the add_to_inbox tool. Include a clear title and your findings/deliverables in the content.`;
 
-					delegateToSquad(squad.id, delegationMessage, fileAttachments)
-						.then(async (response) => {
+					(async () => {
+						try {
+							// Boot squad if not already running (may take time creating sessions)
+							if (!getSquadRuntime(squad.id)) {
+								await bootSquad(squad);
+							}
+							const response = await delegateToSquad(squad.id, delegationMessage, fileAttachments);
 							// Log the team lead's response as activity
 							const { logActivity } = await import('../store/activity.js');
 							await logActivity({
@@ -511,8 +511,7 @@ export function createOrchestratorTools() {
 								sql: `UPDATE squad_instances SET status = 'complete', completed_at = CURRENT_TIMESTAMP WHERE id = ?`,
 								args: [delegationId],
 							});
-						})
-						.catch(async (err) => {
+						} catch (err) {
 							// Mark delegation as failed
 							const { logActivity } = await import('../store/activity.js');
 							await logActivity({
@@ -532,7 +531,8 @@ export function createOrchestratorTools() {
 								{ err, squadName: args.squadName },
 								'Background delegation failed',
 							);
-						});
+						}
+					})();
 
 					return {
 						textResultForLlm: JSON.stringify({
@@ -580,19 +580,38 @@ export function createOrchestratorTools() {
 						? await resolveAttachmentPaths(args.attachmentIds)
 						: undefined;
 
-					const result = await runInstance({
+					// Fire-and-forget: run instance in background so orchestrator returns immediately
+					runInstance({
 						squad,
 						objective: args.objective,
 						issueRef: args.issueRef,
 						attachments: fileAttachments,
-					});
+					})
+						.then((result) => {
+							if (result.success) {
+								createChildLogger('orchestrator').info(
+									{ instanceId: result.instanceId, pr: result.pr?.url },
+									'Instance completed successfully',
+								);
+							} else {
+								createChildLogger('orchestrator').warn(
+									{ instanceId: result.instanceId, error: result.error },
+									'Instance completed with failure',
+								);
+							}
+						})
+						.catch((err) => {
+							createChildLogger('orchestrator').error(
+								{ err, squadName: args.squadName },
+								'Background instance run failed',
+							);
+						});
 
 					return {
 						textResultForLlm: JSON.stringify({
-							instanceId: result.instanceId,
-							success: result.success,
-							pr: result.pr ? { url: result.pr.url, number: result.pr.number } : null,
-							error: result.error,
+							started: true,
+							squadName: args.squadName,
+							message: `Instance started for ${args.squadName}. The squad will run through the full lifecycle (meeting → tasks → PR) and deliver results to the inbox when complete.`,
 						}),
 						resultType: 'success' as const,
 					};
