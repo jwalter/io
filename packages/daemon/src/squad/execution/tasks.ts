@@ -55,6 +55,9 @@ export async function executeRework(params: {
 				return;
 			}
 
+			// Track activity under this instance
+			agent.setInstanceId(instance.id);
+
 			const model = selectModelForTask(task.modelTier, task.retryCount);
 			if (agent.getModel() !== model) {
 				await agent.switchModel(model);
@@ -93,6 +96,9 @@ async function executeTask(
 		task.status = 'failed';
 		return;
 	}
+
+	// Track activity under this instance
+	agent.setInstanceId(instance.id);
 
 	const model = selectModelForTask(task.modelTier, task.retryCount);
 	if (agent.getModel() !== model) {

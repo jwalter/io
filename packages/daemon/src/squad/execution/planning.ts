@@ -29,6 +29,9 @@ export async function planInstance(params: {
 	const teamLead = runtime.members.get('technical-pm');
 	if (!teamLead) throw new Error('No team lead available for planning');
 
+	// Track activity under this instance
+	teamLead.setInstanceId(instance.id);
+
 	// Build roster description so the lead knows who's available
 	const roster = [...runtime.members.entries()]
 		.filter(([role]) => role !== 'technical-pm')

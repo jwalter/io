@@ -495,6 +495,11 @@ export function createOrchestratorTools() {
 							if (!getSquadRuntime(squad.id)) {
 								await bootSquad(squad);
 							}
+							// Set instanceId on team lead so events are tracked under this delegation
+							const runtime = getSquadRuntime(squad.id);
+							const teamLead = runtime?.members.get('technical-pm');
+							if (teamLead) teamLead.setInstanceId(delegationId);
+
 							const response = await delegateToSquad(squad.id, delegationMessage, fileAttachments);
 							// Log the team lead's response as activity
 							const { logActivity } = await import('../store/activity.js');

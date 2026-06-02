@@ -38,6 +38,9 @@ export async function reviewWork(params: {
 	const teamLead = runtime.members.get('technical-pm');
 	if (!teamLead) throw new Error('No team lead for review');
 
+	// Track review activity under this instance
+	teamLead.setInstanceId(instance.id);
+
 	// Find veto/QA members
 	const vetoMembers = [...runtime.members.entries()].filter(([role]) => {
 		const skill = runtime.skills.get(role);
@@ -82,6 +85,7 @@ export async function reviewWork(params: {
 			}
 
 			for (const [role, agent] of vetoMembers) {
+				agent.setInstanceId(instance.id);
 				const qaModel = selectModelForRole(role, 'review');
 				if (agent.getModel() !== qaModel) {
 					await agent.switchModel(qaModel);

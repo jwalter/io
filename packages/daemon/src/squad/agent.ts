@@ -46,6 +46,7 @@ export class Agent {
 	readonly squadId: string;
 	readonly squadName: string;
 	readonly instanceId?: string;
+	private _currentInstanceId?: string;
 	private session: Session | null = null;
 	private skill: SkillDefinition;
 	private model: string;
@@ -64,6 +65,16 @@ export class Agent {
 		this.logger = createChildLogger(
 			`agent:${config.squadName}:${config.identity?.displayName ?? this.role}`,
 		);
+	}
+
+	/** Set the current instance ID for activity tracking (used during instance execution) */
+	setInstanceId(id: string): void {
+		this._currentInstanceId = id;
+	}
+
+	/** Clear the current instance ID after execution completes */
+	clearInstanceId(): void {
+		this._currentInstanceId = undefined;
 	}
 
 	get status(): AgentStatus {
@@ -468,7 +479,7 @@ export class Agent {
 				timestamp: new Date(),
 				type,
 				squadId: this.squadId,
-				instanceId: this.instanceId,
+				instanceId: this._currentInstanceId ?? this.instanceId,
 				agentRole: this.role,
 				model: this.model,
 				data,
