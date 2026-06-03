@@ -627,51 +627,44 @@ function SquadDetailView({ name }: { name: string }) {
 						</div>
 					) : (
 						historyItems.map((activity) => (
-							<div
-								key={activity.id}
-								className="glass-card border border-white/[0.07] rounded-2xl px-4 py-3.5 flex items-center gap-3"
-							>
-								<div className="flex-shrink-0">
-									{activity.status === 'completed' ? (
-										<CheckCircle className="w-4 h-4" style={{ color: '#34d399' }} />
-									) : (
-										<XCircle className="w-4 h-4" style={{ color: '#f87171' }} />
-									)}
-								</div>
-								<div className="flex-1 min-w-0">
-									<p className="text-[12px] text-zinc-300 font-mono truncate">
-										{activity.title}
-									</p>
-									<div className="flex items-center gap-3 mt-0.5">
-										<span className="text-[10px] text-zinc-700 font-mono">
-											{formatDateTime(activity.completedAt || activity.createdAt, timezone)}
-										</span>
-										<span className="text-[10px] text-zinc-700 font-mono flex items-center gap-1">
-											<Activity className="w-2.5 h-2.5" />
-											{activity.duration || '—'}
-										</span>
-										<span className="text-[10px] text-zinc-700 font-mono flex items-center gap-1">
-											<Bot className="w-2.5 h-2.5" />
-											{activity.agentCount} agent{activity.agentCount !== 1 ? 's' : ''}
-										</span>
-									</div>
-								</div>
-								<Chip
-									variant={activity.status === 'completed' ? 'success' : 'error'}
-								>
-									{activity.status}
-								</Chip>
 								<button
 									type="button"
+									key={activity.id}
 									onClick={() => drillIntoActivity(activity)}
-									title="View activity detail"
-									className="p-2 rounded-xl hover:bg-white/[0.06] transition-colors flex-shrink-0 cursor-pointer"
-									style={{ color }}
+									className="w-full glass-card border border-white/[0.07] rounded-2xl px-4 py-3.5 flex items-center gap-3 hover:bg-white/[0.03] transition-colors cursor-pointer text-left"
 								>
-									<Activity className="w-4 h-4" />
+									<div className="flex-shrink-0">
+										{activity.status === 'completed' ? (
+											<CheckCircle className="w-4 h-4" style={{ color: '#34d399' }} />
+										) : (
+											<XCircle className="w-4 h-4" style={{ color: '#f87171' }} />
+										)}
+									</div>
+									<div className="flex-1 min-w-0">
+										<p className="text-[12px] text-zinc-300 font-mono truncate">
+											{activity.title}
+										</p>
+										<div className="flex items-center gap-3 mt-0.5">
+											<span className="text-[10px] text-zinc-700 font-mono">
+												{formatDateTime(activity.completedAt || activity.createdAt, timezone)}
+											</span>
+											<span className="text-[10px] text-zinc-700 font-mono flex items-center gap-1">
+												<Activity className="w-2.5 h-2.5" />
+												{activity.duration || '—'}
+											</span>
+											<span className="text-[10px] text-zinc-700 font-mono flex items-center gap-1">
+												<Bot className="w-2.5 h-2.5" />
+												{activity.agentCount} agent{activity.agentCount !== 1 ? 's' : ''}
+											</span>
+										</div>
+									</div>
+									<Chip
+										variant={activity.status === 'completed' ? 'success' : 'error'}
+									>
+										{activity.status}
+									</Chip>
 								</button>
-							</div>
-						))
+							))
 					)}
 					{historyItems.length < historyTotal && (
 						<button
@@ -711,6 +704,7 @@ function ActivityDetailView({
 	onBack: () => void;
 }) {
 	const timezone = useTimezone();
+	const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set());
 
 	// Assign a deterministic color to each agent
 	const agentColors = useMemo(() => {
@@ -733,14 +727,31 @@ function ActivityDetailView({
 	const getKindMeta = (kind: string): { label: string; icon: React.ElementType } =>
 		kindMeta[kind] ?? defaultMeta;
 
+	// Toggle agent filter
+	const toggleAgent = (agentId: string) => {
+		setSelectedAgents((prev) => {
+			const next = new Set(prev);
+			if (next.has(agentId)) {
+				next.delete(agentId);
+			} else {
+				next.add(agentId);
+			}
+			return next;
+		});
+	};
+
 	// Flatten all events into a unified timeline sorted by timestamp
 	const timeline = useMemo(() => {
 		const flat = activity.agentEntries.flatMap((entry) =>
 			entry.events.map((ev) => ({ ev, entry })),
 		);
 		flat.sort((a, b) => a.ev.timestamp.localeCompare(b.ev.timestamp));
+		// Apply agent filter
+		if (selectedAgents.size > 0) {
+			return flat.filter(({ entry }) => selectedAgents.has(entry.agentId));
+		}
 		return flat;
-	}, [activity]);
+	}, [activity, selectedAgents]);
 
 	return (
 		<div className="flex-1 overflow-y-auto p-6" style={{ background: `${squadColor}06` }}>
@@ -776,26 +787,44 @@ function ActivityDetailView({
 				</Chip>
 			</div>
 
-			{/* Agent legend */}
+			{/* Agent legend — clickable to filter */}
 			<div className="flex flex-wrap gap-2 mb-6">
 				{activity.agentEntries.map((entry) => {
 					const color = agentColors[entry.agentId];
+					const isSelected = selectedAgents.has(entry.agentId);
+					const isFiltering = selectedAgents.size > 0;
+					const isActive = !isFiltering || isSelected;
 					return (
-						<div
+						<button
+							type="button"
 							key={entry.agentId}
-							className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border"
-							style={{ borderColor: `${color}30`, background: `${color}10` }}
+							onClick={() => toggleAgent(entry.agentId)}
+							className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition-all cursor-pointer"
+							style={{
+								borderColor: isActive ? `${color}30` : 'rgba(255,255,255,0.05)',
+								background: isActive ? `${color}10` : 'transparent',
+								opacity: isActive ? 1 : 0.4,
+							}}
 						>
 							{roleIcon(entry.roleType || entry.role, color!)}
-							<span className="text-[11px] font-mono" style={{ color }}>
+							<span className="text-[11px] font-mono" style={{ color: isActive ? color : '#71717a' }}>
 								{entry.agentName}
 							</span>
 							<span className="text-[10px] font-mono text-zinc-500">
 								— {entry.role}
 							</span>
-						</div>
+						</button>
 					);
 				})}
+				{selectedAgents.size > 0 && (
+					<button
+						type="button"
+						onClick={() => setSelectedAgents(new Set())}
+						className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-white/[0.1] text-[11px] font-mono text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+					>
+						Show all
+					</button>
+				)}
 			</div>
 
 			{/* Unified timeline */}

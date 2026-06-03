@@ -336,7 +336,7 @@ export function squadsRouter(): Router {
 				             (SELECT COUNT(DISTINCT agent_role) FROM agent_activity WHERE instance_id = si.id) as agent_count
 				      FROM squad_instances si
 				      WHERE si.squad_id = ? AND si.status IN ('complete', 'failed')
-				      ORDER BY si.completed_at DESC
+				      ORDER BY COALESCE(si.completed_at, si.created_at) DESC
 				      LIMIT ? OFFSET ?`,
 				args: [squad.id, limit, offset],
 			});
