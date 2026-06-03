@@ -1234,7 +1234,7 @@ function InstanceDetailView({
 											{/* Tool name label */}
 											{ev.toolName && (
 												<span className="text-[10px] font-mono text-sky-400 border border-sky-400/20 rounded px-1.5 py-px bg-sky-400/[0.06]">
-													[{ev.toolName}]
+													{ev.toolName}
 												</span>
 											)}
 											{ev.model && (
