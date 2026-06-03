@@ -152,7 +152,7 @@ export class Agent {
 		}
 
 		this._status = 'working';
-		this.emitEvent('agent:task_started', { content: content.slice(0, 100) });
+		this.emitEvent('agent:task_started', { content: content.slice(0, 500) });
 
 		try {
 			const options: { prompt: string; attachments?: FileAttachment[] } = { prompt: content };
