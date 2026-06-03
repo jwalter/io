@@ -1,5 +1,9 @@
 import { type CopilotSession, approveAll, defineTool } from '@github/copilot-sdk';
 import type { AgentEvent, AgentStatus } from '@io/shared';
+import { exec as execCb } from 'node:child_process';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { promisify } from 'node:util';
 import { z } from 'zod';
 import { getClient } from '../copilot/client.js';
 import { createChildLogger } from '../logging/logger.js';
@@ -14,6 +18,8 @@ import {
 } from '../wiki/index.js';
 import { getEventBus } from './event-bus.js';
 import { type SkillDefinition, compileSystemPrompt } from './skill-parser.js';
+
+const exec = promisify(execCb);
 
 export interface AgentConfig {
 	skill: SkillDefinition;
@@ -47,6 +53,7 @@ export class Agent {
 	readonly squadName: string;
 	readonly instanceId?: string;
 	private _currentInstanceId?: string;
+	private _workingDir?: string;
 	private session: Session | null = null;
 	private skill: SkillDefinition;
 	private model: string;
@@ -75,6 +82,16 @@ export class Agent {
 	/** Clear the current instance ID after execution completes */
 	clearInstanceId(): void {
 		this._currentInstanceId = undefined;
+	}
+
+	/** Set the working directory for tool execution (worktree path) */
+	setWorkingDir(dir: string): void {
+		this._workingDir = dir;
+	}
+
+	/** Get the resolved working directory */
+	getWorkingDir(): string | undefined {
+		return this._workingDir;
 	}
 
 	get status(): AgentStatus {
@@ -264,11 +281,43 @@ export class Agent {
 						path: z.string().describe('Relative path to the file'),
 					}),
 					handler: async (args: { path: string }) => {
-						// TODO: Implement actual file reading with path sandboxing
-						return {
-							textResultForLlm: `[read_file] Would read: ${args.path}`,
-							resultType: 'success' as const,
-						};
+						const cwd = this._workingDir;
+						if (!cwd) {
+							return {
+								textResultForLlm: 'Error: No working directory set. Cannot read files.',
+								resultType: 'success' as const,
+							};
+						}
+						const resolved = resolveSafePath(cwd, args.path);
+						if (!resolved) {
+							return {
+								textResultForLlm: `Error: Path "${args.path}" is outside the working directory.`,
+								resultType: 'success' as const,
+							};
+						}
+						if (!existsSync(resolved)) {
+							return {
+								textResultForLlm: `Error: File not found: ${args.path}`,
+								resultType: 'success' as const,
+							};
+						}
+						try {
+							const content = readFileSync(resolved, 'utf-8');
+							// Truncate very large files
+							const maxLen = 100_000;
+							const truncated = content.length > maxLen
+								? `${content.slice(0, maxLen)}\n\n... [truncated, ${content.length} total chars]`
+								: content;
+							return {
+								textResultForLlm: truncated,
+								resultType: 'success' as const,
+							};
+						} catch (err) {
+							return {
+								textResultForLlm: `Error reading file: ${err instanceof Error ? err.message : String(err)}`,
+								resultType: 'success' as const,
+							};
+						}
 					},
 				}),
 			);
@@ -277,17 +326,39 @@ export class Agent {
 		if (this.skill.tools.includes('edit_file')) {
 			tools.push(
 				defineTool('edit_file', {
-					description: 'Edit a file in the project. Provide the full new content.',
+					description: 'Write content to a file in the project. Creates the file if it does not exist. Provide the full new content.',
 					parameters: z.object({
 						path: z.string().describe('Relative path to the file'),
 						content: z.string().describe('New file content'),
 					}),
 					handler: async (args: { path: string; content: string }) => {
-						// TODO: Implement actual file editing with path sandboxing
-						return {
-							textResultForLlm: `[edit_file] Would write ${args.content.length} chars to: ${args.path}`,
-							resultType: 'success' as const,
-						};
+						const cwd = this._workingDir;
+						if (!cwd) {
+							return {
+								textResultForLlm: 'Error: No working directory set. Cannot write files.',
+								resultType: 'success' as const,
+							};
+						}
+						const resolved = resolveSafePath(cwd, args.path);
+						if (!resolved) {
+							return {
+								textResultForLlm: `Error: Path "${args.path}" is outside the working directory.`,
+								resultType: 'success' as const,
+							};
+						}
+						try {
+							mkdirSync(dirname(resolved), { recursive: true });
+							writeFileSync(resolved, args.content, 'utf-8');
+							return {
+								textResultForLlm: `Successfully wrote ${args.content.length} chars to ${args.path}`,
+								resultType: 'success' as const,
+							};
+						} catch (err) {
+							return {
+								textResultForLlm: `Error writing file: ${err instanceof Error ? err.message : String(err)}`,
+								resultType: 'success' as const,
+							};
+						}
 					},
 				}),
 			);
@@ -296,16 +367,56 @@ export class Agent {
 		if (this.skill.tools.includes('run_command')) {
 			tools.push(
 				defineTool('run_command', {
-					description: 'Run a shell command in the project directory.',
+					description: 'Run a shell command in the project directory. Do NOT use git commands (commit, push, branch, checkout) — the system handles git operations.',
 					parameters: z.object({
 						command: z.string().describe('The command to execute'),
 					}),
 					handler: async (args: { command: string }) => {
-						// TODO: Implement actual command execution with sandboxing
-						return {
-							textResultForLlm: `[run_command] Would run: ${args.command}`,
-							resultType: 'success' as const,
-						};
+						const cwd = this._workingDir;
+						if (!cwd) {
+							return {
+								textResultForLlm: 'Error: No working directory set. Cannot run commands.',
+								resultType: 'success' as const,
+							};
+						}
+						// Block git commands that could interfere with the system
+						const blocked = /^\s*(git\s+(commit|push|pull|checkout|switch|merge|rebase|branch\s+-[dDmM]|tag|remote|init))/i;
+						if (blocked.test(args.command)) {
+							return {
+								textResultForLlm: 'Error: Git mutation commands are not allowed. The system handles git operations after review.',
+								resultType: 'success' as const,
+							};
+						}
+						try {
+							const { stdout, stderr } = await exec(args.command, {
+								cwd,
+								timeout: 60_000,
+								maxBuffer: 1024 * 1024,
+							});
+							const output = [
+								stdout ? `stdout:\n${stdout.slice(0, 50_000)}` : '',
+								stderr ? `stderr:\n${stderr.slice(0, 10_000)}` : '',
+							]
+								.filter(Boolean)
+								.join('\n\n');
+							return {
+								textResultForLlm: output || '(no output)',
+								resultType: 'success' as const,
+							};
+						} catch (err: unknown) {
+							const execErr = err as { stdout?: string; stderr?: string; message?: string };
+							const errOutput = [
+								execErr.stdout ? `stdout:\n${execErr.stdout.slice(0, 20_000)}` : '',
+								execErr.stderr ? `stderr:\n${execErr.stderr.slice(0, 10_000)}` : '',
+								execErr.message ? `error: ${execErr.message.slice(0, 500)}` : '',
+							]
+								.filter(Boolean)
+								.join('\n\n');
+							return {
+								textResultForLlm: `Command failed:\n${errOutput}`,
+								resultType: 'success' as const,
+							};
+						}
 					},
 				}),
 			);
@@ -314,17 +425,41 @@ export class Agent {
 		if (this.skill.tools.includes('search_code')) {
 			tools.push(
 				defineTool('search_code', {
-					description: 'Search for patterns in the project codebase.',
+					description: 'Search for patterns in the project codebase using grep.',
 					parameters: z.object({
 						pattern: z.string().describe('Search pattern (regex or text)'),
-						glob: z.string().optional().describe('File glob to limit search'),
+						glob: z.string().optional().describe('File glob to limit search (e.g., "*.ts")'),
 					}),
 					handler: async (args: { pattern: string; glob?: string }) => {
-						// TODO: Implement actual code search
-						return {
-							textResultForLlm: `[search_code] Would search for: ${args.pattern}`,
-							resultType: 'success' as const,
-						};
+						const cwd = this._workingDir;
+						if (!cwd) {
+							return {
+								textResultForLlm: 'Error: No working directory set. Cannot search.',
+								resultType: 'success' as const,
+							};
+						}
+						try {
+							const globArg = args.glob ? `--glob "${args.glob}"` : '';
+							const { stdout } = await exec(
+								`npx --yes ripgrep-wrapper "${args.pattern}" ${globArg} --max-count 50`,
+								{ cwd, timeout: 30_000, maxBuffer: 1024 * 1024 },
+							).catch(async () => {
+								// Fallback to grep/findstr if ripgrep not available
+								const cmd = process.platform === 'win32'
+									? `findstr /S /N /R "${args.pattern}" ${args.glob || '*.*'}`
+									: `grep -rn "${args.pattern}" ${args.glob ? `--include="${args.glob}"` : ''} . | head -50`;
+								return exec(cmd, { cwd, timeout: 30_000, maxBuffer: 1024 * 1024 });
+							});
+							return {
+								textResultForLlm: stdout.slice(0, 50_000) || 'No matches found.',
+								resultType: 'success' as const,
+							};
+						} catch {
+							return {
+								textResultForLlm: 'No matches found.',
+								resultType: 'success' as const,
+							};
+						}
 					},
 				}),
 			);
@@ -487,4 +622,21 @@ export class Agent {
 				this.logger.error({ err }, 'Failed to emit agent event');
 			});
 	}
+}
+
+/**
+ * Resolve a relative path safely within a base directory.
+ * Returns null if the resolved path escapes the base.
+ */
+function resolveSafePath(base: string, relativePath: string): string | null {
+	// Reject absolute paths outright
+	if (isAbsolute(relativePath)) return null;
+
+	const resolved = resolve(base, relativePath);
+	const normalizedBase = resolve(base);
+
+	// Ensure resolved path is within the base directory
+	if (!resolved.startsWith(normalizedBase)) return null;
+
+	return resolved;
 }

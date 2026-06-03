@@ -57,6 +57,10 @@ export async function executeRework(params: {
 
 			// Track activity under this instance
 			agent.setInstanceId(instance.id);
+			const workingDir = instance.worktree?.path ?? '';
+			if (workingDir) {
+				agent.setWorkingDir(workingDir);
+			}
 
 			const model = selectModelForTask(task.modelTier, task.retryCount);
 			if (agent.getModel() !== model) {
@@ -97,8 +101,12 @@ async function executeTask(
 		return;
 	}
 
-	// Track activity under this instance
+	// Track activity under this instance and set working directory for tools
 	agent.setInstanceId(instance.id);
+	const workingDir = instance.worktree?.path ?? '';
+	if (workingDir) {
+		agent.setWorkingDir(workingDir);
+	}
 
 	const model = selectModelForTask(task.modelTier, task.retryCount);
 	if (agent.getModel() !== model) {
