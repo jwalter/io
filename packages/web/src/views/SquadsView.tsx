@@ -978,10 +978,10 @@ function InstanceDetailView({
 				}
 				const newEvent: AgentActivityEvent = {
 					id: ev.id,
-					agent: (data?.agentRole as string) || 'unknown',
+						agent: (ev.agentRole as string) || (data?.agentRole as string) || 'unknown',
 					type: ev.type.replace('agent:', ''),
 					content,
-					model: (data?.model as string) || null,
+						model: (ev.model as string) || (data?.model as string) || null,
 					tokensUsed: null,
 					timestamp: ev.timestamp,
 				};

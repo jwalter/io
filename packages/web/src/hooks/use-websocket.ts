@@ -20,6 +20,8 @@ export interface WsMessage {
 		timestamp: string;
 		squadId?: string;
 		instanceId?: string;
+		agentRole?: string;
+		model?: string;
 		data?: unknown;
 	};
 }

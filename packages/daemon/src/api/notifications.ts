@@ -99,6 +99,8 @@ export function initNotifications(): void {
 				timestamp: event.timestamp.toISOString(),
 				squadId: event.squadId,
 				instanceId: event.instanceId,
+				agentRole: 'agentRole' in event ? event.agentRole : undefined,
+				model: 'model' in event ? event.model : undefined,
 				data: 'data' in event ? event.data : undefined,
 			},
 		});
