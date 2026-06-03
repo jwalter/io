@@ -134,7 +134,6 @@ export class Agent {
 		this.session.on('tool.execution_complete', (event) => {
 			const data = event.data;
 			this.emitEvent('agent:tool_result', {
-				tool: data.toolDescription?.name ?? 'unknown',
 				toolCallId: data.toolCallId,
 				success: data.success,
 				result: data.result?.content?.slice(0, 500),

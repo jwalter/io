@@ -175,7 +175,6 @@ function mapEventToActivity(event: IOEvent): Parameters<typeof logActivity>[0] |
 				instanceId: event.instanceId,
 				agentRole: event.agentRole,
 				activityType: 'tool_result',
-				label: (event.data as Record<string, unknown>)?.tool as string ?? undefined,
 				content: event.data,
 				status: (event.data as Record<string, unknown>)?.success ? 'ok' : 'error',
 			};
