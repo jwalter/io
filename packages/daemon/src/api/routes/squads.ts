@@ -442,7 +442,27 @@ export function squadsRouter(): Router {
 				try {
 					const parsed = JSON.parse(content);
 					if (typeof parsed === 'object' && parsed !== null) {
-						content = parsed.message ?? parsed.content ?? parsed.response ?? parsed.decision ?? JSON.stringify(parsed, null, 2);
+						// Format tool events to show relevant content
+						if ((kind === 'tool_call' || kind === 'tool_result') && parsed.tool) {
+							if (parsed.arguments) {
+								const args = parsed.arguments;
+								if (typeof args === 'object' && args !== null && args.command) {
+									content = String(args.command);
+								} else if (typeof args === 'string') {
+									content = args;
+								} else {
+									content = JSON.stringify(args, null, 2);
+								}
+							} else if (parsed.result) {
+								content = String(parsed.result);
+							} else if (parsed.error) {
+								content = String(parsed.error);
+							} else {
+								content = JSON.stringify(parsed, null, 2);
+							}
+						} else {
+							content = parsed.message ?? parsed.content ?? parsed.response ?? parsed.decision ?? JSON.stringify(parsed, null, 2);
+						}
 					}
 				} catch {
 					// content is already a string
