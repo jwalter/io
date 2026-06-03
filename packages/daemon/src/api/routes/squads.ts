@@ -513,5 +513,83 @@ export function squadsRouter(): Router {
 		}
 	});
 
+	/**
+	 * GET /api/squads/:name/members/:role/skill
+	 * Get the skill file content for a squad member.
+	 */
+	router.get('/squads/:name/members/:role/skill', async (req, res) => {
+		try {
+			const squad = await getSquadByName(req.params.name);
+			if (!squad) {
+				res.status(404).json({ error: `Squad '${req.params.name}' not found` });
+				return;
+			}
+
+			const members = await getSquadMembers(squad.id);
+			const member = members.find((m) => m.roleName === req.params.role);
+			if (!member) {
+				res.status(404).json({ error: `Member '${req.params.role}' not found` });
+				return;
+			}
+
+			if (!member.skillFilePath) {
+				res.json({ content: '', filePath: null });
+				return;
+			}
+
+			const { readFileSync, existsSync } = await import('node:fs');
+			if (!existsSync(member.skillFilePath)) {
+				res.json({ content: '', filePath: member.skillFilePath });
+				return;
+			}
+
+			const content = readFileSync(member.skillFilePath, 'utf-8');
+			res.json({ content, filePath: member.skillFilePath });
+		} catch (err) {
+			res.status(500).json({ error: 'Failed to read skill file' });
+		}
+	});
+
+	/**
+	 * PUT /api/squads/:name/members/:role/skill
+	 * Update the skill file content for a squad member.
+	 */
+	router.put('/squads/:name/members/:role/skill', async (req, res) => {
+		try {
+			const squad = await getSquadByName(req.params.name);
+			if (!squad) {
+				res.status(404).json({ error: `Squad '${req.params.name}' not found` });
+				return;
+			}
+
+			const members = await getSquadMembers(squad.id);
+			const member = members.find((m) => m.roleName === req.params.role);
+			if (!member) {
+				res.status(404).json({ error: `Member '${req.params.role}' not found` });
+				return;
+			}
+
+			if (!member.skillFilePath) {
+				res.status(400).json({ error: 'Member has no skill file path configured' });
+				return;
+			}
+
+			const { content } = req.body as { content: string };
+			if (typeof content !== 'string') {
+				res.status(400).json({ error: 'Missing "content" string in request body' });
+				return;
+			}
+
+			const { writeFileSync, mkdirSync } = await import('node:fs');
+			const { dirname } = await import('node:path');
+			mkdirSync(dirname(member.skillFilePath), { recursive: true });
+			writeFileSync(member.skillFilePath, content, 'utf-8');
+
+			res.json({ ok: true, filePath: member.skillFilePath });
+		} catch (err) {
+			res.status(500).json({ error: 'Failed to write skill file' });
+		}
+	});
+
 	return router;
 }

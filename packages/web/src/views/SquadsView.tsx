@@ -20,6 +20,8 @@ import {
 	Info,
 	Loader,
 	MessageSquare,
+	Pencil,
+	Save,
 	ScrollText,
 	Square,
 	Terminal,
@@ -183,7 +185,11 @@ function agentColor(name: string): string {
 }
 
 export function SquadsView() {
-	const { name, instanceId } = useParams<{ name: string; instanceId: string }>();
+	const { name, instanceId, role } = useParams<{ name: string; instanceId: string; role: string }>();
+
+	if (name && role) {
+		return <AgentDetailView squadName={name} role={role} />;
+	}
 
 	if (name && instanceId) {
 		return <InstanceDetailView squadName={name} instanceId={instanceId} />;
@@ -465,34 +471,36 @@ function SquadDetailView({ name }: { name: string }) {
 			{tab === 'agents' && (
 				<div className="space-y-2">
 					{detail.members.map((agent) => (
-						<div
-							key={agent.id}
-							className="glass-card border border-white/[0.07] rounded-2xl p-4 flex items-center gap-3"
-						>
-							<div
-								className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-								style={{ border: `1px solid ${color}30`, background: `${color}12` }}
+							<button
+								type="button"
+								key={agent.id}
+								onClick={() => navigate(`/squads/${name}/agents/${agent.roleName || agent.role}`)}
+								className="w-full glass-card border border-white/[0.07] rounded-2xl p-4 flex items-center gap-3 hover:bg-white/[0.03] transition-colors cursor-pointer text-left"
 							>
-								{roleIcon(agent.roleName || agent.role, color as string)}
-							</div>
-							<div className="flex-1 min-w-0">
-								<div className="flex items-center gap-2">
-									<span className="text-sm font-mono text-zinc-200">
-										{agent.displayName}
-									</span>
-									<Chip variant={statusToVariant(agent.status)}>{agent.status}</Chip>
+								<div
+									className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+									style={{ border: `1px solid ${color}30`, background: `${color}12` }}
+								>
+									{roleIcon(agent.roleName || agent.role, color as string)}
 								</div>
-								<p className="text-[11px] text-zinc-600 font-mono mt-0.5">{agent.role}</p>
-								{agent.currentTask && (
-									<p className="text-xs text-zinc-500 mt-1 truncate">
-										{agent.currentTask}
-									</p>
-								)}
-							</div>
-						</div>
-					))}
-				</div>
-			)}
+								<div className="flex-1 min-w-0">
+									<div className="flex items-center gap-2">
+										<span className="text-sm font-mono text-zinc-200">
+											{agent.displayName}
+										</span>
+										<Chip variant={statusToVariant(agent.status)}>{agent.status}</Chip>
+									</div>
+									<p className="text-[11px] text-zinc-600 font-mono mt-0.5">{agent.role}</p>
+									{agent.currentTask && (
+										<p className="text-xs text-zinc-500 mt-1 truncate">
+											{agent.currentTask}
+										</p>
+									)}
+								</div>
+							</button>
+						))}
+					</div>
+				)}
 
 			{tab === 'instances' && (
 				<div className="space-y-2">
@@ -1305,6 +1313,172 @@ function InstanceDetailView({
 					{unseenCount} new event{unseenCount !== 1 ? 's' : ''}
 				</button>
 			)}
+		</div>
+	);
+}
+
+// ─── Agent Detail View ───────────────────────────────────────────────────────
+
+function AgentDetailView({ squadName, role }: { squadName: string; role: string }) {
+	const navigate = useNavigate();
+	const [member, setMember] = useState<{
+		displayName: string;
+		role: string;
+		roleName: string;
+		persona?: string;
+		veto: boolean;
+		tools: string[];
+		status: string;
+	} | null>(null);
+	const [skillContent, setSkillContent] = useState('');
+	const [editing, setEditing] = useState(false);
+	const [editBuffer, setEditBuffer] = useState('');
+	const [saving, setSaving] = useState(false);
+	const [squadColor, setSquadColor] = useState('#38bdf8');
+
+	useEffect(() => {
+		// Load squad detail to get member info and color
+		api.get<{ squad: { color?: string }; members: Array<{
+			displayName: string;
+			role: string;
+			roleName: string;
+			persona?: string;
+			veto: boolean;
+			tools: string[];
+			status: string;
+		}> }>(`/squads/${squadName}`).then((res) => {
+			setSquadColor(res.squad.color || '#38bdf8');
+			const m = res.members.find((m) => m.roleName === role || m.role === role);
+			if (m) setMember(m);
+		}).catch(() => {});
+
+		// Load skill file content
+		api.get<{ content: string; filePath: string | null }>(`/squads/${squadName}/members/${role}/skill`).then((res) => {
+			setSkillContent(res.content);
+		}).catch(() => {});
+	}, [squadName, role]);
+
+	const handleSave = async () => {
+		setSaving(true);
+		try {
+			await api.put(`/squads/${squadName}/members/${role}/skill`, { content: editBuffer });
+			setSkillContent(editBuffer);
+			setEditing(false);
+			toast.success('Skill file saved');
+		} catch {
+			toast.error('Failed to save skill file');
+		} finally {
+			setSaving(false);
+		}
+	};
+
+	if (!member) {
+		return <div className="h-full flex items-center justify-center text-zinc-600">Loading...</div>;
+	}
+
+	return (
+		<div className="flex-1 overflow-y-auto p-6" style={{ background: `${squadColor}06` }}>
+			<button
+				type="button"
+				onClick={() => navigate(`/squads/${squadName}`)}
+				className="flex items-center gap-1.5 text-[11px] text-zinc-600 hover:text-zinc-300 font-mono mb-5 transition-colors cursor-pointer"
+			>
+				<ChevronLeft className="w-3.5 h-3.5" /> Back to {squadName}
+			</button>
+
+			{/* Agent header */}
+			<div className="glass-card border border-white/[0.07] rounded-2xl p-5 mb-5">
+				<div className="flex items-center gap-3 mb-3">
+					<div
+						className="w-10 h-10 rounded-xl flex items-center justify-center"
+						style={{ border: `1px solid ${squadColor}30`, background: `${squadColor}12` }}
+					>
+						{roleIcon(member.roleName, squadColor)}
+					</div>
+					<div>
+						<h2
+							className="text-xl tracking-wide"
+							style={{ fontFamily: "'Bebas Neue', sans-serif", color: squadColor }}
+						>
+							{member.displayName}
+						</h2>
+						<div className="flex items-center gap-2 mt-0.5">
+							<span className="text-[11px] font-mono text-zinc-500">{member.roleName}</span>
+							{member.veto && (
+								<span className="text-[10px] font-mono text-amber-400 border border-amber-400/20 rounded px-1.5 py-px bg-amber-400/[0.06]">
+									veto
+								</span>
+							)}
+						</div>
+					</div>
+				</div>
+				{member.persona && (
+					<p className="text-[12px] text-zinc-400 font-mono leading-relaxed mt-2">
+						{member.persona}
+					</p>
+				)}
+				{member.tools.length > 0 && (
+					<div className="flex flex-wrap gap-1.5 mt-3">
+						{member.tools.map((tool) => (
+							<span
+								key={tool}
+								className="text-[10px] font-mono text-zinc-500 border border-white/[0.08] rounded px-1.5 py-px bg-white/[0.03]"
+							>
+								{tool}
+							</span>
+						))}
+					</div>
+				)}
+			</div>
+
+			{/* Skill file */}
+			<div className="glass-card border border-white/[0.07] rounded-2xl p-5">
+				<div className="flex items-center justify-between mb-4">
+					<h3 className="text-sm font-mono text-zinc-300">Skill File</h3>
+					{!editing ? (
+						<button
+							type="button"
+							onClick={() => { setEditBuffer(skillContent); setEditing(true); }}
+							className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-mono text-zinc-400 hover:text-zinc-200 border border-white/[0.1] hover:border-white/[0.2] transition-colors cursor-pointer"
+						>
+							<Pencil className="w-3 h-3" /> Edit
+						</button>
+					) : (
+						<div className="flex items-center gap-2">
+							<button
+								type="button"
+								onClick={() => setEditing(false)}
+								className="px-3 py-1.5 rounded-lg text-[11px] font-mono text-zinc-500 hover:text-zinc-300 border border-white/[0.1] transition-colors cursor-pointer"
+							>
+								Cancel
+							</button>
+							<button
+								type="button"
+								onClick={handleSave}
+								disabled={saving}
+								className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-mono text-emerald-400 border border-emerald-400/30 hover:bg-emerald-400/10 transition-colors cursor-pointer disabled:opacity-50"
+							>
+								<Save className="w-3 h-3" /> {saving ? 'Saving...' : 'Save'}
+							</button>
+						</div>
+					)}
+				</div>
+
+				{editing ? (
+					<textarea
+						value={editBuffer}
+						onChange={(e) => setEditBuffer(e.target.value)}
+						className="w-full h-[500px] bg-black/30 border border-white/[0.08] rounded-xl p-4 text-[12px] font-mono text-zinc-300 resize-y focus:outline-none focus:border-white/[0.2] leading-relaxed"
+						spellCheck={false}
+					/>
+				) : skillContent ? (
+					<MarkdownRenderer content={skillContent} className="text-[12px] [&_pre]:text-[11px]" />
+				) : (
+					<p className="text-zinc-700 text-[12px] font-mono py-8 text-center">
+						No skill file configured for this agent
+					</p>
+				)}
+			</div>
 		</div>
 	);
 }
