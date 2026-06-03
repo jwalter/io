@@ -220,10 +220,30 @@ export function squadsRouter(): Router {
 
 			const activity = activityResult.rows.map((row) => {
 				let content = row.content as string ?? '';
+				let toolName: string | null = null;
+				let success: boolean | null = null;
 				try {
 					const parsed = JSON.parse(content);
 					if (typeof parsed === 'object' && parsed !== null) {
-						content = parsed.message ?? parsed.content ?? parsed.response ?? parsed.decision ?? JSON.stringify(parsed, null, 2);
+						toolName = parsed.tool ?? null;
+						success = typeof parsed.success === 'boolean' ? parsed.success : null;
+						// Format content based on type
+						if (toolName && parsed.arguments) {
+							const args = parsed.arguments;
+							if (typeof args === 'object' && args !== null && args.command) {
+								content = String(args.command);
+							} else if (typeof args === 'string') {
+								content = args;
+							} else {
+								content = JSON.stringify(args, null, 2);
+							}
+						} else if (parsed.result) {
+							content = String(parsed.result);
+						} else if (parsed.error) {
+							content = String(parsed.error);
+						} else {
+							content = parsed.message ?? parsed.content ?? parsed.response ?? parsed.decision ?? JSON.stringify(parsed, null, 2);
+						}
 					}
 				} catch {
 					// content is already a plain string
@@ -233,6 +253,8 @@ export function squadsRouter(): Router {
 					agent: row.agent_role as string,
 					type: row.activity_type as string,
 					content,
+					toolName,
+					success,
 					model: row.model_used as string | null,
 					tokensUsed: row.tokens_used as number | null,
 					timestamp: row.timestamp as string,

@@ -104,6 +104,8 @@ interface AgentActivityEvent {
 	agent: string;
 	type: string;
 	content: string;
+	toolName: string | null;
+	success: boolean | null;
 	model: string | null;
 	tokensUsed: number | null;
 	timestamp: string;
@@ -967,24 +969,53 @@ function InstanceDetailView({
 			// Agent activity events
 			if (ev.type.startsWith('agent:') && ev.instanceId === instanceId) {
 				const data = ev.data as Record<string, unknown> | undefined;
-				let content = (data?.content as string) || (data?.tool as string) || '';
-				try {
-					const parsed = JSON.parse(content);
-					if (typeof parsed === 'object' && parsed !== null) {
-						content = parsed.message ?? parsed.content ?? parsed.response ?? parsed.decision ?? JSON.stringify(parsed, null, 2);
+					const toolName = (data?.tool as string) || null;
+					const success = typeof data?.success === 'boolean' ? data.success : null;
+
+					let content = '';
+					if (toolName && data?.arguments) {
+						// Tool call: show arguments in a readable way
+						const args = data.arguments;
+						if (typeof args === 'string') {
+							content = args;
+						} else if (typeof args === 'object' && args !== null) {
+							const argObj = args as Record<string, unknown>;
+							// For bash/shell, show the command
+							if (argObj.command) {
+								content = String(argObj.command);
+							} else {
+								content = JSON.stringify(args, null, 2);
+							}
+						}
+					} else if (data?.result) {
+						content = String(data.result);
+					} else if (data?.error) {
+						content = String(data.error);
+					} else {
+						content = (data?.content as string) || '';
 					}
-				} catch {
-					// already a plain string
-				}
-				const newEvent: AgentActivityEvent = {
-					id: ev.id,
+
+					// Try to simplify JSON content
+					try {
+						const parsed = JSON.parse(content);
+						if (typeof parsed === 'object' && parsed !== null) {
+							content = parsed.message ?? parsed.content ?? parsed.response ?? parsed.decision ?? JSON.stringify(parsed, null, 2);
+						}
+					} catch {
+						// already a plain string
+					}
+
+					const newEvent: AgentActivityEvent = {
+						id: ev.id,
 						agent: (ev.agentRole as string) || (data?.agentRole as string) || 'unknown',
-					type: ev.type.replace('agent:', ''),
-					content,
+						type: ev.type.replace('agent:', ''),
+						content,
+						toolName,
+						success,
 						model: (ev.model as string) || (data?.model as string) || null,
-					tokensUsed: null,
-					timestamp: ev.timestamp,
-				};
+						tokensUsed: null,
+						timestamp: ev.timestamp,
+					};
 				setLiveEvents((prev) => [...prev, newEvent]);
 
 				// Auto-scroll or increment unseen
@@ -1163,12 +1194,29 @@ function InstanceDetailView({
 											<span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">
 												{meta.label}
 											</span>
+											{/* Tool name label */}
+											{ev.toolName && (
+												<span className="text-[10px] font-mono text-sky-400 border border-sky-400/20 rounded px-1.5 py-px bg-sky-400/[0.06]">
+													[{ev.toolName}]
+												</span>
+											)}
 											{ev.model && (
 												<span className="text-[10px] font-mono text-zinc-600 border border-white/[0.08] rounded px-1.5 py-px bg-white/[0.03]">
 													{ev.model}
 												</span>
 											)}
-											{isError && <Chip variant="error">failed</Chip>}
+											{/* Success/failure pill for tool results */}
+											{ev.success === true && (
+												<span className="text-[10px] font-mono text-emerald-400 border border-emerald-400/20 rounded px-1.5 py-px bg-emerald-400/[0.08]">
+													success
+												</span>
+											)}
+											{ev.success === false && (
+												<span className="text-[10px] font-mono text-red-400 border border-red-400/20 rounded px-1.5 py-px bg-red-400/[0.08]">
+													failed
+												</span>
+											)}
+											{isError && ev.success === null && <Chip variant="error">failed</Chip>}
 										</div>
 										<span className="text-[10px] font-mono text-zinc-700 flex-shrink-0 ml-2">
 											{formatTime(ev.timestamp, timezone)}
