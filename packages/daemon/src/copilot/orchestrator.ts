@@ -8,6 +8,7 @@ import { appendConversationMessage } from '../store/conversations.js';
 import { getDatabase } from '../store/db.js';
 import { getOrchestratorScopes, getPageListing } from '../wiki/index.js';
 import { getClient } from './client.js';
+import { buildProvider } from './provider.js';
 import { createOrchestratorTools } from './tools.js';
 
 type Session = Awaited<ReturnType<Awaited<ReturnType<typeof getClient>>['createSession']>>;
@@ -110,6 +111,7 @@ export async function initOrchestrator(config: IOConfig): Promise<void> {
 			backgroundCompactionThreshold: 0.8,
 			bufferExhaustionThreshold: 0.95,
 		},
+		...(buildProvider(config.byok) && { provider: buildProvider(config.byok) }),
 	};
 
 	// Try to resume existing session
@@ -203,6 +205,7 @@ async function processMessage(msg: QueuedMessage): Promise<string> {
 				backgroundCompactionThreshold: 0.8,
 				bufferExhaustionThreshold: 0.95,
 			},
+			...(buildProvider(freshConfig.byok) && { provider: buildProvider(freshConfig.byok) }),
 		});
 		sessionId = session.sessionId;
 		subscribeToUsage(session);

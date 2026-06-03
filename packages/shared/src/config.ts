@@ -3,6 +3,12 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { DEFAULT_CONFIG } from './constants.js';
 
+export interface ByokConfig {
+	type: 'openai' | 'azure' | 'anthropic';
+	baseUrl: string;
+	apiKey: string;
+}
+
 export interface IOConfig {
 	apiPort: number;
 	logLevel: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
@@ -22,6 +28,7 @@ export interface IOConfig {
 		anonKey: string | null;
 		jwtSecret: string | null;
 	};
+	byok: ByokConfig | null;
 }
 
 function resolveDataDir(dir: string): string {
@@ -81,5 +88,19 @@ export function loadConfig(): IOConfig {
 			anonKey: readString(process.env.IO_SUPABASE_ANON_KEY, fileConfig.supabase?.anonKey),
 			jwtSecret: readString(process.env.IO_SUPABASE_JWT_SECRET, fileConfig.supabase?.jwtSecret),
 		},
+		byok: resolveByok(fileConfig.byok),
 	};
+}
+
+function resolveByok(fileByok: Record<string, string> | null | undefined): ByokConfig | null {
+	const type = (process.env.IO_BYOK_TYPE || fileByok?.type || null) as
+		| ByokConfig['type']
+		| null;
+	const baseUrl = readString(process.env.IO_BYOK_BASE_URL, fileByok?.baseUrl);
+	const apiKey = readString(process.env.IO_BYOK_API_KEY, fileByok?.apiKey);
+
+	if (!type || !baseUrl || !apiKey) return null;
+	if (type !== 'openai' && type !== 'azure' && type !== 'anthropic') return null;
+
+	return { type, baseUrl, apiKey };
 }
