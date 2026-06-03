@@ -32,9 +32,9 @@ export async function planInstance(params: {
 	// Track activity under this instance
 	teamLead.setInstanceId(instance.id);
 
-	// Build roster description so the lead knows who's available
+	// Build roster description so the lead knows who's available (exclude scribe — it's never assigned tasks)
 	const roster = [...runtime.members.entries()]
-		.filter(([role]) => role !== 'technical-pm')
+		.filter(([role]) => role !== 'technical-pm' && role !== 'scribe')
 		.map(([role]) => `- ${role}`)
 		.join('\n');
 

@@ -66,7 +66,7 @@ export async function executeRework(params: {
 			try {
 				const workingDir = instance.worktree?.path ?? '';
 				const result = await agent.send(
-					`Your previous work on "${task.description}" needs revision.\n\nFeedback: ${feedback}\n\n${workingDir ? `Working directory: ${workingDir}\n\n` : ''}Please address this feedback and report your updated results.`,
+					`Your previous work on "${task.description}" needs revision.\n\nFeedback: ${feedback}\n\n${workingDir ? `Working directory: ${workingDir}\n\n` : ''}Please address this feedback. Write/edit code and run tests to verify.\n\nIMPORTANT: Do NOT run git commands, create commits, or make PRs — the system handles that after review.`,
 				);
 				task.result = result;
 				task.status = 'done';
@@ -131,7 +131,13 @@ function buildTaskPrompt(task: InstanceTask, workingDir: string, instance: Insta
 	}
 
 	parts.push(
-		'\nComplete the task to the best of your ability. Use your available tools to read, edit, and test code as needed. Report back with a summary of what you did.',
+		'\nComplete the task by writing code and tests in the working directory. Use your available tools to read, write, and test code.',
+		'\n\nIMPORTANT RULES:',
+		'\n- Do NOT run git commands (commit, push, branch, checkout, etc.) — the system handles all git operations after review.',
+		'\n- Do NOT create pull requests or attempt to merge anything.',
+		'\n- Do NOT modify files outside the working directory.',
+		'\n- Focus ONLY on writing/editing code and running tests to verify your work.',
+		'\n\nWhen done, report a brief summary of what you changed.',
 	);
 
 	return parts.join('');
