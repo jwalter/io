@@ -11,7 +11,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 export function ChatView() {
 	const { session } = useAuth();
 	const timezone = useTimezone();
-	const { messages, streaming, isStreaming, isThinking, sendChatMessage, addUserMessage, uploadAttachment } = useChat();
+	const { messages, streaming, isStreaming, isThinking, sendChatMessage, stopStreaming, addUserMessage, uploadAttachment } = useChat();
 	const [input, setInput] = useState('');
 	const [selectedFile, setSelectedFile] = useState<File | null>(null);
 	const [expandedTool, setExpandedTool] = useState<string | null>(null);
@@ -254,7 +254,7 @@ export function ChatView() {
 							{isStreaming ? (
 								<button
 									type="button"
-									onClick={() => { /* stop not yet supported */ }}
+									onClick={() => stopStreaming()}
 									className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-[11px] font-mono text-zinc-300 transition-colors"
 								>
 									<Square className="w-3 h-3" /> Stop

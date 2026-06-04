@@ -556,7 +556,14 @@ function SquadDetailView({ name }: { name: string }) {
 									</button>
 									<button
 										type="button"
-										onClick={() => toast.info('Stop not yet implemented')}
+										onClick={async () => {
+											try {
+												await api.post(`/squads/${name}/instances/${inst.id}/cancel`);
+												toast.success('Instance cancelled');
+											} catch {
+												toast.error('Failed to cancel instance');
+											}
+										}}
 										title="Stop instance"
 										className="p-2 rounded-xl hover:bg-red-500/10 text-zinc-600 hover:text-red-400 transition-colors cursor-pointer"
 									>

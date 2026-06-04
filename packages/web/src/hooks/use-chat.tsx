@@ -32,6 +32,7 @@ interface ChatContextValue {
 	isThinking: boolean;
 	connected: boolean;
 	sendChatMessage: (content: string) => void;
+	stopStreaming: () => void;
 	addUserMessage: (msg: ChatMessage) => void;
 	uploadAttachment: (file: File, messageId: string) => Promise<void>;
 }
@@ -110,6 +111,24 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 		[sendMessage],
 	);
 
+	const stopStreaming = useCallback(() => {
+		if (streaming) {
+			// Commit current streamed content as a message
+			setMessages((prev) => [
+				...prev,
+				{
+					id: crypto.randomUUID(),
+					role: 'assistant',
+					content: streaming,
+					timestamp: new Date().toISOString(),
+				},
+			]);
+		}
+		setIsStreaming(false);
+		setIsThinking(false);
+		setStreaming('');
+	}, [streaming]);
+
 	const addUserMessage = useCallback((msg: ChatMessage) => {
 		setMessages((prev) => [...prev, msg]);
 	}, []);
@@ -140,6 +159,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 				isThinking,
 				connected,
 				sendChatMessage,
+				stopStreaming,
 				addUserMessage,
 				uploadAttachment,
 			}}
