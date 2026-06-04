@@ -16,6 +16,10 @@ export async function executeTasks(params: {
 	const log = logger();
 	const { instance, runtime } = params;
 
+	if (!instance.worktree) {
+		throw new Error('Cannot execute tasks: no worktree available. Instance has no working directory for agents.');
+	}
+
 	await transitionInstance(instance.id, 'working');
 
 	const teamLead = runtime.members.get('technical-pm');

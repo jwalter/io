@@ -55,17 +55,12 @@ export async function createInstance(params: {
 
 	const id = crypto.randomUUID();
 
-	// Create worktree if project has git
-	let worktree: WorktreeInfo | null = null;
-	try {
-		worktree = await createWorktree({
-			repoPath: params.squad.projectPath,
-			squadName: params.squad.name,
-			instanceId: id,
-		});
-	} catch (err) {
-		log.warn({ err }, 'Could not create worktree, proceeding without isolation');
-	}
+	// Create worktree — required for agents to do actual work
+	const worktree = await createWorktree({
+		repoPath: params.squad.projectPath,
+		squadName: params.squad.name,
+		instanceId: id,
+	});
 
 	// Persist to DB
 	await db.execute({
@@ -75,8 +70,8 @@ export async function createInstance(params: {
 			id,
 			params.squad.id,
 			params.issueRef ?? null,
-			worktree?.path ?? null,
-			worktree?.branch ?? null,
+			worktree.path,
+			worktree.branch,
 			params.objective,
 		],
 	});
@@ -86,7 +81,7 @@ export async function createInstance(params: {
 		squadId: params.squad.id,
 		issueRef: params.issueRef,
 		worktree,
-		branch: worktree?.branch ?? null,
+		branch: worktree.branch,
 		status: 'planning',
 		tasks: [],
 		meetingLog: [],

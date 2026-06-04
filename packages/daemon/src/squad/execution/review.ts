@@ -40,6 +40,9 @@ export async function reviewWork(params: {
 
 	// Track review activity under this instance
 	teamLead.setInstanceId(instance.id);
+	if (instance.worktree) {
+		teamLead.setWorkingDir(instance.worktree.path);
+	}
 
 	// Find veto/QA members
 	const vetoMembers = [...runtime.members.entries()].filter(([role]) => {
@@ -74,7 +77,7 @@ export async function reviewWork(params: {
 		}
 
 		const leadReview = await teamLead.send(
-			`Review all completed work for this objective:\n\nObjective: ${objective}\n\nTask results:\n${taskSummary}\n\nDoes the work meet the objective? Reply with one of:\n- "APPROVED" if all work is satisfactory\n- "REWORK:" followed by a JSON array of objects with "taskId" and "feedback" for each task that needs revision. Example:\nREWORK: [{"taskId": "abc-123", "feedback": "Missing error handling"}]`,
+			`Review all completed work for this objective:\n\nObjective: ${objective}\n\nTask results:\n${taskSummary}\n\nBefore deciding, use your tools to VERIFY the work exists on disk:\n- Use read_file to check that expected files were created/modified\n- Use run_command to run tests or check file structure (e.g., "ls -la", "cat <file>", "npm test")\n\nDo NOT trust the task results text alone — verify actual changes exist.\n\nAfter verifying, reply with one of:\n- "APPROVED" if work is verified on disk and meets the objective\n- "REWORK:" followed by a JSON array of objects with "taskId" and "feedback" for each task that needs revision. Example:\nREWORK: [{"taskId": "abc-123", "feedback": "File was not actually written to disk"}]`,
 		);
 
 		if (leadReview.toUpperCase().includes('APPROVED')) {
@@ -86,13 +89,16 @@ export async function reviewWork(params: {
 
 			for (const [role, agent] of vetoMembers) {
 				agent.setInstanceId(instance.id);
+					if (instance.worktree) {
+						agent.setWorkingDir(instance.worktree.path);
+					}
 				const qaModel = selectModelForRole(role, 'review');
 				if (agent.getModel() !== qaModel) {
 					await agent.switchModel(qaModel);
 				}
 
 				const qaReview = await agent.send(
-					`As QA, review the following completed work:\n\nObjective: ${objective}\n\nTask results:\n${taskSummary}\n\nDoes this meet quality standards? Reply with:\n- "APPROVED" if satisfactory\n- "REWORK:" followed by a JSON array of objects with "taskId" and "feedback" for tasks that need revision.`,
+						`As QA, review the following completed work:\n\nObjective: ${objective}\n\nTask results:\n${taskSummary}\n\nBefore deciding, use your tools to VERIFY the work on disk:\n- Use read_file to inspect the actual files\n- Use run_command to run tests or linting\n\nDo NOT rely on task result text alone — verify real changes exist.\n\nReply with:\n- "APPROVED" if verified and satisfactory\n- "REWORK:" followed by a JSON array of objects with "taskId" and "feedback" for tasks that need revision.`,
 				);
 
 				if (qaReview.toUpperCase().includes('REWORK:')) {
