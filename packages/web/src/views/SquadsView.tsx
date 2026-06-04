@@ -1160,12 +1160,17 @@ function InstanceDetailView({
 							{agent.status === 'working' && (
 								<button
 									type="button"
-									onClick={(e) => {
+									onClick={async (e) => {
 										e.stopPropagation();
-										toast.info('Agent stop not yet supported');
+										try {
+											await api.post(`/squads/${squadName}/instances/${instanceId}/cancel`);
+											toast.success('Instance cancelled');
+										} catch {
+											toast.error('Failed to cancel instance');
+										}
 									}}
-									title="Stop agent (not yet supported)"
-									className="ml-1 p-1 rounded-lg hover:bg-red-500/10 text-zinc-600 hover:text-red-400 transition-colors cursor-pointer opacity-50"
+									title="Cancel instance"
+									className="ml-1 p-1 rounded-lg hover:bg-red-500/10 text-zinc-600 hover:text-red-400 transition-colors cursor-pointer"
 								>
 									<Square className="w-3 h-3" />
 								</button>

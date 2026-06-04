@@ -27,6 +27,7 @@ export interface Instance {
 	status: InstanceStatus;
 	tasks: InstanceTask[];
 	meetingLog: string[];
+	abortController: AbortController;
 }
 
 const activeInstances = new Map<string, Instance>();
@@ -89,6 +90,7 @@ export async function createInstance(params: {
 		status: 'planning',
 		tasks: [],
 		meetingLog: [],
+		abortController: new AbortController(),
 	};
 
 	activeInstances.set(id, instance);
@@ -162,8 +164,45 @@ export async function transitionInstance(
 }
 
 /**
- * Clean up a completed/failed instance (remove worktree).
+ * Cancel a running instance. Aborts in-flight work and transitions to failed.
  */
+export async function cancelInstance(instanceId: string, squad: Squad): Promise<boolean> {
+	const log = logger();
+	const instance = activeInstances.get(instanceId);
+	if (!instance) return false;
+
+	// Already terminal
+	if (instance.status === 'complete' || instance.status === 'failed') {
+		return false;
+	}
+
+	// Signal abort to any in-flight work
+	instance.abortController.abort();
+
+	// Force transition to failed (bypass normal validation)
+	instance.status = 'failed';
+	const db = getDatabase();
+	await db.execute({
+		sql: "UPDATE squad_instances SET status = 'failed', completed_at = ? WHERE id = ?",
+		args: [new Date().toISOString(), instanceId],
+	});
+
+	await getEventBus().emit({
+		id: crypto.randomUUID(),
+		timestamp: new Date(),
+		type: 'instance:failed',
+		squadId: instance.squadId,
+		instanceId,
+		data: { reason: 'cancelled' },
+	});
+
+	// Clean up worktree
+	await cleanupInstance(instanceId, squad);
+
+	log.info({ instanceId }, 'Instance cancelled');
+	return true;
+}
+
 export async function cleanupInstance(instanceId: string, squad: Squad): Promise<void> {
 	const instance = activeInstances.get(instanceId);
 	if (!instance) return;

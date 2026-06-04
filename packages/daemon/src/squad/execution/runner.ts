@@ -69,6 +69,10 @@ export async function executeInstance(params: {
 		// Team Lead plans
 		await planInstance({ instance, runtime, objective, attachments });
 
+		if (instance.abortController.signal.aborted) {
+			return { instanceId: instance.id, success: false, error: 'Cancelled' };
+		}
+
 		if (instance.tasks.length === 0) {
 			log.warn({ instanceId: instance.id }, 'No tasks generated from planning');
 			return {
@@ -81,8 +85,16 @@ export async function executeInstance(params: {
 		// Execute tasks in parallel
 		await executeTasks({ instance, runtime });
 
+		if (instance.abortController.signal.aborted) {
+			return { instanceId: instance.id, success: false, error: 'Cancelled' };
+		}
+
 		// Gated review/rework cycles
 		const reviewResult = await reviewWork({ instance, runtime, objective });
+
+		if (instance.abortController.signal.aborted) {
+			return { instanceId: instance.id, success: false, error: 'Cancelled' };
+		}
 
 		if (!reviewResult.approved) {
 			await cleanupInstance(instance.id, squad);

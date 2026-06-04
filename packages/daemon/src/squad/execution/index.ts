@@ -1,6 +1,7 @@
 export { createWorktree, removeWorktree, listWorktrees } from './worktree.js';
 export type { WorktreeInfo } from './worktree.js';
 export {
+	cancelInstance,
 	createInstance,
 	transitionInstance,
 	cleanupInstance,

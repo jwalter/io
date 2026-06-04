@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { ActivityType } from '../../store/activity.js';
-import { getInstance, getSquadInstances } from '../../squad/execution/instance.js';
+import { cancelInstance, getInstance, getSquadInstances } from '../../squad/execution/instance.js';
 import { executeInstance, initInstance } from '../../squad/execution/runner.js';
 import { getSquadByName, getSquadMembers, listSquads } from '../../squad/manager.js';
 import { getDatabase } from '../../store/db.js';
@@ -305,6 +305,30 @@ export function squadsRouter(): Router {
 			});
 		} catch (err) {
 			res.status(500).json({ error: 'Failed to get instance detail' });
+		}
+	});
+
+	/**
+	 * POST /api/squads/:name/instances/:instanceId/cancel
+	 * Cancel a running instance.
+	 */
+	router.post('/squads/:name/instances/:instanceId/cancel', async (req, res) => {
+		try {
+			const squad = await getSquadByName(req.params.name);
+			if (!squad) {
+				res.status(404).json({ error: `Squad '${req.params.name}' not found` });
+				return;
+			}
+
+			const cancelled = await cancelInstance(req.params.instanceId, squad);
+			if (!cancelled) {
+				res.status(404).json({ error: 'Instance not found or already completed' });
+				return;
+			}
+
+			res.json({ cancelled: true, instanceId: req.params.instanceId });
+		} catch (err) {
+			res.status(500).json({ error: 'Failed to cancel instance' });
 		}
 	});
 
