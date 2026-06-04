@@ -1162,10 +1162,10 @@ function InstanceDetailView({
 									type="button"
 									onClick={(e) => {
 										e.stopPropagation();
-										toast.success(`${agent.displayName} stopped`);
+										toast.info('Agent stop not yet supported');
 									}}
-									title="Stop agent"
-									className="ml-1 p-1 rounded-lg hover:bg-red-500/10 text-zinc-600 hover:text-red-400 transition-colors cursor-pointer"
+									title="Stop agent (not yet supported)"
+									className="ml-1 p-1 rounded-lg hover:bg-red-500/10 text-zinc-600 hover:text-red-400 transition-colors cursor-pointer opacity-50"
 								>
 									<Square className="w-3 h-3" />
 								</button>
