@@ -61,6 +61,8 @@ export class Agent {
 	private logger;
 	private _status: AgentStatus = 'idle';
 
+	private _squadContext?: string;
+
 	constructor(config: AgentConfig) {
 		this.skill = config.skill;
 		this.role = config.skill.role;
@@ -96,6 +98,17 @@ export class Agent {
 
 	get status(): AgentStatus {
 		return this._status;
+	}
+
+	/** Store squad context for lazy initialization */
+	setSquadContext(context: string): void {
+		this._squadContext = context;
+	}
+
+	/** Ensure the agent's session is initialized (lazy — called on first use) */
+	private async ensureSession(): Promise<void> {
+		if (this.session) return;
+		await this.init(this._squadContext);
 	}
 
 	/** Initialize the agent's Copilot session */
@@ -162,44 +175,67 @@ export class Agent {
 	}
 
 	/** Send a message and get a response */
+	private static readonly SEND_TIMEOUT = 120_000; // 2 minutes
+	private static readonly MAX_RETRIES = 1;
+
 	async send(content: string, attachments?: FileAttachment[]): Promise<string> {
+		await this.ensureSession();
 		if (!this.session) {
-			throw new Error(`Agent ${this.role} not initialized`);
+			throw new Error(`Agent ${this.role} failed to initialize session`);
 		}
 
 		this._status = 'working';
 		this.emitEvent('agent:task_started', { content: content.slice(0, 500) });
 
-		try {
-			const options: { prompt: string; attachments?: FileAttachment[] } = { prompt: content };
-			if (attachments && attachments.length > 0) {
-				options.attachments = attachments;
-			}
-			const result = await this.session.sendAndWait(options, 300_000);
-			const response = result?.data?.content ?? '';
-			this._status = 'idle';
-			this.emitEvent('agent:task_completed', { responseLength: response.length });
-			return response;
-		} catch (err) {
-			this._status = 'error';
-			this.logger.error({ err }, 'Agent send failed');
-			this.emitEvent('agent:error', {
-				error: err instanceof Error ? err.message : String(err),
-			});
-			throw err;
+		const options: { prompt: string; attachments?: FileAttachment[] } = { prompt: content };
+		if (attachments && attachments.length > 0) {
+			options.attachments = attachments;
 		}
+
+		let lastErr: Error | undefined;
+		for (let attempt = 0; attempt <= Agent.MAX_RETRIES; attempt++) {
+			try {
+				if (attempt > 0) {
+					this.logger.info({ attempt: attempt + 1 }, 'Retrying send after timeout');
+					// Reinitialize session on retry (previous may be stuck)
+					if (this.session) {
+						await this.session.disconnect().catch(() => {});
+						this.session = null;
+					}
+					await this.ensureSession();
+					if (!this.session) throw new Error('Failed to reinitialize session');
+				}
+				const result = await this.session!.sendAndWait(options, Agent.SEND_TIMEOUT);
+				const response = result?.data?.content ?? '';
+				this._status = 'idle';
+				this.emitEvent('agent:task_completed', { responseLength: response.length });
+				return response;
+			} catch (err) {
+				lastErr = err instanceof Error ? err : new Error(String(err));
+				const isTimeout = lastErr.message.includes('Timeout');
+				if (!isTimeout || attempt >= Agent.MAX_RETRIES) break;
+				this.logger.warn({ attempt: attempt + 1 }, 'Send timed out, will retry');
+			}
+		}
+
+		this._status = 'error';
+		this.logger.error({ err: lastErr }, 'Agent send failed');
+		this.emitEvent('agent:error', {
+			error: lastErr?.message ?? 'Unknown error',
+		});
+		throw lastErr;
 	}
 
-	/** Switch to a different model (reinitializes session) */
+	/** Switch to a different model (session will reinitialize on next use) */
 	async switchModel(newModel: string, squadContext?: string): Promise<void> {
 		if (this.model === newModel) return;
 		this.logger.info({ from: this.model, to: newModel }, 'Switching model');
 		this.model = newModel;
+		if (squadContext) this._squadContext = squadContext;
 		if (this.session) {
 			await this.session.disconnect().catch(() => {});
 			this.session = null;
 		}
-		await this.init(squadContext);
 	}
 
 	/** Get the current model */

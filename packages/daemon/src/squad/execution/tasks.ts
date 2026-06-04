@@ -5,6 +5,9 @@ import { type Instance, type InstanceTask, transitionInstance } from './instance
 
 const logger = () => createChildLogger('task-exec');
 
+// Max time for a single task (covers send timeout + retries + overhead)
+const TASK_TIMEOUT_MS = 300_000; // 5 minutes total per task
+
 /**
  * Execute all tasks in parallel.
  * No per-task review — that's handled by the review phase.
@@ -25,11 +28,11 @@ export async function executeTasks(params: {
 	const teamLead = runtime.members.get('technical-pm');
 	if (!teamLead) throw new Error('No team lead for task execution');
 
-	// Execute all tasks concurrently
+	// Execute all tasks concurrently with per-task timeout
 	await Promise.all(
 		instance.tasks
 			.filter((task) => task.status !== 'done')
-			.map((task) => executeTask(task, instance, runtime, log)),
+			.map((task) => withTimeout(executeTask(task, instance, runtime, log), TASK_TIMEOUT_MS, task)),
 	);
 }
 
@@ -153,5 +156,21 @@ function buildTaskPrompt(task: InstanceTask, workingDir: string, instance: Insta
 	);
 
 	return parts.join('');
+}
+
+/** Wrap a task promise with a timeout — marks the task as failed if it exceeds the limit */
+function withTimeout(promise: Promise<void>, ms: number, task: InstanceTask): Promise<void> {
+	return Promise.race([
+		promise,
+		new Promise<void>((_, reject) =>
+			setTimeout(() => {
+				task.status = 'failed';
+				task.result = `Task timed out after ${Math.round(ms / 1000)}s`;
+				reject(new Error(`Task ${task.id} timed out`));
+			}, ms),
+		),
+	]).catch(() => {
+		// Swallow — task is already marked failed
+	});
 }
 

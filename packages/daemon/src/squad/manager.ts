@@ -400,7 +400,8 @@ export async function bootSquad(squad: Squad): Promise<SquadRuntime> {
 			},
 		});
 
-		await agent.init(squadContext);
+		// Store context for lazy init — sessions are created on first send()
+		agent.setSquadContext(squadContext);
 		runtime.members.set(member.roleName, agent);
 	}
 
