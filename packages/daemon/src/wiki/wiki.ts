@@ -268,7 +268,7 @@ async function pruneEmptyDirectories(directory: string, rootDirectory: string): 
 				return;
 			}
 
-			await rm(currentDirectory);
+			await rm(currentDirectory, { recursive: true });
 		} catch (error) {
 			if (isMissingFileError(error)) {
 				return;
