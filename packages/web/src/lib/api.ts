@@ -16,7 +16,7 @@ interface LegacyConfig {
 	timezone: string;
 	pricing: { refreshIntervalHours: number };
 	telegram: { botToken: string | null; allowedChatIds: number[] };
-	supabase: { projectUrl: string | null; anonKey: string | null; jwtSecret: string | null };
+	supabase: { projectUrl: string | null; anonKey: string | null };
 	sessionResetThreshold: number;
 }
 
@@ -54,7 +54,6 @@ function toLegacyConfig(settings: AppSettings): LegacyConfig {
 		supabase: {
 			projectUrl: settings.supabaseUrl,
 			anonKey: settings.supabaseAnonKey,
-			jwtSecret: null,
 		},
 		sessionResetThreshold: settings.sessionResetThreshold,
 	};

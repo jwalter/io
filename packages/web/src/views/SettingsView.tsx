@@ -14,7 +14,7 @@ interface Config {
 	timezone: string;
 	pricing: { refreshIntervalHours: number };
 	telegram: { botToken: string | null; allowedChatIds: number[] };
-	supabase: { projectUrl: string | null; anonKey: string | null; jwtSecret: string | null };
+	supabase: { projectUrl: string | null; anonKey: string | null };
 }
 
 type TabId = "general" | "telegram" | "auth";
@@ -221,15 +221,6 @@ export function SettingsView() {
 									value={config.supabase.anonKey ?? ""}
 									onChange={(value) =>
 										update({ supabase: { ...config.supabase, anonKey: value || null } })
-									}
-									size="lg"
-								/>
-							</FormRow>
-							<FormRow label="JWT Secret">
-								<MaskedInput
-									value={config.supabase.jwtSecret ?? ""}
-									onChange={(value) =>
-										update({ supabase: { ...config.supabase, jwtSecret: value || null } })
 									}
 									size="lg"
 								/>
