@@ -20,7 +20,7 @@ import { toast } from "sonner";
 interface WikiPage {
 	name: string;
 	path: string;
-	scope?: string;
+	title?: string;
 	isDir?: boolean;
 }
 
@@ -305,38 +305,22 @@ export function WikiView() {
 
 	async function loadPages() {
 		try {
-			const data = await api.get<{ pages: WikiPage[] }>("/wiki/all");
-			setPages(data.pages);
+			const data = await api.get<{ path: string; title: string }[]>("/wiki/pages");
+			setPages(
+				data.map((p) => ({
+					name: p.path.split("/").pop() ?? p.path,
+					path: p.path,
+					title: p.title,
+				})),
+			);
 		} catch {
 			setPages([]);
 		}
 	}
 
-	function parseScopePath(fullPath: string): { scope: string; relativePath: string } {
-		if (fullPath.startsWith("squads/")) {
-			// squads/{squadName}/rest... → scope={squadName}, path=rest...
-			const parts = fullPath.split("/");
-			const squadName = parts[1] ?? "";
-			const relativePath = parts.slice(2).join("/");
-			return { scope: squadName, relativePath };
-		}
-		if (fullPath.startsWith("templates/")) {
-			return { scope: "templates", relativePath: fullPath.slice(10) };
-		}
-		if (fullPath.startsWith("io/")) {
-			return { scope: "io", relativePath: fullPath.slice(3) };
-		}
-		if (fullPath.startsWith("shared/")) {
-			return { scope: "shared", relativePath: fullPath.slice(7) };
-		}
-		// Fallback: treat as shared scope
-		return { scope: "shared", relativePath: fullPath };
-	}
-
 	async function loadPage(path: string) {
 		try {
-			const { scope, relativePath } = parseScopePath(path);
-			const data = await api.get<{ content: string }>(`/wiki/${scope}/${relativePath}`);
+			const data = await api.get<{ content: string }>(`/wiki/pages/${path}`);
 			setContent(data.content);
 			setEditContent(data.content);
 			setSelectedPage(path);
@@ -349,8 +333,7 @@ export function WikiView() {
 	async function savePage() {
 		if (!selectedPage) return;
 		try {
-			const { scope, relativePath } = parseScopePath(selectedPage);
-			await api.put(`/wiki/${scope}/${relativePath}`, { content: editContent });
+			await api.put(`/wiki/pages/${selectedPage}`, { content: editContent });
 			setContent(editContent);
 			setEditing(false);
 			toast.success("Page saved");
@@ -362,8 +345,7 @@ export function WikiView() {
 	async function deletePage() {
 		if (!selectedPage) return;
 		try {
-			const { scope, relativePath } = parseScopePath(selectedPage);
-			await api.delete(`/wiki/${scope}/${relativePath}`);
+			await api.delete(`/wiki/pages/${selectedPage}`);
 			toast.success("Page deleted");
 			setSelectedPage(null);
 			setContent("");
@@ -394,7 +376,9 @@ export function WikiView() {
 	async function confirmDeleteFolder() {
 		if (!confirmDelete) return;
 		try {
-			await api.delete(`/wiki/dir/${confirmDelete}`);
+			// Delete all pages under this folder path
+			const folderPages = pages.filter((p) => p.path.startsWith(`${confirmDelete}/`));
+			await Promise.all(folderPages.map((p) => api.delete(`/wiki/pages/${p.path}`)));
 			toast.success(`Deleted ${confirmDelete}`);
 			// If the selected page was inside the deleted folder, clear selection
 			if (selectedPage?.startsWith(confirmDelete)) {
@@ -423,11 +407,11 @@ export function WikiView() {
 				? path
 				: `shared/${path}`;
 
+		const title = fullPath.split("/").pop() ?? fullPath;
+
 		setCreating(true);
 		try {
-			const { scope, relativePath } = parseScopePath(fullPath);
-			const title = relativePath.split("/").slice(-1)[0] ?? relativePath;
-			await api.put(`/wiki/${scope}/${relativePath}`, { content: `# ${title}\n\n` });
+			await api.post("/wiki/pages", { path: fullPath, title, content: `# ${title}\n\n`, tags: [] });
 			toast.success("Page created");
 			setNewPageName("");
 			await loadPages();
