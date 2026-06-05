@@ -36,6 +36,40 @@ export async function listPages(): Promise<WikiPage[]> {
 	return pages.sort((left, right) => left.path.localeCompare(right.path));
 }
 
+export interface WikiDirectory {
+	path: string;
+}
+
+export async function listDirectories(): Promise<WikiDirectory[]> {
+	const directories = await collectDirectories(getWikiPagesDir());
+	return directories
+		.map((dirPath) => ({ path: relative(getWikiPagesDir(), dirPath).replace(/\\/g, "/") }))
+		.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+async function collectDirectories(directory: string): Promise<string[]> {
+	try {
+		const entries = await readdir(directory, { withFileTypes: true });
+		const dirs: string[] = [];
+
+		for (const entry of entries) {
+			if (entry.isDirectory()) {
+				const entryPath = join(directory, entry.name);
+				dirs.push(entryPath);
+				dirs.push(...(await collectDirectories(entryPath)));
+			}
+		}
+
+		return dirs;
+	} catch (error) {
+		if (isMissingFileError(error)) {
+			return [];
+		}
+
+		throw error;
+	}
+}
+
 export async function getPage(pagePath: string): Promise<WikiPage | null> {
 	try {
 		return await readWikiPageFromFile(resolvePagePath(pagePath));

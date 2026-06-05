@@ -305,12 +305,13 @@ export function WikiView() {
 
 	async function loadPages() {
 		try {
-			const data = await api.get<{ path: string; title: string }[]>("/wiki/pages");
+			const data = await api.get<{ path: string; title: string; isDir?: boolean }[]>("/wiki/pages");
 			setPages(
 				data.map((p) => ({
-					name: p.path.split("/").pop() ?? p.path,
+					name: p.title || p.path.split("/").pop() || p.path,
 					path: p.path,
 					title: p.title,
+					isDir: p.isDir,
 				})),
 			);
 		} catch {

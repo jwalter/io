@@ -5,6 +5,7 @@ import {
 	createPage,
 	deletePage,
 	getPage,
+	listDirectories,
 	listPages,
 	searchPages,
 	updatePage,
@@ -14,8 +15,16 @@ const router = Router();
 
 router.get("/api/wiki/pages", async (_req, res) => {
 	try {
-		const pages = await listPages();
-		res.status(200).json(pages);
+		const [pages, directories] = await Promise.all([listPages(), listDirectories()]);
+		const dirEntries = directories.map((d) => ({
+			path: d.path,
+			title: d.path.split("/").pop() ?? d.path,
+			tags: [],
+			content: "",
+			updatedAt: "",
+			isDir: true,
+		}));
+		res.status(200).json([...dirEntries, ...pages]);
 	} catch (error) {
 		res.status(500).json({
 			error: "Failed to list wiki pages",
