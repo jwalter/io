@@ -51,7 +51,7 @@ jobs:
         uses: github/copilot-release-notes@v1
         with:
           base-ref: ${{ steps.fetch_latest_release.outputs.release }}
-          head-ref: ${{ env.VERSION }}
+          head-ref: "v${{ env.VERSION }}"
         env:
           COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
           model: claude-sonnet-4
