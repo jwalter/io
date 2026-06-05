@@ -78,7 +78,7 @@ export function createApiServer(config: ApiServerConfig): ApiServer {
 	if (existsSync(webDirectory)) {
 		app.use(express.static(webDirectory));
 		// SPA fallback: serve index.html for all non-API routes
-		app.get("*", (_req, res) => {
+		app.use((_req, res) => {
 			res.sendFile(join(webDirectory, "index.html"));
 		});
 	}
