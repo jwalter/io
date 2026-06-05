@@ -62,6 +62,6 @@ jobs:
           body: ${{ steps.notes.outputs.release-notes }}
 
       - name: Publish to npm
-        run: npm publish --workspace=packages/daemon
+        run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

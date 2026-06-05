@@ -15,7 +15,7 @@
 	"bin": {
 		"io": "./dist/daemon/cli.js"
 	},
-	"files": ["dist/"],
+	"files": ["dist/", "README.md", "CODE_OF_CONDUCT.md", "LICENSE", "!dist/**/*.map"],
 	"keywords": ["ai", "copilot", "orchestrator", "agent", "squad", "daemon"],
 	"workspaces": ["packages/shared", "packages/daemon", "packages/web"],
 	"scripts": {
