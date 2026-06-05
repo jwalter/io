@@ -60,6 +60,6 @@ All IO data lives in `~/.io/`:
 |------|---------|
 | `config.json` | Configuration |
 | `io.db` | libSQL database (squads, conversations, tokens, etc.) |
-| `wiki/pages/` | Knowledge base markdown pages |
+| `wiki/` | Knowledge base markdown pages |
 | `skills/` | Installed SKILL.md skill files |
 | `logs/io.log` | Application logs (rotated) |

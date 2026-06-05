@@ -4,12 +4,12 @@ IO's wiki is a personal knowledge base stored as markdown files. Io uses it for 
 
 ## Location
 
-Wiki pages live at `~/.io/wiki/pages/`.
+Wiki pages live at `~/.io/wiki/`.
 
 ## Structure
 
 ```
-wiki/pages/
+wiki/
 ├── people/
 │   ├── alice.md
 │   └── bob.md

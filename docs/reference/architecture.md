@@ -109,7 +109,7 @@ All data lives in `~/.io/`:
 | Path | Format | Purpose |
 |------|--------|---------|
 | `io.db` | SQLite (libSQL) | Squads, conversations, tokens, schedules, inbox |
-| `wiki/pages/` | Markdown + YAML | Knowledge base |
+| `wiki/` | Markdown + YAML | Knowledge base |
 | `skills/` | SKILL.md | Installed capabilities |
 | `config.json` | JSON | Configuration |
 | `logs/io.log` | JSON (Pino) | Structured logs |
