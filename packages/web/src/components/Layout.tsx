@@ -4,7 +4,7 @@ import { StatusDot } from "@/components/ui/shared";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import { APP_VERSION, type InboxItem } from "@io/shared";
+import type { InboxItem } from "@io/shared";
 import {
 	BarChart2,
 	BookOpen,
@@ -70,9 +70,16 @@ function NavBtn({
 
 export function Layout() {
 	const [collapsed, setCollapsed] = useState(false);
-	const [version] = useState(APP_VERSION);
+	const [version, setVersion] = useState("");
 	const [unreadCount, setUnreadCount] = useState(0);
 	const { supabase } = useAuth();
+
+	useEffect(() => {
+		api
+			.get<{ version: string }>("/version")
+			.then((data) => setVersion(data.version))
+			.catch(() => setVersion("unknown"));
+	}, []);
 
 	useEffect(() => {
 		let active = true;

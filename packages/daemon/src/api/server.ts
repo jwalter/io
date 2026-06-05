@@ -3,7 +3,7 @@ import { type Server as HttpServer, createServer } from "node:http";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { API_HOST } from "@io/shared";
+import { API_HOST, APP_VERSION } from "@io/shared";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 
 import { eventBus } from "../event-bus.js";
@@ -59,6 +59,10 @@ export function createApiServer(config: ApiServerConfig): ApiServer {
 			supabaseUrl: config.supabaseUrl ?? null,
 			supabaseAnonKey: config.supabaseAnonKey ?? null,
 		});
+	});
+
+	app.get("/api/version", (_req, res) => {
+		res.json({ version: APP_VERSION });
 	});
 
 	app.use("/api", createAuthMiddleware(config));
