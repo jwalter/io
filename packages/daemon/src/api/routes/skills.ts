@@ -17,13 +17,133 @@ interface InstalledSkill {
 	entryFile: string | null;
 }
 
+interface SkillSummary {
+	name: string;
+	activatedForOrchestrator: boolean;
+	preview: string;
+	description: string;
+	filePath: string;
+}
+
+async function getSkillContent(skill: InstalledSkill): Promise<string> {
+	if (!skill.entryFile) return "";
+	const filePath = join(SKILLS_DIR, skill.directory, skill.entryFile);
+	try {
+		return await readFile(filePath, "utf8");
+	} catch {
+		return "";
+	}
+}
+
+function extractDescription(content: string): string {
+	const lines = content.split("\n").filter((l) => l.trim() && !l.startsWith("#"));
+	return lines[0]?.trim().slice(0, 200) ?? "";
+}
+
+function extractPreview(content: string): string {
+	return content.slice(0, 300);
+}
+
+async function buildSkillSummaries(skills: InstalledSkill[]): Promise<SkillSummary[]> {
+	return Promise.all(
+		skills.map(async (skill) => {
+			const content = await getSkillContent(skill);
+			return {
+				name: skill.slug,
+				activatedForOrchestrator: true,
+				preview: extractPreview(content),
+				description: extractDescription(content),
+				filePath: skill.entryFile
+					? join(SKILLS_DIR, skill.directory, skill.entryFile)
+					: join(SKILLS_DIR, skill.directory),
+			};
+		}),
+	);
+}
+
 router.get("/api/skills", async (_req, res) => {
 	try {
 		const skills = await readInstalledSkills();
-		res.status(200).json({ skills });
+		const summaries = await buildSkillSummaries(skills);
+		res.status(200).json({ skills: summaries });
 	} catch (error) {
 		res.status(500).json({
 			error: "Failed to list skills",
+			details: error instanceof Error ? error.message : "Unknown error",
+		});
+	}
+});
+
+router.get("/api/skills/discover", async (req, res) => {
+	try {
+		const source = typeof req.query.source === "string" ? req.query.source : "";
+		const query = typeof req.query.q === "string" ? req.query.q.trim() : "";
+
+		if (source === "skillssh") {
+			const skills = await discoverSkillsSh(query);
+			res.status(200).json({ skills });
+		} else if (source === "awesome-copilot") {
+			const skills = await discoverAwesomeCopilot(query);
+			res.status(200).json({ skills });
+		} else {
+			res.status(400).json({ error: `Unknown source: ${source}` });
+		}
+	} catch (error) {
+		res.status(500).json({
+			error: "Failed to discover skills",
+			details: error instanceof Error ? error.message : "Unknown error",
+		});
+	}
+});
+
+router.get("/api/skills/:name", async (req, res) => {
+	try {
+		const skills = await readInstalledSkills();
+		const skill = skills.find((s) => s.slug === req.params.name);
+		if (!skill) {
+			res.status(404).json({ error: "Skill not found" });
+			return;
+		}
+
+		const content = await getSkillContent(skill);
+		const filePath = skill.entryFile
+			? join(SKILLS_DIR, skill.directory, skill.entryFile)
+			: join(SKILLS_DIR, skill.directory);
+		res.status(200).json({ name: skill.slug, content, filePath });
+	} catch (error) {
+		res.status(500).json({
+			error: "Failed to get skill",
+			details: error instanceof Error ? error.message : "Unknown error",
+		});
+	}
+});
+
+router.put("/api/skills/:name", async (req, res) => {
+	try {
+		const skills = await readInstalledSkills();
+		const skill = skills.find((s) => s.slug === req.params.name);
+		if (!skill) {
+			res.status(404).json({ error: "Skill not found" });
+			return;
+		}
+
+		if (!skill.entryFile) {
+			res.status(400).json({ error: "Skill has no entry file to update" });
+			return;
+		}
+
+		const { content } = req.body as { content?: string };
+		if (typeof content !== "string") {
+			res.status(400).json({ error: "content is required" });
+			return;
+		}
+
+		const filePath = join(SKILLS_DIR, skill.directory, skill.entryFile);
+		await writeFile(filePath, content, "utf8");
+		res.status(200).json({ name: skill.slug, content, filePath });
+	} catch (error) {
+		res.status(500).json({
+			error: "Failed to update skill",
 			details: error instanceof Error ? error.message : "Unknown error",
 		});
 	}
@@ -60,38 +180,21 @@ router.post("/api/skills/install", async (req, res) => {
 
 router.delete("/api/skills/:id", async (req, res) => {
 	try {
-		const removed = await removeSkill(req.params.id);
+		const identifier = req.params.id;
+		const removed = await removeSkill(identifier);
 		if (!removed) {
-			res.status(404).json({ error: "Skill not found" });
-			return;
+			// Try matching by slug (the frontend sends the slug as name)
+			const removedBySlug = await removeSkillBySlug(identifier);
+			if (!removedBySlug) {
+				res.status(404).json({ error: "Skill not found" });
+				return;
+			}
 		}
 
 		res.status(200).json({ deleted: true });
 	} catch (error) {
 		res.status(500).json({
 			error: "Failed to remove skill",
-			details: error instanceof Error ? error.message : "Unknown error",
-		});
-	}
-});
-
-router.get("/api/skills/discover", async (req, res) => {
-	try {
-		const source = typeof req.query.source === "string" ? req.query.source : "";
-		const query = typeof req.query.q === "string" ? req.query.q.trim() : "";
-
-		if (source === "skillssh") {
-			const skills = await discoverSkillsSh(query);
-			res.status(200).json({ skills });
-		} else if (source === "awesome-copilot") {
-			const skills = await discoverAwesomeCopilot(query);
-			res.status(200).json({ skills });
-		} else {
-			res.status(400).json({ error: `Unknown source: ${source}` });
-		}
-	} catch (error) {
-		res.status(500).json({
-			error: "Failed to discover skills",
 			details: error instanceof Error ? error.message : "Unknown error",
 		});
 	}
@@ -162,6 +265,18 @@ async function removeSkill(skillId: string): Promise<boolean> {
 
 	await rm(skill.directory, { recursive: true, force: true });
 	await writeSkillsLock(installedSkills.filter((entry) => entry.id !== skillId));
+	return true;
+}
+
+async function removeSkillBySlug(slug: string): Promise<boolean> {
+	const installedSkills = await readInstalledSkills();
+	const skill = installedSkills.find((entry) => entry.slug === slug);
+	if (!skill) {
+		return false;
+	}
+
+	await rm(skill.directory, { recursive: true, force: true });
+	await writeSkillsLock(installedSkills.filter((entry) => entry.slug !== slug));
 	return true;
 }
 

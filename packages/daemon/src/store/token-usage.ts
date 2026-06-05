@@ -340,3 +340,82 @@ function buildUsageFilter(params: UsageQueryParams): QueryFilter {
 		args,
 	};
 }
+
+export interface UsageRecord {
+	model: string;
+	inputTokens: number;
+	outputTokens: number;
+	estimatedCostUsd: number | null;
+	timestamp: string;
+	squadId: string | null;
+	squadName: string | null;
+	agentRole: string | null;
+}
+
+export interface UsageRecordsResponse {
+	records: UsageRecord[];
+	totals: {
+		totalInputTokens: number;
+		totalOutputTokens: number;
+		totalCostUsd: number;
+		callCount: number;
+	};
+}
+
+export async function getUsageRecords(
+	params: UsageQueryParams = {},
+	db?: DatabaseClient,
+): Promise<UsageRecordsResponse> {
+	const database = db ?? (await getDatabase());
+	const filter = buildUsageFilter(params);
+
+	const aliasedClause = filter.clause
+		.replaceAll("created_at", "tu.created_at")
+		.replaceAll("squad_id", "tu.squad_id")
+		.replaceAll("agent_id", "tu.agent_id")
+		.replaceAll("model", "tu.model");
+
+	const result = await database.execute({
+		sql: `SELECT tu.model, tu.input_tokens, tu.output_tokens, tu.cost,
+		             tu.created_at, tu.squad_id, tu.agent_id,
+		             COALESCE(s.name, '') AS squad_name,
+		             COALESCE(sm.name, '') AS agent_name
+		      FROM token_usage tu
+		      LEFT JOIN squads s ON s.id = tu.squad_id
+		      LEFT JOIN squad_members sm ON sm.id = tu.agent_id
+		      ${aliasedClause}
+		      ORDER BY tu.created_at DESC
+		      LIMIT 10000`,
+		args: filter.args,
+	});
+
+	const records: UsageRecord[] = result.rows.map((row) => ({
+		model: asString(row.model),
+		inputTokens: asNumber(row.input_tokens),
+		outputTokens: asNumber(row.output_tokens),
+		estimatedCostUsd: asNumber(row.cost),
+		timestamp: asString(row.created_at),
+		squadId: asNullableString(row.squad_id),
+		squadName: asNullableString(row.squad_name) || null,
+		agentRole: asNullableString(row.agent_name) || null,
+	}));
+
+	let totalInputTokens = 0;
+	let totalOutputTokens = 0;
+	let totalCostUsd = 0;
+	for (const r of records) {
+		totalInputTokens += r.inputTokens;
+		totalOutputTokens += r.outputTokens;
+		totalCostUsd += r.estimatedCostUsd ?? 0;
+	}
+
+	return {
+		records,
+		totals: {
+			totalInputTokens,
+			totalOutputTokens,
+			totalCostUsd,
+			callCount: records.length,
+		},
+	};
+}

@@ -1,18 +1,18 @@
 import type { UsageQueryParams } from "@io/shared";
 import { Router } from "express";
 
-import { getDailyUsage, getUsageSummary } from "../../store/index.js";
+import { getDailyUsage, getUsageRecords } from "../../store/index.js";
 
 const router = Router();
 
 router.get("/api/usage", async (req, res) => {
 	try {
 		const params = getUsageParams(req.query);
-		const summary = await getUsageSummary(params);
-		res.status(200).json(summary);
+		const result = await getUsageRecords(params);
+		res.status(200).json(result);
 	} catch (error) {
 		res.status(500).json({
-			error: "Failed to fetch usage summary",
+			error: "Failed to fetch usage",
 			details: error instanceof Error ? error.message : "Unknown error",
 		});
 	}
@@ -36,8 +36,9 @@ router.get("/api/usage/daily", async (req, res) => {
 });
 
 function getUsageParams(query: Record<string, unknown>): UsageQueryParams {
+	const since = typeof query.since === "string" ? query.since : undefined;
 	return {
-		startDate: typeof query.startDate === "string" ? query.startDate : undefined,
+		startDate: typeof query.startDate === "string" ? query.startDate : since,
 		endDate: typeof query.endDate === "string" ? query.endDate : undefined,
 		squadId: typeof query.squadId === "string" ? query.squadId : undefined,
 		agentId: typeof query.agentId === "string" ? query.agentId : undefined,
