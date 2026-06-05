@@ -112,85 +112,14 @@ function parseSkillContent(content: string): ParsedSkill {
 	return { frontMatter: parseFrontMatterLines(fmMatch[1] ?? ""), body: fmMatch[2] ?? "" };
 }
 
-const FM_DISPLAY_ORDER = [
-	"name",
-	"description",
-	"version",
-	"author",
-	"license",
-	"argument_hint",
-	"argument-hint",
-	"use_when",
-	"use-when",
-	"enhancements",
-	"metadata",
-	"tags",
-];
-
 function SkillContentView({ content }: { content: string }) {
-	const { frontMatter, body } = parseSkillContent(content);
-	const fmKeys = FM_DISPLAY_ORDER.filter((k) => frontMatter[k] !== undefined);
-	const extraKeys = Object.keys(frontMatter).filter((k) => !FM_DISPLAY_ORDER.includes(k));
-	const allKeys = [...fmKeys, ...extraKeys];
+	const { body } = parseSkillContent(content);
 
-	return (
-		<div>
-			{allKeys.length > 0 && (
-				<div className="border-b border-white/[0.05] pb-4 mb-4">
-					<p className="text-[10px] font-mono text-zinc-700 uppercase tracking-wider mb-3">
-						Front Matter
-					</p>
-					<div className="space-y-2">
-						{allKeys.map((key) => {
-							const val = frontMatter[key];
-							if (val === undefined || val === null) return null;
-							if (Array.isArray(val) && val.length === 0) return null;
-							return (
-								<div key={key} className="flex gap-3 items-start">
-									<span className="text-[10px] font-mono text-zinc-600 w-28 flex-shrink-0 pt-0.5">
-										{key}
-									</span>
-									<div className="flex-1 min-w-0">
-										{Array.isArray(val) ? (
-											<div className="flex flex-wrap gap-1">
-												{val.map((v) => (
-													<Chip key={`${key}-${v}`} variant="muted">
-														{v}
-													</Chip>
-												))}
-											</div>
-										) : typeof val === "object" ? (
-											<div className="space-y-0.5">
-												{Object.entries(val).map(([k, v]) => (
-													<p key={k} className="text-[11px] font-mono text-zinc-400">
-														<span className="text-zinc-600">{k}:</span> {v}
-													</p>
-												))}
-											</div>
-										) : key === "use_when" || key === "use-when" ? (
-											<p className="text-[11px] text-zinc-300 leading-relaxed">{val}</p>
-										) : key === "argument_hint" || key === "argument-hint" ? (
-											<code className="text-[11px] font-mono text-[#E43A9C] bg-[#2d1a24] px-1.5 py-0.5 rounded">
-												{val}
-											</code>
-										) : (
-											<span className="text-[11px] font-mono text-zinc-300">{val}</span>
-										)}
-									</div>
-								</div>
-							);
-						})}
-					</div>
-				</div>
-			)}
-			{body.trim() && (
-				<div>
-					<p className="text-[10px] font-mono text-zinc-700 uppercase tracking-wider mb-3">Body</p>
-					<MarkdownRenderer content={body} />
-				</div>
-			)}
-		</div>
-	);
+	if (!body.trim()) {
+		return <p className="font-mono text-[11px] text-zinc-500">No content body in this skill.</p>;
+	}
+
+	return <MarkdownRenderer content={body} />;
 }
 
 export function SkillsView() {
@@ -231,7 +160,8 @@ export function SkillsView() {
 		try {
 			const skill = await api.get<InstalledSkillDetail>(`/skills/${encodeURIComponent(name)}`);
 			setSelectedInstalledSkill(skill);
-			setDraftContent(skill.content);
+			const { body } = parseSkillContent(skill.content);
+			setDraftContent(body);
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : "Failed to load skill");
 			setSelectedInstalledSkill(null);
@@ -374,8 +304,11 @@ export function SkillsView() {
 		if (!selectedInstalledSkill) return;
 		setBusySkillName(selectedInstalledSkill.name);
 		try {
+			// Reconstruct full content: preserve original frontmatter + updated body
+			const fmMatch = selectedInstalledSkill.content.match(/^(---\s*\n[\s\S]*?\n---\s*\n)/);
+			const fullContent = fmMatch ? `${fmMatch[1]}${draftContent}` : draftContent;
 			await api.put(`/skills/${encodeURIComponent(selectedInstalledSkill.name)}`, {
-				content: draftContent,
+				content: fullContent,
 			});
 			toast.success(`Updated ${selectedInstalledSkill.name}`);
 			setIsEditing(false);
@@ -524,7 +457,8 @@ export function SkillsView() {
 									<PrimaryBtn
 										onClick={handleSaveEdit}
 										disabled={
-											selectedInstalledBusy || draftContent === selectedInstalledSkill?.content
+											selectedInstalledBusy ||
+											draftContent === parseSkillContent(selectedInstalledSkill?.content ?? "").body
 										}
 										className="px-3 py-2"
 									>
@@ -567,11 +501,12 @@ export function SkillsView() {
 										className="min-h-[440px] w-full rounded-2xl border border-white/[0.08] bg-black/30 p-4 font-mono text-[12px] leading-6 text-zinc-200 outline-none transition-colors focus:border-[#E43A9C]/50"
 									/>
 									<div className="flex items-center justify-between font-mono text-[11px] text-zinc-500">
-										<span>Editing raw SKILL.md</span>
+										<span>Editing skill markdown</span>
 										<SecondaryBtn
 											onClick={() => {
 												setIsEditing(false);
-												setDraftContent(selectedInstalledSkill?.content ?? "");
+												const { body } = parseSkillContent(selectedInstalledSkill?.content ?? "");
+												setDraftContent(body);
 											}}
 											className="px-3 py-2"
 										>
