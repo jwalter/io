@@ -178,6 +178,27 @@ const MIGRATIONS: Migration[] = [
 			"ALTER TABLE token_usage ADD COLUMN token_unit_cost REAL",
 		],
 	},
+	{
+		version: 3,
+		name: "add-squad-instances",
+		statements: [
+			`CREATE TABLE IF NOT EXISTS squad_instances (
+				id TEXT PRIMARY KEY,
+				squad_id TEXT NOT NULL REFERENCES squads(id) ON DELETE CASCADE,
+				objective_id TEXT REFERENCES objectives(id) ON DELETE SET NULL,
+				status TEXT NOT NULL DEFAULT 'queued',
+				branch TEXT,
+				worktree_path TEXT,
+				created_at TEXT NOT NULL,
+				started_at TEXT,
+				completed_at TEXT,
+				error TEXT
+			)`,
+			"CREATE INDEX IF NOT EXISTS idx_squad_instances_squad_status ON squad_instances(squad_id, status)",
+			"CREATE INDEX IF NOT EXISTS idx_squad_instances_status ON squad_instances(status)",
+			"CREATE INDEX IF NOT EXISTS idx_squad_instances_objective_id ON squad_instances(objective_id)",
+		],
+	},
 ];
 
 let client: DatabaseClient | null = null;

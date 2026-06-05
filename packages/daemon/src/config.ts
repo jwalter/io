@@ -16,6 +16,7 @@ const configSchema = z.object({
 	supabaseAnonKey: z.string().trim().min(1).nullable().default(null),
 	sessionResetThreshold: z.coerce.number().int().positive().default(SESSION_RESET_THRESHOLD),
 	pricingRefreshHours: z.coerce.number().positive().default(24),
+	maxInstancesPerSquad: z.coerce.number().int().positive().default(3),
 });
 
 export type Config = z.infer<typeof configSchema>;

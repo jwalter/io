@@ -5,10 +5,23 @@ import type { InboxItem } from "./store.js";
 
 export type EventName = (typeof EVENT_NAMES)[keyof typeof EVENT_NAMES];
 
+export interface InstanceEventPayload {
+	squadId: string;
+	instanceId: string;
+	status: string;
+	branch: string | null;
+	objectiveId: string | null;
+}
+
 export interface EventPayloads {
 	[EVENT_NAMES.SQUAD_CREATED]: { squad: Squad };
 	[EVENT_NAMES.SQUAD_DELETED]: { squadId: string };
 	[EVENT_NAMES.SQUAD_UPDATED]: { squad: Squad };
+	[EVENT_NAMES.INSTANCE_CREATED]: InstanceEventPayload;
+	[EVENT_NAMES.INSTANCE_STARTED]: InstanceEventPayload;
+	[EVENT_NAMES.INSTANCE_COMPLETED]: InstanceEventPayload;
+	[EVENT_NAMES.INSTANCE_FAILED]: InstanceEventPayload;
+	[EVENT_NAMES.INSTANCE_CANCELLED]: InstanceEventPayload;
 	[EVENT_NAMES.OBJECTIVE_STARTED]: { objective: Objective };
 	[EVENT_NAMES.OBJECTIVE_COMPLETED]: { objective: Objective };
 	[EVENT_NAMES.OBJECTIVE_FAILED]: { objective: Objective; reason: string };

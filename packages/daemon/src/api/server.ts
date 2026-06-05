@@ -75,6 +75,11 @@ export function createApiServer(config: ApiServerConfig): ApiServer {
 	app.use(usageRouter);
 	app.use(settingsRouter);
 	app.use(activityRouter);
+
+	app.get("/api/config", (_req, res) => {
+		res.json({ config: { maxInstancesPerSquad: config.maxInstancesPerSquad } });
+	});
+
 	app.use("/api", (_req, res) => {
 		res.status(404).json({ error: "API route not found" });
 	});

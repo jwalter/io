@@ -7,3 +7,4 @@ export * from "./token-usage.js";
 export * from "./activity.js";
 export * from "./agent-history.js";
 export * from "./objectives.js";
+export * from "./instances.js";

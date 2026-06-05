@@ -8,7 +8,14 @@ import {
 } from "@io/shared";
 import { Router } from "express";
 
+import { loadConfig } from "../../config.js";
 import { eventBus } from "../../event-bus.js";
+import {
+	cancelInstance,
+	getInstance,
+	listActiveInstances,
+	listInstancesBySquad,
+} from "../../execution/instances.js";
 import { asNullableString, asNumber, asString, getDatabase } from "../../store/db.js";
 import {
 	createObjective,
@@ -30,7 +37,25 @@ const DEFAULT_CONFIG: SquadConfig = {
 
 router.get("/api/squads", async (_req, res) => {
 	try {
-		res.status(200).json(await listSquads());
+		const squads = await listSquads();
+		const config = loadConfig();
+		const enriched = await Promise.all(
+			squads.map(async (squad) => {
+				const instances = await listActiveInstances(squad.id);
+				const allInstances = await listInstancesBySquad(squad.id);
+				const members = await getMembers(squad.id);
+				return {
+					...squad,
+					memberCount: members.length,
+					activeInstances: instances.filter((i) => i.status === "running").length,
+					totalInstances: allInstances.length,
+					recentActivity: [],
+				};
+			}),
+		);
+		res
+			.status(200)
+			.json({ squads: enriched, config: { maxInstancesPerSquad: config.maxInstancesPerSquad } });
 	} catch (error) {
 		res.status(500).json({
 			error: "Failed to list squads",
@@ -325,6 +350,80 @@ function parseRepoInfo(
 
 function isValidationError(error: unknown): boolean {
 	return error instanceof Error && /repoUrl|config|Invalid URL/i.test(error.message);
+}
+
+// ─── Instance Routes ──────────────────────────────────────────────────────────
+
+router.get("/api/squads/:name/instances/:instanceId", async (req, res) => {
+	try {
+		const instance = await getInstance(req.params.instanceId);
+		if (!instance) {
+			res.status(404).json({ error: "Instance not found" });
+			return;
+		}
+
+		const squad = await getSquad(instance.squadId);
+		const members = squad ? await getMembers(squad.id) : [];
+		const tasks = instance.objectiveId ? await getTasksForInstance(instance.objectiveId) : [];
+
+		res.status(200).json({
+			squadColor: squad?.color ?? undefined,
+			instance: {
+				id: instance.id,
+				status: instance.status,
+				branch: instance.branch,
+				issueRef: null,
+				taskCount: tasks.length,
+				tasksComplete: tasks.filter((t) => t.status === "completed").length,
+				tasks,
+				meetingLog: [],
+			},
+			members: members.map((m) => ({
+				id: m.id,
+				name: m.name,
+				role: m.role,
+				displayName: m.name,
+				veto: false,
+				status: "idle",
+				currentTask: null,
+			})),
+			activity: [],
+		});
+	} catch (error) {
+		res.status(500).json({
+			error: "Failed to get instance",
+			details: error instanceof Error ? error.message : "Unknown error",
+		});
+	}
+});
+
+router.post("/api/squads/:name/instances/:instanceId/cancel", async (req, res) => {
+	try {
+		const instance = await cancelInstance(req.params.instanceId);
+		res.status(200).json({ instance });
+	} catch (error) {
+		res.status(500).json({
+			error: "Failed to cancel instance",
+			details: error instanceof Error ? error.message : "Unknown error",
+		});
+	}
+});
+
+async function getTasksForInstance(
+	objectiveId: string,
+): Promise<Array<{ id: string; description: string; assignedTo: string; status: string }>> {
+	const database = await getDatabase();
+	const result = await database.execute({
+		sql: "SELECT id, title, assignee_id, status FROM tasks WHERE objective_id = ? ORDER BY created_at ASC",
+		args: [objectiveId],
+	});
+
+	return result.rows.map((row) => ({
+		id: asString(row.id),
+		description: asString(row.title),
+		assignedTo: asNullableString(row.assignee_id) ?? "unassigned",
+		status: asString(row.status),
+	}));
 }
 
 export { router as squadsRouter };
