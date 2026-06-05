@@ -1,5 +1,11 @@
 import type { CopilotSession } from "@github/copilot-sdk";
-import { type Conversation, EVENT_NAMES, type Message, type StreamChunk } from "@io/shared";
+import {
+	type Conversation,
+	DEFAULT_MODEL,
+	EVENT_NAMES,
+	type Message,
+	type StreamChunk,
+} from "@io/shared";
 
 import type { Config } from "../config.js";
 import {
@@ -269,12 +275,26 @@ export class Orchestrator {
 
 	private async refreshSession(model: string, systemPrompt: string): Promise<void> {
 		await this.disconnectSession();
-		this.activeSession = await createSession({
-			model,
-			systemPrompt,
-			tools: createBoundOrchestratorTools(this.config),
-		});
-		this.activeModel = model;
+		try {
+			this.activeSession = await createSession({
+				model,
+				systemPrompt,
+				tools: createBoundOrchestratorTools(this.config),
+			});
+			this.activeModel = model;
+		} catch (error) {
+			// If the configured model isn't available, fall back to DEFAULT_MODEL
+			if (model !== DEFAULT_MODEL) {
+				this.activeSession = await createSession({
+					model: DEFAULT_MODEL,
+					systemPrompt,
+					tools: createBoundOrchestratorTools(this.config),
+				});
+				this.activeModel = DEFAULT_MODEL;
+			} else {
+				throw error;
+			}
+		}
 	}
 
 	private async disconnectSession(): Promise<void> {
