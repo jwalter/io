@@ -12,7 +12,7 @@ export function setWikiDirectory(directory: string | null): void {
 }
 
 function getWikiPagesDir(): string {
-	return join(wikiDirectoryOverride ?? process.env.WIKI_DIR ?? WIKI_DIR, "pages");
+	return wikiDirectoryOverride ?? process.env.WIKI_DIR ?? WIKI_DIR;
 }
 
 export interface WikiPage {
