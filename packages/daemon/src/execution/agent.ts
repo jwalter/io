@@ -338,7 +338,7 @@ export async function executeAgentTask(
 	member: SquadMember,
 	task: Task,
 	worktreePath: string,
-	options?: { mcpServers?: string[] },
+	options?: { mcpServers?: string[]; instancePromptSuffix?: string },
 ): Promise<AgentExecutionResult> {
 	const usage = createEmptyUsage();
 	const usageEvents: AssistantUsageData[] = [];
@@ -362,7 +362,7 @@ export async function executeAgentTask(
 			availableTools: ["custom:*"],
 			onPermissionRequest: approveAll,
 			systemMessage: {
-				content: `${member.systemPrompt}\n\nRecent agent history:\n${historyContext}\n\n${mcpServerNote}`,
+				content: `${member.systemPrompt}\n\nRecent agent history:\n${historyContext}\n\n${mcpServerNote}${options?.instancePromptSuffix ?? ""}`,
 			},
 		});
 		session.on("assistant.usage", (event) => {

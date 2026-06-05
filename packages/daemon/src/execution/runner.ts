@@ -33,6 +33,7 @@ import {
 	markTaskFailed,
 } from "./tasks.js";
 import { cleanupWorktree, createWorktree } from "./worktree.js";
+import { buildInstanceSystemPromptSuffix } from "./instance-context.js";
 
 const execAsync = promisify(exec);
 
@@ -113,6 +114,7 @@ async function executePendingTasks(
 	members: SquadMember[],
 	worktreePath: string,
 	mcpServers: string[],
+	instancePromptSuffix?: string,
 ): Promise<Task[]> {
 	const pendingTasks = await getNextPendingTasks(objective.id);
 	if (pendingTasks.length === 0) {
@@ -148,7 +150,7 @@ async function executePendingTasks(
 				taskId: task.id,
 			});
 
-			const execution = await executeAgentTask(member, task, worktreePath, { mcpServers });
+			const execution = await executeAgentTask(member, task, worktreePath, { mcpServers, instancePromptSuffix });
 			if (!execution.success) {
 				const failedTask = await markTaskFailed(task.id, execution.result);
 				eventBus.emit(EVENT_NAMES.TASK_FAILED, {
@@ -250,6 +252,12 @@ export async function executeObjective(
 		await updateObjectiveStatus(objectiveId, "executing");
 		await createTasksFromPlan(objectiveId, planned.tasks, squadRecord.members);
 
+		const instancePromptSuffix = instanceContext
+			? await buildInstanceSystemPromptSuffix(squadId, instanceContext.instanceId).catch(
+					() => "",
+				)
+			: undefined;
+
 		let qaOutcome: { approved: boolean; feedback: string } | null = null;
 		while (true) {
 			currentObjective = (await getObjective(objectiveId)) ?? currentObjective;
@@ -258,6 +266,7 @@ export async function executeObjective(
 				squadRecord.members,
 				worktreePath,
 				squadRecord.config.mcpServers,
+				instancePromptSuffix,
 			);
 			const tasksAfterExecution = await getTasksForObjective(objectiveId);
 

@@ -72,7 +72,22 @@ router.get("/api/squads/:id", async (req, res) => {
 			return;
 		}
 
-		res.status(200).json(squad);
+		const members = await getMembers(squad.id);
+		const instances = await listActiveInstances(squad.id);
+		const instanceSummaries = instances.map((inst) => ({
+			id: inst.id,
+			status: inst.status,
+			issueRef: null,
+			branch: inst.branch,
+			taskCount: 0,
+			tasksComplete: 0,
+		}));
+
+		res.status(200).json({
+			squad,
+			members,
+			instances: instanceSummaries,
+		});
 	} catch (error) {
 		res.status(500).json({
 			error: "Failed to fetch squad",
