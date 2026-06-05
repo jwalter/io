@@ -8,12 +8,13 @@ Complete reference for all configuration options in `~/.io/config.json`.
 {
   "port": 7777,
   "logLevel": "info",
-  "defaultModel": "gpt-4.1",
+  "defaultModel": "gpt-4o",
   "telegramToken": "YOUR_BOT_TOKEN",
   "telegramUserId": "123456789",
   "supabaseUrl": "https://your-project.supabase.co",
   "supabaseAnonKey": "your-anon-key",
-  "sessionResetThreshold": 50
+  "sessionResetThreshold": 50,
+  "pricingRefreshHours": 24
 }
 ```
 
@@ -35,9 +36,9 @@ All fields are optional. IO runs with sensible defaults if omitted.
 
 ### `defaultModel`
 - **Type:** `string`
-- **Default:** `"gpt-4.1"`
+- **Default:** `"gpt-4o"`
 - **Env:** `IO_DEFAULT_MODEL`
-- **Description:** Fallback LLM model used when the router cannot classify a message
+- **Description:** LLM model used by the orchestrator for all messages
 
 ### `telegramToken`
 - **Type:** `string | null`
@@ -69,17 +70,15 @@ All fields are optional. IO runs with sensible defaults if omitted.
 - **Env:** `IO_SESSION_RESET_THRESHOLD`
 - **Description:** Number of messages before the conversation context window resets
 
+### `pricingRefreshHours`
+- **Type:** `number`
+- **Default:** `24`
+- **Env:** `IO_PRICING_REFRESH_HOURS`
+- **Description:** How often (in hours) to refresh the model catalog and pricing data from GitHub
+
 ## Model Routing
 
-IO uses smart model routing with three tiers. The tier models are currently set by built-in constants:
-
-| Tier | Default Model | Use Case |
-|------|---------------|----------|
-| **Fast** | `gpt-4.1-mini` | Simple questions, greetings, status checks |
-| **Standard** | `claude-sonnet-4.6` | Moderate tasks, code questions, planning |
-| **Premium** | `claude-sonnet-4.6` | Complex analysis, architecture decisions |
-
-The `defaultModel` config field sets the fallback model when the router cannot classify a message into a tier.
+The orchestrator always uses the configured `defaultModel`. Squad agents use dynamic model selection — see the [Model Routing guide](/squads/model-routing) for details.
 
 ## Validation
 

@@ -64,4 +64,5 @@ export interface AppSettings {
 	supabaseUrl: string | null;
 	supabaseAnonKey: string | null;
 	sessionResetThreshold: number;
+	pricingRefreshHours: number;
 }

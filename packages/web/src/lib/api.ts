@@ -46,7 +46,7 @@ function toLegacyConfig(settings: AppSettings): LegacyConfig {
 		maxInstancesPerSquad: 3,
 		dataDir: "~/.io",
 		timezone: "UTC",
-		pricing: { refreshIntervalHours: 24 },
+		pricing: { refreshIntervalHours: settings.pricingRefreshHours ?? 24 },
 		telegram: {
 			botToken: settings.telegramToken,
 			allowedChatIds: Number.isFinite(chatId) ? [chatId] : [],
@@ -93,6 +93,9 @@ function normalizeConfigBody(body: unknown) {
 		supabaseUrl: supabase.projectUrl ?? config.supabaseUrl ?? null,
 		supabaseAnonKey: supabase.anonKey ?? config.supabaseAnonKey ?? null,
 		sessionResetThreshold: config.sessionResetThreshold,
+		pricingRefreshHours:
+			(config.pricing as Record<string, unknown> | undefined)?.refreshIntervalHours ??
+			config.pricingRefreshHours,
 	};
 }
 

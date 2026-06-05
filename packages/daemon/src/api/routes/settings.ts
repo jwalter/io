@@ -17,6 +17,7 @@ const APP_SETTING_KEYS = [
 	"supabaseUrl",
 	"supabaseAnonKey",
 	"sessionResetThreshold",
+	"pricingRefreshHours",
 ] as const satisfies Array<keyof AppSettings>;
 
 type WritableSettings = Pick<AppSettings, (typeof APP_SETTING_KEYS)[number]>;

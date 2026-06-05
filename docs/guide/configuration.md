@@ -8,12 +8,13 @@ IO is configured via `~/.io/config.json` and environment variables. Environment 
 {
   "port": 7777,
   "logLevel": "info",
-  "defaultModel": "gpt-4.1",
+  "defaultModel": "gpt-4o",
   "telegramToken": "YOUR_BOT_TOKEN",
   "telegramUserId": "123456789",
   "supabaseUrl": "https://your-project.supabase.co",
   "supabaseAnonKey": "your-anon-key",
-  "sessionResetThreshold": 50
+  "sessionResetThreshold": 50,
+  "pricingRefreshHours": 24
 }
 ```
 
@@ -25,24 +26,21 @@ All fields are optional — IO runs with sensible defaults if no config file exi
 |----------|-------------|---------|
 | `IO_PORT` | HTTP/WS server port | `7777` |
 | `IO_LOG_LEVEL` | Log level (trace/debug/info/warn/error) | `info` |
-| `IO_DEFAULT_MODEL` | Default LLM model | `gpt-4.1` |
+| `IO_DEFAULT_MODEL` | Default LLM model for the orchestrator | `gpt-4o` |
 | `IO_TELEGRAM_TOKEN` | Telegram bot token | — |
 | `IO_TELEGRAM_USER_ID` | Allowed Telegram user ID | — |
 | `IO_SUPABASE_URL` | Supabase project URL | — |
 | `IO_SUPABASE_ANON_KEY` | Supabase anonymous key | — |
 | `IO_SESSION_RESET_THRESHOLD` | Message count before session reset | `50` |
+| `IO_PRICING_REFRESH_HOURS` | How often to refresh model pricing (hours) | `24` |
 
 ## Model Routing
 
-IO uses smart model routing to balance cost and capability:
+The **orchestrator** always uses the configured `defaultModel` (fallback: `gpt-4o`). It does not dynamically switch models.
 
-| Tier | Use Case | Default Model |
-|------|----------|---------------|
-| **Fast** | Simple questions, greetings, status checks | `gpt-4.1-mini` |
-| **Standard** | Moderate tasks, code questions, planning | `claude-sonnet-4.6` |
-| **Premium** | Complex analysis, architecture decisions | `claude-sonnet-4.6` |
+**Squad agents** use dynamic model routing — an LLM classifies each task's complexity and selects the cheapest capable model from 5 tiers (trivial through ultra). See the [Model Routing guide](/squads/model-routing) for details.
 
-The router classifies each incoming message and selects the appropriate tier automatically. The `defaultModel` config sets the fallback model used when the router cannot classify a message.
+The model catalog is refreshed from GitHub's APIs every `pricingRefreshHours` hours.
 
 ## Authentication
 
