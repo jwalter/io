@@ -40,11 +40,18 @@ jobs:
       - name: Test
         run: npm test
 
+      - id: fetch_latest_release
+        uses: pozetroninc/github-action-get-latest-release@master
+        with:
+          repository: ${{ github.repository }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Generate release notes
         id: notes
         uses: github/copilot-release-notes@v1
         with:
-          base-ref: ${{ env.VERSION }}
+          base-ref: ${{ steps.fetch_latest_release.outputs.release }}
+          head-ref: ${{ env.VERSION }}
         env:
           COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
           model: claude-sonnet-4
