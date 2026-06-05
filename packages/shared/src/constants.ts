@@ -5,9 +5,6 @@ export const API_PORT = 7777;
 export const API_HOST = "0.0.0.0";
 
 export const DEFAULT_MODEL = "gpt-4o";
-export const FAST_MODEL = "gpt-4o-mini";
-export const STANDARD_MODEL = "gpt-4o";
-export const PREMIUM_MODEL = "claude-sonnet-4";
 
 export const SESSION_RESET_THRESHOLD = 50;
 export const SCHEDULER_INTERVAL_MS = 60_000;

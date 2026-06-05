@@ -157,6 +157,27 @@ const MIGRATIONS: Migration[] = [
 			"CREATE INDEX IF NOT EXISTS idx_agent_history_agent_id_created_at ON agent_history(agent_id, created_at)",
 		],
 	},
+	{
+		version: 2,
+		name: "add-model-pricing-and-dual-costs",
+		statements: [
+			`CREATE TABLE IF NOT EXISTS model_pricing (
+				id TEXT PRIMARY KEY,
+				display_name TEXT NOT NULL,
+				premium_multiplier REAL,
+				token_input_multiplier REAL,
+				token_output_multiplier REAL,
+				cached_input_multiplier REAL,
+				tier TEXT NOT NULL,
+				available INTEGER NOT NULL DEFAULT 1,
+				updated_at TEXT NOT NULL
+			)`,
+			"CREATE INDEX IF NOT EXISTS idx_model_pricing_tier ON model_pricing(tier)",
+			"CREATE INDEX IF NOT EXISTS idx_model_pricing_available ON model_pricing(available)",
+			"ALTER TABLE token_usage ADD COLUMN premium_request_cost REAL",
+			"ALTER TABLE token_usage ADD COLUMN token_unit_cost REAL",
+		],
+	},
 ];
 
 let client: DatabaseClient | null = null;

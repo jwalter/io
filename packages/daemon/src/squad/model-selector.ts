@@ -1,92 +1,116 @@
-import { FAST_MODEL, PREMIUM_MODEL, STANDARD_MODEL } from "@io/shared";
+import { DEFAULT_MODEL } from "@io/shared";
 
-const SIMPLE_KEYWORDS = [
-	"rename",
-	"typo",
-	"spelling",
-	"copy change",
-	"config",
-	"configuration",
-	"lint",
-	"format",
-	"documentation",
-	"readme",
-	"comment",
-	"small fix",
-	"minor",
-];
+import { CopilotClient, approveAll } from "@github/copilot-sdk";
+import { getCheapestAvailableModel, getCheapestInTier, getNextTierUp } from "../models/registry.js";
+import type { ModelTier } from "../models/types.js";
 
-const COMPLEX_KEYWORDS = [
-	"refactor",
-	"architecture",
-	"pipeline",
-	"orchestr",
-	"multi-file",
-	"cross-cutting",
-	"migration",
-	"performance",
-	"security",
-	"concurrency",
-	"parallel",
-	"worktree",
-	"design",
-	"planning",
-	"system",
-	"integration",
-];
+const VALID_TIERS: ModelTier[] = ["trivial", "fast", "standard", "premium", "ultra"];
 
-function normalize(text: string): string {
-	return text.trim().toLowerCase();
+const CLASSIFICATION_PROMPT = `You are a task complexity classifier. Given a task description, classify its complexity into exactly one tier.
+
+Tiers (from simplest to most complex):
+- trivial: Typos, renames, comment changes, config tweaks, formatting
+- fast: Simple bug fixes, small features, documentation updates, single-file changes
+- standard: Feature implementation, multi-file changes, moderate refactoring
+- premium: Architecture changes, complex refactoring, security work, performance optimization
+- ultra: System-wide redesigns, critical infrastructure, cross-cutting concerns
+
+Reply with ONLY the tier name (one word, lowercase). Nothing else.`;
+
+/**
+ * Use an LLM call to classify task complexity and select the cheapest capable model.
+ * Falls back to DEFAULT_MODEL if classification or model lookup fails.
+ */
+export async function selectModelForTask(taskDescription: string): Promise<string> {
+	const classifierModel = await getCheapestAvailableModel();
+	if (!classifierModel) {
+		return DEFAULT_MODEL;
+	}
+
+	let tier: ModelTier;
+	try {
+		tier = await classifyTaskComplexity(taskDescription, classifierModel.id);
+	} catch {
+		return DEFAULT_MODEL;
+	}
+
+	// Pick cheapest model in the classified tier
+	const selectedModel = await getCheapestInTier(tier);
+	if (selectedModel) {
+		return selectedModel.id;
+	}
+
+	// Escalate one tier up if nothing available in the classified tier
+	const nextTier = getNextTierUp(tier);
+	if (nextTier) {
+		const escalatedModel = await getCheapestInTier(nextTier);
+		if (escalatedModel) {
+			return escalatedModel.id;
+		}
+	}
+
+	return DEFAULT_MODEL;
 }
 
-function pickAvailableModel(preferred: string, availableModels?: string[]): string {
-	if (!availableModels || availableModels.length === 0) {
-		return preferred;
-	}
-
-	if (availableModels.includes(preferred)) {
-		return preferred;
-	}
-
-	if (preferred === PREMIUM_MODEL && availableModels.includes(STANDARD_MODEL)) {
-		return STANDARD_MODEL;
-	}
-
-	if (preferred === FAST_MODEL && availableModels.includes(STANDARD_MODEL)) {
-		return STANDARD_MODEL;
-	}
-
-	if (availableModels.includes(PREMIUM_MODEL)) {
-		return PREMIUM_MODEL;
-	}
-
-	if (availableModels.includes(STANDARD_MODEL)) {
-		return STANDARD_MODEL;
-	}
-
-	if (availableModels.includes(FAST_MODEL)) {
-		return FAST_MODEL;
-	}
-
-	return availableModels[0] ?? preferred;
-}
-
-export async function selectModelForTask(
+/**
+ * Send the task description to the cheapest model for complexity classification.
+ * Returns the classified tier.
+ */
+async function classifyTaskComplexity(
 	taskDescription: string,
-	availableModels?: string[],
+	modelId: string,
+): Promise<ModelTier> {
+	let client: CopilotClient | null = null;
+	try {
+		client = new CopilotClient();
+		await client.start();
+		const session = await client.createSession({
+			model: modelId,
+			onPermissionRequest: approveAll,
+			systemMessage: { content: CLASSIFICATION_PROMPT },
+		});
+
+		try {
+			const response = await session.sendAndWait({ prompt: `Task: ${taskDescription}` }, 15_000);
+
+			const raw = (response.text ?? "").trim().toLowerCase();
+			const tier = VALID_TIERS.find((t) => raw.includes(t));
+			return tier ?? "standard";
+		} finally {
+			await session.disconnect().catch(() => undefined);
+		}
+	} finally {
+		if (client) {
+			await client.stop().catch(() => undefined);
+		}
+	}
+}
+
+/**
+ * Select a model for a task with automatic retry on failure.
+ * If the selected model fails during use, call this with escalate=true
+ * to get the next tier up.
+ */
+export async function selectModelWithEscalation(
+	taskDescription: string,
+	failedModel?: string,
 ): Promise<string> {
-	const normalized = normalize(taskDescription);
-
-	const isComplex = COMPLEX_KEYWORDS.some((keyword) => normalized.includes(keyword));
-	const isSimple = SIMPLE_KEYWORDS.some((keyword) => normalized.includes(keyword));
-
-	let preferred = STANDARD_MODEL;
-
-	if (isComplex) {
-		preferred = PREMIUM_MODEL;
-	} else if (isSimple) {
-		preferred = FAST_MODEL;
+	if (!failedModel) {
+		return selectModelForTask(taskDescription);
 	}
 
-	return pickAvailableModel(preferred, availableModels);
+	// Find the failed model's tier and escalate
+	const { getModelPricing } = await import("../models/registry.js");
+	const failedPricing = await getModelPricing(failedModel);
+	if (!failedPricing) {
+		return DEFAULT_MODEL;
+	}
+
+	const nextTier = getNextTierUp(failedPricing.tier);
+	if (!nextTier) {
+		return DEFAULT_MODEL;
+	}
+
+	const escalatedModel = await getCheapestInTier(nextTier);
+	return escalatedModel?.id ?? DEFAULT_MODEL;
 }

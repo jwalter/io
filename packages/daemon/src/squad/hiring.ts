@@ -1,11 +1,5 @@
 import { CopilotClient, approveAll } from "@github/copilot-sdk";
-import {
-	EVENT_NAMES,
-	MANDATORY_ROLES,
-	PREMIUM_MODEL,
-	QA_MAX_REVISIONS,
-	STANDARD_MODEL,
-} from "@io/shared";
+import { DEFAULT_MODEL, EVENT_NAMES, MANDATORY_ROLES, QA_MAX_REVISIONS } from "@io/shared";
 import type { SquadConfig, SquadMember } from "@io/shared";
 
 import { eventBus } from "../event-bus.js";
@@ -164,14 +158,10 @@ function buildMandatoryRoles(): ProposedComposition["roles"] {
 function modelForRole(role: string): string {
 	const normalized = slugifyRole(role);
 	if (normalized === "team-lead") {
-		return PREMIUM_MODEL;
+		return DEFAULT_MODEL;
 	}
 
-	if (normalized === "qa") {
-		return STANDARD_MODEL;
-	}
-
-	return STANDARD_MODEL;
+	return DEFAULT_MODEL;
 }
 
 function systemPromptForRole(role: string, repoContext: string): string {
@@ -200,7 +190,7 @@ export async function proposeSquadComposition(
 		client = new CopilotClient();
 		await client.start();
 		const session = await client.createSession({
-			model: PREMIUM_MODEL,
+			model: DEFAULT_MODEL,
 			onPermissionRequest: approveAll,
 			systemMessage: {
 				content: ROLE_GENERATION_PROMPT,

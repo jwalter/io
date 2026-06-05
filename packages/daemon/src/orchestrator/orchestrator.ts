@@ -8,9 +8,9 @@ import {
 	createResetSummary,
 	shouldReset,
 } from "../copilot/reset.js";
-import { routeMessage } from "../copilot/router.js";
 import { type UsageData, createSession, sendMessage } from "../copilot/session.js";
 import { createLogger } from "../logging/logger.js";
+import { calculateTokenUnitCost, getModelPricing } from "../models/registry.js";
 import {
 	type Skill,
 	getActiveSkillsContext,
@@ -151,8 +151,7 @@ export class Orchestrator {
 				.filter(Boolean)
 				.join("\n\n"),
 		});
-		const route = routeMessage(normalizedMessage);
-		await this.refreshSession(route.model, systemPrompt);
+		await this.refreshSession(this.config.defaultModel, systemPrompt);
 
 		const sendResult = await sendMessage(
 			this.requireActiveSession(),
@@ -300,11 +299,24 @@ export class Orchestrator {
 		if (usage.inputTokens === 0 && usage.outputTokens === 0) {
 			return;
 		}
+		const model = usage.model || this.activeModel || this.config.defaultModel;
+		const pricing = await getModelPricing(model);
+		const premiumRequestCost = pricing?.premiumMultiplier ?? 0;
+		const tokenUnitCost = pricing
+			? calculateTokenUnitCost(
+					usage.inputTokens,
+					usage.outputTokens,
+					pricing.tokenInputMultiplier,
+					pricing.tokenOutputMultiplier,
+				)
+			: 0;
 		await recordUsage({
-			model: usage.model || this.activeModel || this.config.defaultModel,
+			model,
 			inputTokens: usage.inputTokens,
 			outputTokens: usage.outputTokens,
 			cost: 0,
+			premiumRequestCost,
+			tokenUnitCost,
 		});
 	}
 }

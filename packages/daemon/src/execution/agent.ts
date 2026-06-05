@@ -10,9 +10,10 @@ import {
 	approveAll,
 	defineTool,
 } from "@github/copilot-sdk";
-import { STANDARD_MODEL } from "@io/shared";
+import { DEFAULT_MODEL } from "@io/shared";
 import type { SquadMember, Task } from "@io/shared";
 
+import { calculateTokenUnitCost, getModelPricing } from "../models/registry.js";
 import { recordUsage } from "../store/index.js";
 import { getContextForAgent } from "./history.js";
 
@@ -71,13 +72,26 @@ function mergeUsage(target: UsageData, usage: AssistantUsageData): void {
 
 async function persistUsage(member: SquadMember, usageEvents: AssistantUsageData[]): Promise<void> {
 	for (const usage of usageEvents) {
+		const model = usage.model;
+		const pricing = await getModelPricing(model);
+		const premiumRequestCost = pricing?.premiumMultiplier ?? 0;
+		const tokenUnitCost = pricing
+			? calculateTokenUnitCost(
+					usage.inputTokens ?? 0,
+					usage.outputTokens ?? 0,
+					pricing.tokenInputMultiplier,
+					pricing.tokenOutputMultiplier,
+				)
+			: 0;
 		await recordUsage({
 			squadId: member.squadId,
 			agentId: member.id,
-			model: usage.model,
+			model,
 			inputTokens: usage.inputTokens ?? 0,
 			outputTokens: usage.outputTokens ?? 0,
-			cost: usage.cost ?? 0,
+			cost: 0,
+			premiumRequestCost,
+			tokenUnitCost,
 		});
 	}
 }
@@ -342,7 +356,7 @@ export async function executeAgentTask(
 		client = new CopilotClient({ workingDirectory: worktreePath });
 		await client.start();
 		const session = await client.createSession({
-			model: member.model ?? STANDARD_MODEL,
+			model: member.model ?? DEFAULT_MODEL,
 			workingDirectory: worktreePath,
 			tools,
 			availableTools: ["custom:*"],

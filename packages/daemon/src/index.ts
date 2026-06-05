@@ -7,6 +7,7 @@ import { loadConfig } from "./config.js";
 import { ensureDataDirectories } from "./data-dir.js";
 import { eventBus } from "./event-bus.js";
 import { initLogger } from "./logging/logger.js";
+import { refreshModelPricing, seedFromFallback } from "./models/index.js";
 import { createOrchestrator } from "./orchestrator/index.js";
 import { createScheduler } from "./scheduler/index.js";
 import { scanSkills } from "./skills/index.js";
@@ -25,6 +26,7 @@ function registerShutdownHandlers(logger: Logger, onShutdown: () => Promise<void
 
 async function main(): Promise<void> {
 	let logger: Logger | undefined;
+	let pricingRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
 	try {
 		ensureDataDirectories();
@@ -34,6 +36,14 @@ async function main(): Promise<void> {
 		logger.info(`IO Daemon v${APP_VERSION} starting...`);
 		await initDatabase();
 		logger.info("Database initialized");
+
+		// Fetch model catalog and pricing (blocks startup)
+		const pricingResult = await refreshModelPricing(logger);
+		if (pricingResult.modelsUpdated === 0) {
+			logger.warn("Model pricing refresh returned 0 models, seeding with fallback");
+			await seedFromFallback();
+		}
+		logger.info({ modelsUpdated: pricingResult.modelsUpdated }, "Model pricing initialized");
 
 		await scanSkills();
 		logger.info("Skills scanned");
@@ -46,6 +56,14 @@ async function main(): Promise<void> {
 		scheduler.start();
 		logger.info("Scheduler started");
 
+		// Start periodic pricing refresh
+		const refreshIntervalMs = config.pricingRefreshHours * 60 * 60 * 1000;
+		pricingRefreshTimer = setInterval(() => {
+			void refreshModelPricing(logger).catch((err) => {
+				logger?.warn({ err }, "Periodic model pricing refresh failed");
+			});
+		}, refreshIntervalMs);
+
 		setChatOrchestrator(orchestrator);
 		const apiServer = createApiServer(config);
 		const telegramBot = createTelegramBot(config, orchestrator);
@@ -53,6 +71,9 @@ async function main(): Promise<void> {
 		createTelegramNotifier(telegramBot, config, eventBus);
 
 		registerShutdownHandlers(logger, async () => {
+			if (pricingRefreshTimer) {
+				clearInterval(pricingRefreshTimer);
+			}
 			scheduler.stop();
 			telegramBot?.stop();
 			apiServer.server.close();

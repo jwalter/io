@@ -15,6 +15,7 @@ const configSchema = z.object({
 	supabaseUrl: z.string().trim().min(1).nullable().default(null),
 	supabaseAnonKey: z.string().trim().min(1).nullable().default(null),
 	sessionResetThreshold: z.coerce.number().int().positive().default(SESSION_RESET_THRESHOLD),
+	pricingRefreshHours: z.coerce.number().positive().default(24),
 });
 
 export type Config = z.infer<typeof configSchema>;
@@ -87,6 +88,10 @@ function readEnvOverrides(): ConfigInput {
 
 	if (process.env.IO_SESSION_RESET_THRESHOLD !== undefined) {
 		overrides.sessionResetThreshold = process.env.IO_SESSION_RESET_THRESHOLD;
+	}
+
+	if (process.env.IO_PRICING_REFRESH_HOURS !== undefined) {
+		overrides.pricingRefreshHours = process.env.IO_PRICING_REFRESH_HOURS;
 	}
 
 	return overrides;

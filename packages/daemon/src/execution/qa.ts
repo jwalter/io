@@ -2,7 +2,7 @@ import { exec } from "node:child_process";
 import { promisify } from "node:util";
 
 import { CopilotClient, approveAll } from "@github/copilot-sdk";
-import { EVENT_NAMES, QA_MAX_REVISIONS, STANDARD_MODEL } from "@io/shared";
+import { DEFAULT_MODEL, EVENT_NAMES, QA_MAX_REVISIONS } from "@io/shared";
 import type { Objective, SquadMember } from "@io/shared";
 
 import { eventBus } from "../event-bus.js";
@@ -75,7 +75,7 @@ export async function runQAReview(
 		client = new CopilotClient({ workingDirectory: worktreePath });
 		await client.start();
 		const session = await client.createSession({
-			model: qaMember.model ?? STANDARD_MODEL,
+			model: qaMember.model ?? DEFAULT_MODEL,
 			workingDirectory: worktreePath,
 			onPermissionRequest: approveAll,
 			systemMessage: {

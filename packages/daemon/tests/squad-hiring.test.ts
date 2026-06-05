@@ -11,51 +11,6 @@ import {
 import { createSquad } from "../src/store/index.js";
 import { cleanupGlobalStoreTestContext, createGlobalStoreTestContext } from "./helpers.js";
 
-async function loadModelSelector() {
-	vi.resetModules();
-	vi.doMock("@io/shared", () => ({
-		FAST_MODEL: "fast-model",
-		STANDARD_MODEL: "standard-model",
-		PREMIUM_MODEL: "premium-model",
-	}));
-	return import("../src/squad/model-selector.js");
-}
-
-describe("squad model selector", () => {
-	afterEach(() => {
-		vi.doUnmock("@io/shared");
-		vi.resetModules();
-	});
-
-	it("selects the fast model for simple tasks", async () => {
-		const { selectModelForTask } = await loadModelSelector();
-
-		await expect(selectModelForTask("fix a typo in the readme")).resolves.toBe("fast-model");
-	});
-
-	it("selects the standard model for regular tasks", async () => {
-		const { selectModelForTask } = await loadModelSelector();
-
-		await expect(selectModelForTask("explain how promises work")).resolves.toBe("standard-model");
-	});
-
-	it("selects the premium model for complex tasks", async () => {
-		const { selectModelForTask } = await loadModelSelector();
-
-		await expect(
-			selectModelForTask("design a multi-file architecture migration plan"),
-		).resolves.toBe("premium-model");
-	});
-
-	it("falls back to the best available model when the preferred model is unavailable", async () => {
-		const { selectModelForTask } = await loadModelSelector();
-
-		await expect(
-			selectModelForTask("fix a typo in the readme", ["standard-model", "premium-model"]),
-		).resolves.toBe("standard-model");
-	});
-});
-
 describe("squad role prompts", () => {
 	it("provides non-empty templates", () => {
 		expect(TEAM_LEAD_PROMPT.trim().length).toBeGreaterThan(100);
