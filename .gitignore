@@ -6,13 +6,14 @@ dist/
 
 # Docs
 docs/node_modules/
-docs/dist/
-docs/.astro/
+docs/.vitepress/dist/
+docs/.vitepress/cache/
 
 # SQLite
 *.db
 *.db-journal
 *.db-wal
+*.db-shm
 
 # OS
 .DS_Store
@@ -25,6 +26,9 @@ Thumbs.db
 
 # Coverage
 coverage/
+
+# Test temp files
+.vitest-temp/
 
 # TypeScript build cache
 *.tsbuildinfo

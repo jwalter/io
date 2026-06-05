@@ -1,217 +1,269 @@
 <p align="center">
-  <img src="assets/IO-logo.svg" alt="IO Logo" width="200" />
+  <img src="assets/IO-logo.svg" alt="IO" width="200" />
 </p>
 
 <h1 align="center">IO</h1>
 
 <p align="center">
-  <strong>AI Orchestrator Daemon — manage specialized agent squads for your software projects</strong>
+  A self-hosted AI orchestrator daemon with squad-based team delegation.
 </p>
 
 <p align="center">
-  <a href="https://michaeljolley.github.io/io">Documentation</a> •
-  <a href="#getting-started">Getting Started</a> •
-  <a href="#architecture">Architecture</a>
+  <a href="https://www.npmjs.com/package/heyio"><img src="https://img.shields.io/npm/v/heyio" alt="npm version" /></a>
+  <a href="https://github.com/michaeljolley/io/actions"><img src="https://github.com/michaeljolley/io/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <img src="https://img.shields.io/node/v/heyio" alt="node version" />
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/michaeljolley/io" alt="license" /></a>
 </p>
 
 ---
 
 ## What is IO?
 
-IO is an always-running daemon that acts as your personal AI orchestrator. You talk to IO, and IO manages teams of specialized AI agents ("squads") that work on your codebases.
+IO is your personal AI companion — an always-on daemon you communicate with via a **web dashboard** or **Telegram**. It can answer questions directly, manage a personal wiki, schedule recurring tasks, and delegate project-specific work to **squads** of specialized AI agents.
 
-- **One conversation interface** — talk to IO via TUI, Telegram, or the web dashboard
-- **Squad delegation** — IO automatically routes project questions to the right squad
-- **Universe theming** — squads get pop-culture character names and personas via LLM
-- **Web dashboard** — React SPA with real-time chat, squad management, and usage charts
-- **Cron schedules** — automate recurring tasks like daily standups or issue triage
-- **Inbox system** — squads can send you deliverables or ask blocking questions
-- **Model management** — token tracking and configurable model selection per agent
+### Key Concepts
 
-## Architecture
+- **Io** — The orchestrator. It routes your messages, manages squads, and can do direct coding work on repos without a squad.
+- **Squad** — A team of AI agents assigned to a single repository. Each squad has a Team Lead, a QA agent, and LLM-generated specialist roles.
+- **Execution Pipeline** — When a squad receives an objective: plan → parallel agents (git worktrees) → review → QA veto → PR creation.
 
-```mermaid
-graph TD
-    User["🧑 You<br/>(TUI / Telegram / Web)"]
-    Orch["🤖 Orchestrator<br/>(Copilot SDK · tool-calling)"]
-    Wiki["📚 Wiki<br/>(Knowledge Base)"]
-    Skills["🧩 Skills<br/>(SKILL.md)"]
-    Sched["⏰ Scheduler<br/>(cron jobs)"]
-    SquadA["👥 Squad A<br/>(Team Lead + Agents)"]
-    SquadB["👥 Squad B<br/>(Team Lead + Agents)"]
-    Web["🌐 Web Dashboard<br/>(React SPA)"]
+---
 
-    User --> Orch
-    User --> Web
-    Web --> Orch
-    Orch --> SquadA
-    Orch --> SquadB
-    Orch --> Sched
-    Orch --> Wiki
-    Orch --> Skills
-    SquadA --> Wiki
-    SquadB --> Wiki
+## Features
+
+- 🤖 **Smart Model Routing** — Io classifies messages by complexity and routes to fast/standard/premium models automatically
+- 👥 **Squad Delegation** — Hire a squad for any repo; Io delegates all project questions to it
+- 🔄 **Parallel Execution** — Agents work simultaneously in isolated git worktrees
+- ✅ **QA Gate** — Mandatory QA review with veto power (max 3 revision cycles before escalation)
+- 📋 **4 PR Modes** — Branch-only, draft PR, ready PR, or auto-merge (configurable per squad)
+- 📅 **Cron Scheduler** — Automate recurring tasks (daily standups, issue triage, dependency updates)
+- 📬 **Inbox** — Blocking questions and deliverables from squads, reviewed at your pace
+- 📝 **Wiki** — Personal knowledge base with search, tags, and episodic memory
+- 🔌 **Skills** — Extensible via SKILL.md files (install from GitHub or marketplace)
+- 🔧 **MCP Support** — Agents can connect to external MCP servers
+- 📊 **Token Tracking** — Per-agent usage granularity with cost breakdowns
+- 💬 **Telegram** — Chat with Io and receive notifications on your phone
+- 🌐 **Web Dashboard** — Full-featured React app (chat, squads, inbox, wiki, schedules, usage, skills)
+
+---
+
+## Quick Start
+
+### Install
+
+```bash
+npm install -g heyio
 ```
 
-Each squad has:
-- **Team Lead** — receives objectives, creates plans, coordinates agents
-- **Agents** — specialized workers (developer, reviewer, etc.) with pop-culture character names
-- **Meetings** — structured collaboration between agents for planning and review
-- **QA/Tester** — required veto-holding member who must approve before completion
+### Setup
 
-## Getting Started
+```bash
+io setup
+```
+
+This creates `~/.io/config.json` with your preferences (port, Telegram token, Supabase auth, etc.)
+
+### Run
+
+```bash
+io
+```
+
+The daemon starts and serves the web dashboard at `http://localhost:7777`.
+
+---
+
+## Requirements
+
+- **Node.js 22+**
+- **GitHub Copilot** subscription (for the `@github/copilot-sdk`)
+- **Git** and **gh** CLI (for squad PR creation)
+- **Telegram Bot Token** (optional, for mobile access)
+
+---
+
+## Configuration
+
+IO stores all data in `~/.io/`:
+
+```
+~/.io/
+├── config.json       # Main configuration
+├── io.db             # SQLite database
+├── wiki/pages/       # Wiki markdown pages
+├── skills/           # Installed SKILL.md files
+├── skills-lock.json  # Skills manifest
+└── logs/io.log       # Structured logs
+```
+
+### Config Options
+
+| Key | Env Variable | Default | Description |
+|-----|-------------|---------|-------------|
+| `port` | `IO_PORT` | `7777` | API server port |
+| `logLevel` | `IO_LOG_LEVEL` | `info` | Log level (trace/debug/info/warn/error) |
+| `defaultModel` | `IO_DEFAULT_MODEL` | `gpt-4.1` | Default LLM model |
+| `telegramToken` | `IO_TELEGRAM_TOKEN` | — | Telegram bot token |
+| `telegramUserId` | `IO_TELEGRAM_USER_ID` | — | Your Telegram user ID |
+| `supabaseUrl` | `IO_SUPABASE_URL` | — | Supabase URL (for dashboard auth) |
+| `supabaseAnonKey` | `IO_SUPABASE_ANON_KEY` | — | Supabase anon key |
+| `sessionResetThreshold` | `IO_SESSION_RESET_THRESHOLD` | `50` | Messages before session reset |
+
+---
+
+## Squads
+
+### Hiring a Squad
+
+Tell Io to hire a squad for a repository:
+
+> "Hire a squad for https://github.com/myorg/my-app"
+
+Io analyzes the repo, proposes a team composition (Team Lead + QA + specialists), and asks for your approval.
+
+### Squad Composition
+
+| Role | Mandatory | Purpose |
+|------|-----------|---------|
+| Team Lead | ✅ | Plans objectives, assigns tasks, picks models |
+| QA | ✅ | Reviews diffs, runs tests, approves/rejects |
+| *Generated* | ❌ | Specialists based on repo (e.g., "API Developer", "UI Specialist") |
+
+### PR Modes
+
+Configure per squad how completed work is delivered:
+
+| Mode | Behavior |
+|------|----------|
+| `branch-only` | Branch pushed; PR only if QA approves |
+| `draft-pr` | Draft PR created; promoted to ready on QA approval |
+| `ready-pr` | PR created as ready; stays open if QA rejects |
+| `auto-merge` | PR created; auto-merged on QA approval |
+
+---
+
+## Execution Pipeline
+
+```
+Objective received
+  → Team Lead creates plan
+    → Tasks assigned to agents
+      → Agents execute in parallel (git worktrees)
+        → Review meeting
+          → QA gate
+            ├─ Approved → Push branch + create PR (per prMode)
+            ├─ Rejected (< 3x) → Agents revise with feedback
+            └─ Rejected (3x) → Escalate to inbox
+```
+
+---
+
+## Development
 
 ### Prerequisites
 
-- Node.js 22+
-- GitHub Copilot access (the daemon uses `@github/copilot-sdk`)
-- Git
+```bash
+node --version  # >= 22.0.0
+git --version
+gh --version
+```
 
-### Installation
+### Setup
 
 ```bash
 git clone https://github.com/michaeljolley/io.git
 cd io
 npm install
-npm run build
 ```
 
-### Running
+### Build
 
 ```bash
-# Start the daemon
-npm run dev
-
-# Or build and start
-npm run build
-npm start
+npm run build          # Build all packages
+npm run build:shared   # Build shared types
+npm run build:daemon   # Build daemon with esbuild
+npm run build:web      # Build web dashboard with Vite
 ```
 
-The daemon starts on port `7777` by default. The web dashboard is served at the same port — open `http://localhost:7777` in your browser.
+### Dev Mode
 
-### Configuration
-
-Create `~/.io/config.json`:
-
-```json
-{
-  "apiPort": 7777,
-  "defaultModel": "claude-opus-4.6",
-  "logLevel": "info",
-  "maxInstancesPerSquad": 3,
-  "telegram": {
-    "botToken": "your-token-from-botfather",
-    "allowedChatIds": [12345678]
-  },
-  "supabase": {
-    "projectUrl": "https://your-project.supabase.co",
-    "anonKey": "eyJ...",
-    "jwtSecret": "your-jwt-secret"
-  }
-}
+```bash
+npm run dev            # Run daemon with tsx --watch
 ```
 
-All settings can also be controlled via environment variables (which take priority):
+### Test
 
-| Variable | Config Key | Default |
-|----------|-----------|---------|
-| `IO_PORT` | `apiPort` | `7777` |
-| `IO_LOG_LEVEL` | `logLevel` | `info` |
-| `IO_MODEL` | `defaultModel` | `claude-opus-4.6` |
-| `IO_DATA_DIR` | `dataDir` | `~/.io` |
-| `TELEGRAM_BOT_TOKEN` | `telegram.botToken` | — |
-| `TELEGRAM_ALLOWED_CHAT_IDS` | `telegram.allowedChatIds` | — |
-| `IO_SUPABASE_URL` | `supabase.projectUrl` | — |
-| `IO_SUPABASE_ANON_KEY` | `supabase.anonKey` | — |
-| `IO_SUPABASE_JWT_SECRET` | `supabase.jwtSecret` | — |
+```bash
+npm test               # Run all tests
+npm run test:watch     # Watch mode
+npm run test:coverage  # With coverage
+```
 
-See the [Configuration Guide](https://michaeljolley.github.io/io/guides/configuration/) for full details.
+### Lint
 
-### Authentication
+```bash
+npm run lint           # Check with Biome
+npm run lint:fix       # Auto-fix
+npm run format         # Format with Biome
+```
 
-When Supabase is configured, the web dashboard requires login and all API endpoints are secured with JWT verification. If Supabase is **not** configured, the API stays open (suitable for local-only use).
-
-## Key Features
-
-### Squads
-
-Hire a squad for any project:
-
-> "Hire a squad for https://github.com/org/my-app with the Star Wars universe"
-
-IO creates a team with character names from your chosen universe (e.g., "Yoda" as Team Lead, "R2-D2" as DevOps). Each member gets a persona that influences their communication style.
-
-### Web Dashboard
-
-A full React SPA served by the daemon at the API port:
-- **Chat** — real-time streaming conversation with IO
-- **Squads** — view teams, members, active instances, and activity
-- **Feed** — inbox of deliverables and blocking questions
-- **Skills** — manage installed SKILL.md capabilities
-- **Schedules** — CRUD for cron-based automation
-- **Wiki** — knowledge base viewer and editor
-- **Usage** — token and cost charts (by squad, model, time)
-- **Settings** — configure all daemon options from the UI
-
-### Schedules
-
-Automate recurring work with cron expressions:
-
-> "Create a daily standup for my-app at 9am on weekdays — have them review open issues and report progress"
-
-### Inbox
-
-Squads communicate back via the inbox:
-- **Deliverables** — status reports, completed summaries
-- **Blocking questions** — the squad pauses and waits for your answer
-
-### Clients
-
-| Client | Description |
-|--------|-------------|
-| Web Dashboard | React SPA at `http://localhost:7777` |
-| TUI | Terminal interface built with Ink |
-| Telegram | Bot integration via Grammy |
-| REST API | HTTP endpoints at `/api/*` |
-| WebSocket | Real-time streaming at `/ws` |
+---
 
 ## Project Structure
 
 ```
 packages/
-├── shared/      # Types, constants, shared utilities
-├── daemon/      # Core daemon (orchestrator, squads, API, scheduler)
-├── web/         # Web dashboard (React + Vite + Tailwind)
-├── tui/         # Terminal UI (Ink/React)
-└── telegram/    # Telegram bot client
-docs/            # Astro Starlight documentation site
-.github/
-└── workflows/
-    ├── ci.yml           # PR validation (lint, build, test)
-    ├── release.yml      # Tag-based release + npm publish
-    └── deploy-docs.yml  # Docs site deployment
+├── shared/           # Types, constants, config schema
+├── daemon/           # Core daemon (orchestrator, squads, execution, API)
+│   └── src/
+│       ├── orchestrator/   # Io brain + tools
+│       ├── squad/          # Squad hiring + management
+│       ├── execution/      # Full pipeline (plan, tasks, agents, QA, PR)
+│       ├── copilot/        # Copilot SDK integration + model routing
+│       ├── store/          # libSQL database layer
+│       ├── api/            # Express REST + WebSocket
+│       ├── wiki/           # Personal knowledge base
+│       ├── skills/         # SKILL.md extensibility
+│       ├── scheduler/      # Cron automation
+│       └── telegram/       # Grammy bot + notifications
+└── web/              # React dashboard (Vite + Tailwind + Radix UI)
 ```
 
-## Development
+---
 
-```bash
-# Build all packages
-npm run build
+## API
 
-# Run daemon in dev mode (watches for changes)
-npm run dev
+The daemon exposes a REST API + WebSocket at the configured port (default 7777).
 
-# Run web dashboard dev server (with API proxy)
-cd packages/web && npm run dev
+### Endpoints
 
-# Build documentation
-cd docs && npm run build
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/chat` | Send message to Io |
+| GET | `/api/conversations` | List conversations |
+| GET | `/api/squads` | List squads |
+| POST | `/api/squads` | Create squad |
+| POST | `/api/squads/:id/objectives` | Assign objective |
+| GET | `/api/inbox` | List inbox items |
+| POST | `/api/inbox/:id/reply` | Reply to inbox item |
+| GET | `/api/schedules` | List schedules |
+| POST | `/api/schedules` | Create schedule |
+| GET | `/api/wiki/pages` | List wiki pages |
+| GET | `/api/wiki/search` | Search wiki |
+| GET | `/api/skills` | List installed skills |
+| GET | `/api/usage` | Token usage summary |
+| GET | `/api/activity` | Activity feed |
+
+### WebSocket
+
+Connect to `ws://localhost:7777` and subscribe to channels for real-time events:
+
+```json
+{ "type": "subscribe", "channels": ["chat", "inbox", "activity"] }
 ```
 
-## Documentation
-
-Full documentation is available at **[michaeljolley.github.io/io](https://michaeljolley.github.io/io)**.
+---
 
 ## License
 
-MIT
+[MIT](LICENSE)
