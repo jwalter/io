@@ -27,7 +27,7 @@ interface SkillSummary {
 
 async function getSkillContent(skill: InstalledSkill): Promise<string> {
 	if (!skill.entryFile) return "";
-	const filePath = join(SKILLS_DIR, skill.directory, skill.entryFile);
+	const filePath = join(skill.directory, skill.entryFile);
 	try {
 		return await readFile(filePath, "utf8");
 	} catch {
@@ -53,9 +53,7 @@ async function buildSkillSummaries(skills: InstalledSkill[]): Promise<SkillSumma
 				activatedForOrchestrator: true,
 				preview: extractPreview(content),
 				description: extractDescription(content),
-				filePath: skill.entryFile
-					? join(SKILLS_DIR, skill.directory, skill.entryFile)
-					: join(SKILLS_DIR, skill.directory),
+				filePath: skill.entryFile ? join(skill.directory, skill.entryFile) : skill.directory,
 			};
 		}),
 	);
@@ -106,9 +104,7 @@ router.get("/api/skills/:name", async (req, res) => {
 		}
 
 		const content = await getSkillContent(skill);
-		const filePath = skill.entryFile
-			? join(SKILLS_DIR, skill.directory, skill.entryFile)
-			: join(SKILLS_DIR, skill.directory);
+		const filePath = skill.entryFile ? join(skill.directory, skill.entryFile) : skill.directory;
 		res.status(200).json({ name: skill.slug, content, filePath });
 	} catch (error) {
 		res.status(500).json({
@@ -138,7 +134,7 @@ router.put("/api/skills/:name", async (req, res) => {
 			return;
 		}
 
-		const filePath = join(SKILLS_DIR, skill.directory, skill.entryFile);
+		const filePath = join(skill.directory, skill.entryFile);
 		await writeFile(filePath, content, "utf8");
 		res.status(200).json({ name: skill.slug, content, filePath });
 	} catch (error) {
