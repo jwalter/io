@@ -2,6 +2,7 @@ import { type CreateWikiPageRequest, EVENT_NAMES, type UpdateWikiPageRequest } f
 import { Router } from "express";
 
 import { eventBus } from "../../event-bus.js";
+import { createLogger } from "../../logging/logger.js";
 import {
 	createPage,
 	deletePage,
@@ -11,6 +12,8 @@ import {
 	searchPages,
 	updatePage,
 } from "../../wiki/index.js";
+
+const logger = createLogger("api");
 
 const router = Router();
 
@@ -120,6 +123,8 @@ router.delete("/api/wiki/pages/*pagePath", async (req, res) => {
 			return;
 		}
 
+		logger.debug({ pagePath }, "Wiki delete requested");
+
 		const existingPage = await getPage(pagePath);
 		if (!existingPage) {
 			res.status(404).json({ error: "Wiki page not found" });
@@ -127,9 +132,19 @@ router.delete("/api/wiki/pages/*pagePath", async (req, res) => {
 		}
 
 		await deletePage(pagePath);
+
+		// Verify deletion succeeded
+		const verifyPage = await getPage(pagePath);
+		if (verifyPage) {
+			logger.error({ pagePath }, "Wiki page still exists after deletion");
+			res.status(500).json({ error: "Page deletion failed — file still exists" });
+			return;
+		}
+
 		eventBus.emit(EVENT_NAMES.WIKI_UPDATED, { path: existingPage.path, action: "deleted" });
 		res.status(200).json({ deleted: true });
 	} catch (error) {
+		logger.error({ error, pagePath: req.params.pagePath }, "Wiki delete failed");
 		res.status(500).json({
 			error: "Failed to delete wiki page",
 			details: error instanceof Error ? error.message : "Unknown error",

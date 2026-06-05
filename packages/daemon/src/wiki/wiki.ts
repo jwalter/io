@@ -134,7 +134,7 @@ export async function updatePage(
 
 export async function deletePage(pagePath: string): Promise<void> {
 	const filePath = resolvePagePath(pagePath);
-	await rm(filePath, { force: true });
+	await rm(filePath);
 	await pruneEmptyDirectories(dirname(filePath), getWikiPagesDir());
 }
 
