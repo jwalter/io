@@ -61,16 +61,17 @@ interface ParsedSkill {
 	body: string;
 }
 
-function parseSkillContent(content: string): ParsedSkill {
-	const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/);
-	if (!fmMatch) {
-		return { frontMatter: {}, body: content };
-	}
+function parseArrayValue(value: string): string[] {
+	return value
+		.slice(1, -1)
+		.split(",")
+		.map((s) => s.trim().replace(/^["']|["']$/g, ""));
+}
 
-	const fmRaw = fmMatch[1] ?? "";
-	const body = fmMatch[2] ?? "";
+function parseFrontMatterLines(
+	fmRaw: string,
+): Record<string, string | string[] | Record<string, string>> {
 	const frontMatter: Record<string, string | string[] | Record<string, string>> = {};
-
 	let currentKey = "";
 	let currentArrayItems: string[] | null = null;
 
@@ -86,10 +87,7 @@ function parseSkillContent(content: string): ParsedSkill {
 			if (value === "" || value === "[]") {
 				currentArrayItems = [];
 			} else if (value.startsWith("[") && value.endsWith("]")) {
-				frontMatter[currentKey] = value
-					.slice(1, -1)
-					.split(",")
-					.map((s) => s.trim().replace(/^["']|["']$/g, ""));
+				frontMatter[currentKey] = parseArrayValue(value);
 			} else {
 				frontMatter[currentKey] = value.replace(/^["']|["']$/g, "");
 			}
@@ -102,7 +100,16 @@ function parseSkillContent(content: string): ParsedSkill {
 		frontMatter[currentKey] = currentArrayItems;
 	}
 
-	return { frontMatter, body };
+	return frontMatter;
+}
+
+function parseSkillContent(content: string): ParsedSkill {
+	const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/);
+	if (!fmMatch) {
+		return { frontMatter: {}, body: content };
+	}
+
+	return { frontMatter: parseFrontMatterLines(fmMatch[1] ?? ""), body: fmMatch[2] ?? "" };
 }
 
 const FM_DISPLAY_ORDER = [

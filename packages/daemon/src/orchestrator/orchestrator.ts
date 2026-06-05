@@ -1,3 +1,4 @@
+import type { EventEmitter } from "node:events";
 import type { CopilotSession } from "@github/copilot-sdk";
 import {
 	type Conversation,
@@ -48,7 +49,7 @@ export type ChunkHandler = (chunk: StreamChunk) => void;
 
 export class Orchestrator {
 	private readonly config: Config;
-	private readonly eventBus: any;
+	private readonly eventBus: EventEmitter;
 	private readonly logger = createLogger("orchestrator");
 	private activeSession: CopilotSession | null = null;
 	private activeModel: string | null = null;
@@ -57,7 +58,7 @@ export class Orchestrator {
 	private latestResetSummary = "";
 	private skills: Skill[] = [];
 
-	constructor(config: Config, eventBus: any) {
+	constructor(config: Config, eventBus: EventEmitter) {
 		this.config = config;
 		this.eventBus = eventBus;
 	}
@@ -341,6 +342,6 @@ export class Orchestrator {
 	}
 }
 
-export function createOrchestrator(config: Config, eventBus: any): Orchestrator {
+export function createOrchestrator(config: Config, eventBus: EventEmitter): Orchestrator {
 	return new Orchestrator(config, eventBus);
 }

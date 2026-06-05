@@ -5,7 +5,7 @@ import { listPages } from "../wiki/wiki.js";
  * into agent system prompts when executing within an instance.
  * Returns a compact summary (title + first ~100 chars of content per page).
  */
-export async function buildWikiContext(squadId: string): Promise<string> {
+export async function buildWikiContext(_squadId: string): Promise<string> {
 	const pages = await listPages().catch(() => []);
 
 	if (pages.length === 0) {

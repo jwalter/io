@@ -22,6 +22,7 @@ import {
 } from "../store/index.js";
 import { executeAgentTask } from "./agent.js";
 import { extractLearnings } from "./history.js";
+import { buildInstanceSystemPromptSuffix } from "./instance-context.js";
 import { createPlan } from "./planning.js";
 import { buildPrBody, createPullRequest } from "./pr.js";
 import { getGitDiff, handleQARejection, runQAReview } from "./qa.js";
@@ -33,7 +34,6 @@ import {
 	markTaskFailed,
 } from "./tasks.js";
 import { cleanupWorktree, createWorktree } from "./worktree.js";
-import { buildInstanceSystemPromptSuffix } from "./instance-context.js";
 
 const execAsync = promisify(exec);
 
@@ -150,7 +150,10 @@ async function executePendingTasks(
 				taskId: task.id,
 			});
 
-			const execution = await executeAgentTask(member, task, worktreePath, { mcpServers, instancePromptSuffix });
+			const execution = await executeAgentTask(member, task, worktreePath, {
+				mcpServers,
+				instancePromptSuffix,
+			});
 			if (!execution.success) {
 				const failedTask = await markTaskFailed(task.id, execution.result);
 				eventBus.emit(EVENT_NAMES.TASK_FAILED, {
@@ -253,9 +256,7 @@ export async function executeObjective(
 		await createTasksFromPlan(objectiveId, planned.tasks, squadRecord.members);
 
 		const instancePromptSuffix = instanceContext
-			? await buildInstanceSystemPromptSuffix(squadId, instanceContext.instanceId).catch(
-					() => "",
-				)
+			? await buildInstanceSystemPromptSuffix(squadId, instanceContext.instanceId).catch(() => "")
 			: undefined;
 
 		let qaOutcome: { approved: boolean; feedback: string } | null = null;
