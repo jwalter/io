@@ -8,22 +8,16 @@ Complete reference for all configuration options in `~/.io/config.json`.
 {
   "port": 7777,
   "logLevel": "info",
-  "sessionResetThreshold": 50,
-  "telegram": {
-    "token": "string",
-    "allowedUsers": [123456789]
-  },
-  "supabase": {
-    "url": "https://your-project.supabase.co",
-    "anonKey": "your-anon-key"
-  },
-  "models": {
-    "fast": "gpt-4.1-mini",
-    "standard": "claude-sonnet-4.6",
-    "premium": "claude-sonnet-4.6"
-  }
+  "defaultModel": "gpt-4.1",
+  "telegramToken": "YOUR_BOT_TOKEN",
+  "telegramUserId": "123456789",
+  "supabaseUrl": "https://your-project.supabase.co",
+  "supabaseAnonKey": "your-anon-key",
+  "sessionResetThreshold": 50
 }
 ```
+
+All fields are optional. IO runs with sensible defaults if omitted.
 
 ## Fields
 
@@ -39,55 +33,53 @@ Complete reference for all configuration options in `~/.io/config.json`.
 - **Env:** `IO_LOG_LEVEL`
 - **Description:** Minimum log level for output
 
+### `defaultModel`
+- **Type:** `string`
+- **Default:** `"gpt-4.1"`
+- **Env:** `IO_DEFAULT_MODEL`
+- **Description:** Fallback LLM model used when the router cannot classify a message
+
+### `telegramToken`
+- **Type:** `string | null`
+- **Default:** `null`
+- **Env:** `IO_TELEGRAM_TOKEN`
+- **Description:** Bot token from @BotFather. Required for Telegram integration.
+
+### `telegramUserId`
+- **Type:** `string | null`
+- **Default:** `null`
+- **Env:** `IO_TELEGRAM_USER_ID`
+- **Description:** Telegram user ID allowed to interact with the bot. Messages from other users are ignored.
+
+### `supabaseUrl`
+- **Type:** `string | null`
+- **Default:** `null`
+- **Env:** `IO_SUPABASE_URL`
+- **Description:** Supabase project URL. Required for web dashboard authentication.
+
+### `supabaseAnonKey`
+- **Type:** `string | null`
+- **Default:** `null`
+- **Env:** `IO_SUPABASE_ANON_KEY`
+- **Description:** Supabase anonymous/public key. Required for web dashboard authentication.
+
 ### `sessionResetThreshold`
 - **Type:** `number`
 - **Default:** `50`
-- **Env:** `IO_SESSION_RESET`
-- **Description:** Number of messages before rolling window reset
+- **Env:** `IO_SESSION_RESET_THRESHOLD`
+- **Description:** Number of messages before the conversation context window resets
 
-### `telegram`
+## Model Routing
 
-#### `telegram.token`
-- **Type:** `string`
-- **Env:** `IO_TELEGRAM_TOKEN`
-- **Description:** Bot token from @BotFather
+IO uses smart model routing with three tiers. The tier models are currently set by built-in constants:
 
-#### `telegram.allowedUsers`
-- **Type:** `number[]`
-- **Env:** `IO_TELEGRAM_USERS` (comma-separated)
-- **Description:** Telegram user IDs allowed to interact with the bot
+| Tier | Default Model | Use Case |
+|------|---------------|----------|
+| **Fast** | `gpt-4.1-mini` | Simple questions, greetings, status checks |
+| **Standard** | `claude-sonnet-4.6` | Moderate tasks, code questions, planning |
+| **Premium** | `claude-sonnet-4.6` | Complex analysis, architecture decisions |
 
-### `supabase`
-
-#### `supabase.url`
-- **Type:** `string`
-- **Env:** `IO_SUPABASE_URL`
-- **Description:** Supabase project URL for auth
-
-#### `supabase.anonKey`
-- **Type:** `string`
-- **Env:** `IO_SUPABASE_ANON_KEY`
-- **Description:** Supabase anonymous/public key
-
-### `models`
-
-#### `models.fast`
-- **Type:** `string`
-- **Default:** `"gpt-4.1-mini"`
-- **Env:** `IO_MODEL_FAST`
-- **Description:** Model used for simple, fast responses
-
-#### `models.standard`
-- **Type:** `string`
-- **Default:** `"claude-sonnet-4.6"`
-- **Env:** `IO_MODEL_STANDARD`
-- **Description:** Model used for moderate complexity tasks
-
-#### `models.premium`
-- **Type:** `string`
-- **Default:** `"claude-sonnet-4.6"`
-- **Env:** `IO_MODEL_PREMIUM`
-- **Description:** Model used for complex reasoning tasks
+The `defaultModel` config field sets the fallback model when the router cannot classify a message into a tier.
 
 ## Validation
 

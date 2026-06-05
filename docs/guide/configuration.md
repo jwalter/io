@@ -1,6 +1,6 @@
 # Configuration
 
-IO is configured via `~/.io/config.json` and environment variables. Environment variables take precedence.
+IO is configured via `~/.io/config.json` and environment variables. Environment variables take precedence over the config file.
 
 ## Config File
 
@@ -8,22 +8,16 @@ IO is configured via `~/.io/config.json` and environment variables. Environment 
 {
   "port": 7777,
   "logLevel": "info",
-  "telegram": {
-    "token": "YOUR_BOT_TOKEN",
-    "allowedUsers": [123456789]
-  },
-  "supabase": {
-    "url": "https://your-project.supabase.co",
-    "anonKey": "your-anon-key"
-  },
-  "models": {
-    "fast": "gpt-4.1-mini",
-    "standard": "claude-sonnet-4.6",
-    "premium": "claude-sonnet-4.6"
-  },
+  "defaultModel": "gpt-4.1",
+  "telegramToken": "YOUR_BOT_TOKEN",
+  "telegramUserId": "123456789",
+  "supabaseUrl": "https://your-project.supabase.co",
+  "supabaseAnonKey": "your-anon-key",
   "sessionResetThreshold": 50
 }
 ```
+
+All fields are optional — IO runs with sensible defaults if no config file exists.
 
 ## Environment Variables
 
@@ -31,16 +25,14 @@ IO is configured via `~/.io/config.json` and environment variables. Environment 
 |----------|-------------|---------|
 | `IO_PORT` | HTTP/WS server port | `7777` |
 | `IO_LOG_LEVEL` | Log level (trace/debug/info/warn/error) | `info` |
+| `IO_DEFAULT_MODEL` | Default LLM model | `gpt-4.1` |
 | `IO_TELEGRAM_TOKEN` | Telegram bot token | — |
-| `IO_TELEGRAM_USERS` | Comma-separated allowed Telegram user IDs | — |
+| `IO_TELEGRAM_USER_ID` | Allowed Telegram user ID | — |
 | `IO_SUPABASE_URL` | Supabase project URL | — |
 | `IO_SUPABASE_ANON_KEY` | Supabase anonymous key | — |
-| `IO_MODEL_FAST` | Fast-tier model | `gpt-4.1-mini` |
-| `IO_MODEL_STANDARD` | Standard-tier model | `claude-sonnet-4.6` |
-| `IO_MODEL_PREMIUM` | Premium-tier model | `claude-sonnet-4.6` |
-| `IO_SESSION_RESET` | Message count before session reset | `50` |
+| `IO_SESSION_RESET_THRESHOLD` | Message count before session reset | `50` |
 
-## Model Tiers
+## Model Routing
 
 IO uses smart model routing to balance cost and capability:
 
@@ -50,13 +42,13 @@ IO uses smart model routing to balance cost and capability:
 | **Standard** | Moderate tasks, code questions, planning | `claude-sonnet-4.6` |
 | **Premium** | Complex analysis, architecture decisions | `claude-sonnet-4.6` |
 
-The router classifies each incoming message and selects the appropriate tier automatically. You can override models per tier in config.
+The router classifies each incoming message and selects the appropriate tier automatically. The `defaultModel` config sets the fallback model used when the router cannot classify a message.
 
 ## Authentication
 
 ### Telegram
 
-Authentication is by Telegram user ID. Add your numeric user ID to `telegram.allowedUsers` in config. Messages from other users are ignored.
+Authentication is by Telegram user ID. Set your numeric user ID in `telegramUserId` (config) or `IO_TELEGRAM_USER_ID` (env). Messages from other users are ignored.
 
 ### Web Dashboard
 

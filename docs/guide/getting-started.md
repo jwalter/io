@@ -35,9 +35,10 @@ io setup
 This will:
 
 1. Create the `~/.io/` data directory
-2. Generate a default `config.json`
-3. Prompt for optional Telegram bot token
-4. Prompt for optional Supabase credentials
+2. Prompt for port (default: 7777)
+3. Prompt for optional Telegram bot token and user ID
+4. Prompt for optional Supabase URL and anon key
+5. Save to `~/.io/config.json`
 
 ## Starting the Daemon
 

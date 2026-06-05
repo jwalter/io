@@ -30,10 +30,11 @@ io setup
 ```
 
 Prompts for:
+- Port (default: 7777)
 - Telegram bot token (optional)
-- Supabase credentials (optional)
-- Port configuration
-- Log level
+- Telegram user ID (optional)
+- Supabase URL (optional)
+- Supabase anon key (optional)
 
 ### `io --version`
 
