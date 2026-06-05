@@ -280,8 +280,8 @@ export function SkillsView() {
 		const needle = search.trim().toLowerCase();
 		if (!needle) return installedSkills;
 		return installedSkills.filter((skill) =>
-			[skill.name, skill.description, skill.preview].some(
-				(value) => value && value.toLowerCase().includes(needle),
+			[skill.name, skill.description, skill.preview].some((value) =>
+				value?.toLowerCase().includes(needle),
 			),
 		);
 	}, [installedSkills, search]);
