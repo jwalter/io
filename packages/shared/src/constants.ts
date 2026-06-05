@@ -43,5 +43,6 @@ export const EVENT_NAMES = {
 	CHAT_MESSAGE: "chat.message",
 	CHAT_STREAM_CHUNK: "chat.stream_chunk",
 	CHAT_STREAM_END: "chat.stream_end",
+	WIKI_UPDATED: "wiki.updated",
 	NOTIFICATION: "notification",
 } as const;

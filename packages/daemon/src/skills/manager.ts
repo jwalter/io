@@ -71,17 +71,32 @@ export async function listInstalledSkills(): Promise<InstalledSkill[]> {
 async function readSkillsLock(): Promise<SkillsLockFile> {
 	try {
 		const rawLockFile = await readFile(SKILLS_LOCK_PATH, "utf8");
-		const parsed = JSON.parse(rawLockFile) as Partial<SkillsLockFile>;
+		const parsed = JSON.parse(rawLockFile) as unknown;
+
+		// Handle both formats:
+		// - Bare array: [{ id, slug, source, directory, entryFile, ... }] (written by API route)
+		// - Wrapped object: { skills: [{ id, name, url, ... }] } (legacy format)
+		let entries: unknown[];
+		if (Array.isArray(parsed)) {
+			entries = parsed;
+		} else if (
+			typeof parsed === "object" &&
+			parsed !== null &&
+			"skills" in parsed &&
+			Array.isArray((parsed as { skills: unknown[] }).skills)
+		) {
+			entries = (parsed as { skills: unknown[] }).skills;
+		} else {
+			return { skills: [] };
+		}
 
 		return {
-			skills: Array.isArray(parsed.skills)
-				? parsed.skills.filter(isInstalledSkillRecord).map((skill) => ({
-						id: skill.id,
-						name: skill.name,
-						url: skill.url,
-						installedAt: skill.installedAt,
-					}))
-				: [],
+			skills: entries.filter(isInstalledSkillRecord).map((skill) => ({
+				id: skill.id,
+				name: String(skill.name || skill.slug || skill.id),
+				url: String(skill.url || ""),
+				installedAt: String(skill.installedAt || new Date().toISOString()),
+			})),
 		};
 	} catch (error) {
 		if (isMissingFileError(error)) {
@@ -94,7 +109,7 @@ async function readSkillsLock(): Promise<SkillsLockFile> {
 
 async function writeSkillsLock(lockFile: SkillsLockFile): Promise<void> {
 	await mkdir(dirname(SKILLS_LOCK_PATH), { recursive: true });
-	await writeFile(SKILLS_LOCK_PATH, `${JSON.stringify(lockFile, null, 2)}\n`, "utf8");
+	await writeFile(SKILLS_LOCK_PATH, `${JSON.stringify(lockFile.skills, null, 2)}\n`, "utf8");
 }
 
 async function upsertInstalledSkill(skill: InstalledSkill): Promise<void> {
@@ -131,19 +146,13 @@ function getSkillIdFromUrl(url: string): string {
 	return decodeURIComponent(skillSegment);
 }
 
-function isInstalledSkillRecord(value: unknown): value is InstalledSkill {
+function isInstalledSkillRecord(value: unknown): value is Record<string, unknown> & { id: string } {
 	if (typeof value !== "object" || value === null) {
 		return false;
 	}
 
 	const candidate = value as Record<string, unknown>;
-
-	return (
-		typeof candidate.id === "string" &&
-		typeof candidate.name === "string" &&
-		typeof candidate.url === "string" &&
-		typeof candidate.installedAt === "string"
-	);
+	return typeof candidate.id === "string";
 }
 
 function isMissingFileError(error: unknown): error is NodeJS.ErrnoException {

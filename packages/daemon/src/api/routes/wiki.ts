@@ -1,6 +1,7 @@
-import type { CreateWikiPageRequest, UpdateWikiPageRequest } from "@io/shared";
+import { type CreateWikiPageRequest, EVENT_NAMES, type UpdateWikiPageRequest } from "@io/shared";
 import { Router } from "express";
 
+import { eventBus } from "../../event-bus.js";
 import {
 	createPage,
 	deletePage,
@@ -70,6 +71,7 @@ router.post("/api/wiki/pages", async (req, res) => {
 			body.content,
 			body.tags ?? [],
 		);
+		eventBus.emit(EVENT_NAMES.WIKI_UPDATED, { path: page.path, action: "created" });
 		res.status(201).json(page);
 	} catch (error) {
 		const statusCode =
@@ -100,6 +102,7 @@ router.put("/api/wiki/pages/*pagePath", async (req, res) => {
 			return;
 		}
 
+		eventBus.emit(EVENT_NAMES.WIKI_UPDATED, { path: page.path, action: "updated" });
 		res.status(200).json(page);
 	} catch (error) {
 		res.status(500).json({
@@ -124,6 +127,7 @@ router.delete("/api/wiki/pages/*pagePath", async (req, res) => {
 		}
 
 		await deletePage(pagePath);
+		eventBus.emit(EVENT_NAMES.WIKI_UPDATED, { path: existingPage.path, action: "deleted" });
 		res.status(200).json({ deleted: true });
 	} catch (error) {
 		res.status(500).json({

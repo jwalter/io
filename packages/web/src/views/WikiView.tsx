@@ -1,6 +1,8 @@
 import { configuredMarked as marked } from "@/components/ui/markdown";
 import { DangerBtn, PrimaryBtn, SecondaryBtn } from "@/components/ui/shared";
+import { type WsMessage, useWebSocket } from "@/hooks/use-websocket";
 import { api } from "@/lib/api";
+import { EVENT_NAMES } from "@io/shared";
 import {
 	BookOpen,
 	ChevronRight,
@@ -14,7 +16,7 @@ import {
 	Search,
 	Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 interface WikiPage {
@@ -265,9 +267,25 @@ export function WikiView() {
 	const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 	const newPageInputRef = useRef<HTMLInputElement>(null);
 
-	useEffect(() => {
-		loadPages();
+	const loadPages = useCallback(async () => {
+		try {
+			const data = await api.get<{ path: string; title: string; isDir?: boolean }[]>("/wiki/pages");
+			setPages(
+				data.map((p) => ({
+					name: p.title || p.path.split("/").pop() || p.path,
+					path: p.path,
+					title: p.title,
+					isDir: p.isDir,
+				})),
+			);
+		} catch {
+			setPages([]);
+		}
 	}, []);
+
+	useEffect(() => {
+		void loadPages();
+	}, [loadPages]);
 
 	const tree = useMemo(() => buildTree(pages), [pages]);
 	const normalizedQuery = search.trim().toLowerCase();
@@ -303,33 +321,25 @@ export function WikiView() {
 		});
 	}, [tree]);
 
-	async function loadPages() {
-		try {
-			const data = await api.get<{ path: string; title: string; isDir?: boolean }[]>("/wiki/pages");
-			setPages(
-				data.map((p) => ({
-					name: p.title || p.path.split("/").pop() || p.path,
-					path: p.path,
-					title: p.title,
-					isDir: p.isDir,
-				})),
-			);
-		} catch {
-			setPages([]);
-		}
-	}
-
 	async function loadPage(path: string) {
 		try {
-			const data = await api.get<{ content: string }>(`/wiki/pages/${path}`);
+			const data = await api.get<{ path: string; content: string }>(`/wiki/pages/${path}`);
 			setContent(data.content);
 			setEditContent(data.content);
-			setSelectedPage(path);
+			setSelectedPage(data.path || path);
 			setEditing(false);
 		} catch {
 			toast.error("Failed to load page");
 		}
 	}
+
+	useWebSocket({
+		onEvent: (message: WsMessage) => {
+			if (message.type === "connected" || message.type === EVENT_NAMES.WIKI_UPDATED) {
+				void loadPages();
+			}
+		},
+	});
 
 	async function savePage() {
 		if (!selectedPage) return;
@@ -352,7 +362,7 @@ export function WikiView() {
 			setContent("");
 			setEditContent("");
 			setEditing(false);
-			loadPages();
+			await loadPages();
 		} catch {
 			toast.error("Failed to delete page");
 		}
@@ -378,17 +388,17 @@ export function WikiView() {
 		if (!confirmDelete) return;
 		try {
 			// Delete all pages under this folder path
-			const folderPages = pages.filter((p) => p.path.startsWith(`${confirmDelete}/`));
+			const folderPages = pages.filter((p) => !p.isDir && p.path.startsWith(`${confirmDelete}/`));
 			await Promise.all(folderPages.map((p) => api.delete(`/wiki/pages/${p.path}`)));
 			toast.success(`Deleted ${confirmDelete}`);
 			// If the selected page was inside the deleted folder, clear selection
-			if (selectedPage?.startsWith(confirmDelete)) {
+			if (selectedPage?.startsWith(`${confirmDelete}/`) || selectedPage === confirmDelete) {
 				setSelectedPage(null);
 				setContent("");
 				setEditContent("");
 				setEditing(false);
 			}
-			loadPages();
+			await loadPages();
 		} catch {
 			toast.error("Failed to delete directory");
 		} finally {
@@ -512,7 +522,7 @@ export function WikiView() {
 						<div className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.07] px-6">
 							<div className="min-w-0">
 								<h3 className="truncate font-mono text-sm text-zinc-100">{selectedPageName}</h3>
-								<p className="truncate font-mono text-[11px] text-zinc-500">{selectedPage}.md</p>
+								<p className="truncate font-mono text-[11px] text-zinc-500">{selectedPage}</p>
 							</div>
 							<div className="flex items-center gap-2">
 								{editing ? (

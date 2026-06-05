@@ -42,6 +42,7 @@ export interface EventPayloads {
 	[EVENT_NAMES.CHAT_MESSAGE]: { conversationId: string; content: string };
 	[EVENT_NAMES.CHAT_STREAM_CHUNK]: StreamChunk;
 	[EVENT_NAMES.CHAT_STREAM_END]: { conversationId: string; messageId: string };
+	[EVENT_NAMES.WIKI_UPDATED]: { path: string; action: "created" | "updated" | "deleted" };
 	[EVENT_NAMES.NOTIFICATION]: { title: string; body: string; channel: string };
 }
 

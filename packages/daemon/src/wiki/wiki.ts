@@ -133,7 +133,9 @@ export async function updatePage(
 }
 
 export async function deletePage(pagePath: string): Promise<void> {
-	await rm(resolvePagePath(pagePath), { force: true });
+	const filePath = resolvePagePath(pagePath);
+	await rm(filePath, { force: true });
+	await pruneEmptyDirectories(dirname(filePath), getWikiPagesDir());
 }
 
 async function collectMarkdownFiles(directory: string): Promise<string[]> {
@@ -253,6 +255,39 @@ function serializeWikiPage(metadata: WikiPageMetadata, content: string): string 
 		"",
 		pageContent,
 	].join("\n");
+}
+
+async function pruneEmptyDirectories(directory: string, rootDirectory: string): Promise<void> {
+	let currentDirectory = directory;
+	const resolvedRoot = resolve(rootDirectory);
+
+	while (currentDirectory.startsWith(resolvedRoot) && currentDirectory !== resolvedRoot) {
+		try {
+			const entries = await readdir(currentDirectory);
+			if (entries.length > 0) {
+				return;
+			}
+
+			await rm(currentDirectory);
+		} catch (error) {
+			if (isMissingFileError(error)) {
+				return;
+			}
+
+			if (
+				typeof error === "object" &&
+				error !== null &&
+				"code" in error &&
+				(error.code === "ENOTEMPTY" || error.code === "EEXIST")
+			) {
+				return;
+			}
+
+			throw error;
+		}
+
+		currentDirectory = dirname(currentDirectory);
+	}
 }
 
 function isMissingFileError(error: unknown): error is NodeJS.ErrnoException {
