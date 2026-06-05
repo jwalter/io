@@ -83,15 +83,94 @@ function getDefaultSquadConfig(_config: Config): SquadConfig {
 	};
 }
 
-function buildRepoAnalysis(repoUrl: string): string {
+async function buildRepoAnalysis(repoUrl: string): Promise<string> {
 	const normalized = repoUrl.trim();
-	const name =
-		normalized
-			.split("/")
-			.filter(Boolean)
-			.at(-1)
-			?.replace(/\.git$/iu, "") ?? normalized;
-	return `Repository URL: ${normalized}\nRepository name: ${name}\nUse the repository identity and any available conventions to propose a practical squad composition.`;
+	const segments = normalized
+		.replace(/\.git$/i, "")
+		.split("/")
+		.filter(Boolean);
+	const owner = segments.at(-2) ?? "";
+	const name = segments.at(-1) ?? normalized;
+
+	const lines = [`Repository URL: ${normalized}`, `Repository name: ${name}`];
+
+	if (!owner || !name) {
+		lines.push(
+			"Use the repository identity and any available conventions to propose a practical squad composition.",
+		);
+		return lines.join("\n");
+	}
+
+	const headers: Record<string, string> = { Accept: "application/vnd.github+json" };
+	if (process.env.GITHUB_TOKEN) {
+		headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+	}
+
+	try {
+		// Fetch repo metadata
+		const metaRes = await fetch(`https://api.github.com/repos/${owner}/${name}`, { headers });
+		if (metaRes.ok) {
+			const meta = (await metaRes.json()) as {
+				description?: string;
+				language?: string;
+				topics?: string[];
+			};
+			if (meta.description) lines.push(`Description: ${meta.description}`);
+			if (meta.language) lines.push(`Primary language: ${meta.language}`);
+			if (meta.topics?.length) lines.push(`Topics: ${meta.topics.join(", ")}`);
+		}
+
+		// Fetch repo tree (shallow)
+		const treeRes = await fetch(
+			`https://api.github.com/repos/${owner}/${name}/git/trees/HEAD?recursive=false`,
+			{ headers },
+		);
+		if (treeRes.ok) {
+			const tree = (await treeRes.json()) as { tree?: Array<{ path: string; type: string }> };
+			const rootFiles = (tree.tree ?? [])
+				.filter((entry) => entry.type === "blob")
+				.map((entry) => entry.path);
+			const rootDirs = (tree.tree ?? [])
+				.filter((entry) => entry.type === "tree")
+				.map((entry) => entry.path);
+			if (rootFiles.length) lines.push(`Root files: ${rootFiles.join(", ")}`);
+			if (rootDirs.length) lines.push(`Root directories: ${rootDirs.join(", ")}`);
+		}
+
+		// Fetch key manifest files for tech detection
+		const manifests = [
+			"package.json",
+			"Cargo.toml",
+			"go.mod",
+			"requirements.txt",
+			"pyproject.toml",
+		];
+		for (const manifest of manifests) {
+			try {
+				const fileRes = await fetch(
+					`https://api.github.com/repos/${owner}/${name}/contents/${manifest}`,
+					{ headers },
+				);
+				if (fileRes.ok) {
+					const file = (await fileRes.json()) as { content?: string; encoding?: string };
+					if (file.content && file.encoding === "base64") {
+						const decoded = Buffer.from(file.content, "base64").toString("utf8");
+						// Truncate to first 2000 chars to avoid huge payloads
+						lines.push(`\n--- ${manifest} ---\n${decoded.slice(0, 2000)}`);
+					}
+				}
+			} catch {
+				// Skip individual file fetch failures
+			}
+		}
+	} catch {
+		// If API calls fail, fall back to just the URL/name
+	}
+
+	lines.push(
+		"\nBased on the above repository structure, propose roles that match the project's actual technology stack.",
+	);
+	return lines.join("\n");
 }
 
 function formatSquadList(squads: Squad[]): string {
@@ -156,7 +235,10 @@ export function createSquadToolExecutor(config: Config): OrchestratorToolExecuto
 		switch (toolName) {
 			case "hire_squad": {
 				const { repoUrl } = hireSquadSchema.parse(rawArgs);
-				const composition = await proposeSquadComposition(repoUrl, buildRepoAnalysis(repoUrl));
+				const composition = await proposeSquadComposition(
+					repoUrl,
+					await buildRepoAnalysis(repoUrl),
+				);
 				const result = await hireSquad(repoUrl, composition, getDefaultSquadConfig(config));
 				return {
 					message: `Squad ready for ${repoUrl}.`,

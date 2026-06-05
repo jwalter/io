@@ -23,6 +23,8 @@ import {
 	deleteSquad,
 	getMembers,
 	getSquad,
+	getSquadActivity,
+	getSquadByName,
 	listSquads,
 	logActivity,
 	updateSquad,
@@ -34,6 +36,10 @@ const DEFAULT_CONFIG: SquadConfig = {
 	mcpServers: [],
 	maxRevisions: QA_MAX_REVISIONS,
 };
+
+async function resolveSquad(idOrName: string) {
+	return (await getSquad(idOrName)) ?? (await getSquadByName(idOrName));
+}
 
 router.get("/api/squads", async (_req, res) => {
 	try {
@@ -66,7 +72,7 @@ router.get("/api/squads", async (_req, res) => {
 
 router.get("/api/squads/:id", async (req, res) => {
 	try {
-		const squad = await getSquad(req.params.id);
+		const squad = await resolveSquad(req.params.id);
 		if (!squad) {
 			res.status(404).json({ error: "Squad not found" });
 			return;
@@ -141,7 +147,7 @@ router.post("/api/squads", async (req, res) => {
 
 router.put("/api/squads/:id", async (req, res) => {
 	try {
-		const existing = await getSquad(req.params.id);
+		const existing = await resolveSquad(req.params.id);
 		if (!existing) {
 			res.status(404).json({ error: "Squad not found" });
 			return;
@@ -189,7 +195,7 @@ router.put("/api/squads/:id", async (req, res) => {
 
 router.delete("/api/squads/:id", async (req, res) => {
 	try {
-		const existing = await getSquad(req.params.id);
+		const existing = await resolveSquad(req.params.id);
 		if (!existing) {
 			res.status(404).json({ error: "Squad not found" });
 			return;
@@ -219,13 +225,13 @@ router.delete("/api/squads/:id", async (req, res) => {
 
 router.get("/api/squads/:id/members", async (req, res) => {
 	try {
-		const squad = await getSquad(req.params.id);
+		const squad = await resolveSquad(req.params.id);
 		if (!squad) {
 			res.status(404).json({ error: "Squad not found" });
 			return;
 		}
 
-		res.status(200).json(await getMembers(req.params.id));
+		res.status(200).json(await getMembers(squad.id));
 	} catch (error) {
 		res.status(500).json({
 			error: "Failed to list squad members",
@@ -236,7 +242,7 @@ router.get("/api/squads/:id/members", async (req, res) => {
 
 router.post("/api/squads/:id/objectives", async (req, res) => {
 	try {
-		const squad = await getSquad(req.params.id);
+		const squad = await resolveSquad(req.params.id);
 		if (!squad) {
 			res.status(404).json({ error: "Squad not found" });
 			return;
@@ -267,13 +273,13 @@ router.post("/api/squads/:id/objectives", async (req, res) => {
 
 router.get("/api/squads/:id/objectives", async (req, res) => {
 	try {
-		const squad = await getSquad(req.params.id);
+		const squad = await resolveSquad(req.params.id);
 		if (!squad) {
 			res.status(404).json({ error: "Squad not found" });
 			return;
 		}
 
-		res.status(200).json(await listObjectivesForSquad(req.params.id));
+		res.status(200).json(await listObjectivesForSquad(squad.id));
 	} catch (error) {
 		res.status(500).json({
 			error: "Failed to list squad objectives",
@@ -366,6 +372,64 @@ function parseRepoInfo(
 function isValidationError(error: unknown): boolean {
 	return error instanceof Error && /repoUrl|config|Invalid URL/i.test(error.message);
 }
+
+// ─── History Routes ───────────────────────────────────────────────────────────
+
+router.get("/api/squads/:id/history", async (req, res) => {
+	try {
+		const squad = await resolveSquad(req.params.id);
+		if (!squad) {
+			res.status(404).json({ error: "Squad not found" });
+			return;
+		}
+
+		const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+		const offset = Math.max(Number(req.query.offset) || 0, 0);
+		const items = await getSquadActivity(squad.id, limit, offset);
+		res.status(200).json({ items, total: items.length < limit ? offset + items.length : -1 });
+	} catch (error) {
+		res.status(500).json({
+			error: "Failed to fetch squad history",
+			details: error instanceof Error ? error.message : "Unknown error",
+		});
+	}
+});
+
+router.get("/api/squads/:id/history/:activityId", async (req, res) => {
+	try {
+		const squad = await resolveSquad(req.params.id);
+		if (!squad) {
+			res.status(404).json({ error: "Squad not found" });
+			return;
+		}
+
+		const database = await getDatabase();
+		const result = await database.execute({
+			sql: "SELECT * FROM activity WHERE id = ? AND squad_id = ? LIMIT 1",
+			args: [req.params.activityId, squad.id],
+		});
+		const row = result.rows[0];
+		if (!row) {
+			res.status(404).json({ error: "Activity not found" });
+			return;
+		}
+
+		res.status(200).json({
+			id: asString(row.id),
+			squadId: asString(row.squad_id),
+			objectiveId: asNullableString(row.objective_id),
+			event: asString(row.event),
+			description: asNullableString(row.description),
+			metadata: row.metadata ? JSON.parse(asString(row.metadata)) : null,
+			createdAt: asString(row.created_at),
+		});
+	} catch (error) {
+		res.status(500).json({
+			error: "Failed to fetch activity detail",
+			details: error instanceof Error ? error.message : "Unknown error",
+		});
+	}
+});
 
 // ─── Instance Routes ──────────────────────────────────────────────────────────
 

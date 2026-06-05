@@ -93,6 +93,26 @@ export async function getSquad(id: string, db?: DatabaseClient): Promise<SquadRe
 	return { ...squad, members };
 }
 
+export async function getSquadByName(
+	name: string,
+	db?: DatabaseClient,
+): Promise<SquadRecord | null> {
+	const database = db ?? (await getDatabase());
+	const result = await database.execute({
+		sql: "SELECT * FROM squads WHERE name = ? LIMIT 1",
+		args: [name],
+	});
+	const row = result.rows[0];
+
+	if (!row) {
+		return null;
+	}
+
+	const squad = mapSquad(row);
+	const members = await getMembers(squad.id, database);
+	return { ...squad, members };
+}
+
 export async function listSquads(db?: DatabaseClient): Promise<Squad[]> {
 	const database = db ?? (await getDatabase());
 	const result = await database.execute("SELECT * FROM squads ORDER BY created_at DESC, id DESC");
