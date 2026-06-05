@@ -6,15 +6,37 @@ IO uses WebSocket for real-time communication with the web dashboard. Connect to
 ws://localhost:7777
 ```
 
+## Connection
+
+On connect, the server sends:
+
+```json
+{ "type": "connected", "payload": { "channels": [] } }
+```
+
+## Subscribing to Channels
+
+Clients subscribe to channels to receive filtered events:
+
+```json
+{ "type": "subscribe", "channels": ["chat", "activity", "inbox"] }
+```
+
+Available channels:
+- `chat` — Chat stream events
+- `activity` — Squad, objective, task, agent, review, QA, and PR events
+- `inbox` — Inbox and notification events
+- `<squadId>` — Events for a specific squad
+
 ## Event Format
 
-All events are JSON messages with a `type` field:
+All events are JSON messages with a `type` and `payload` field:
 
 ```json
 {
-  "type": "event.name",
-  "payload": { ... },
-  "timestamp": "2024-12-01T10:00:00.000Z"
+  "type": "chat.stream_chunk",
+  "channel": "chat",
+  "payload": { ... }
 }
 ```
 
@@ -24,59 +46,83 @@ All events are JSON messages with a `type` field:
 
 | Event | Payload | Description |
 |-------|---------|-------------|
-| `chat.chunk` | `{ text, conversationId }` | Streaming token from Io |
-| `chat.complete` | `{ conversationId, messageId }` | Response complete |
-| `chat.error` | `{ error, conversationId }` | Error during generation |
+| `chat.message` | `{ conversationId, content }` | New chat message |
+| `chat.stream_chunk` | `StreamChunk` | Streaming token from Io |
+| `chat.stream_end` | `{ conversationId, messageId }` | Response complete |
 
 ### Squad Events
 
 | Event | Payload | Description |
 |-------|---------|-------------|
-| `squad.objective.created` | `{ squadId, objectiveId, description }` | New objective assigned |
-| `squad.task.started` | `{ squadId, taskId, agentRole }` | Agent started a task |
-| `squad.task.completed` | `{ squadId, taskId, agentRole }` | Agent finished a task |
-| `squad.review.started` | `{ squadId, objectiveId }` | Review meeting began |
-| `squad.qa.approved` | `{ squadId, objectiveId }` | QA approved the work |
-| `squad.qa.rejected` | `{ squadId, objectiveId, reason, cycle }` | QA rejected (includes cycle count) |
-| `squad.pr.created` | `{ squadId, prUrl, prMode }` | PR created |
-| `squad.escalated` | `{ squadId, objectiveId, reason }` | Escalated to inbox after 3 rejections |
+| `squad.created` | `{ squad }` | New squad created |
+| `squad.updated` | `{ squad }` | Squad updated |
+| `squad.deleted` | `{ squadId }` | Squad removed |
+
+### Objective Events
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `objective.started` | `{ objective }` | Objective execution began |
+| `objective.completed` | `{ objective }` | Objective finished |
+| `objective.failed` | `{ objective, reason }` | Objective failed |
+
+### Task Events
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `task.started` | `{ task, agentName }` | Agent started a task |
+| `task.completed` | `{ task, agentName }` | Agent finished a task |
+| `task.failed` | `{ task, agentName, reason }` | Task failed |
 
 ### Agent Events
 
 | Event | Payload | Description |
 |-------|---------|-------------|
-| `agent.executing` | `{ squadId, agentRole, taskId }` | Agent is actively working |
-| `agent.tool_call` | `{ squadId, agentRole, tool }` | Agent called a tool |
-| `agent.completed` | `{ squadId, agentRole, taskId }` | Agent finished |
-| `agent.error` | `{ squadId, agentRole, error }` | Agent encountered an error |
+| `agent.executing` | `{ squadId, agentId, taskId }` | Agent is actively working |
+| `agent.completed` | `{ squadId, agentId, taskId }` | Agent finished |
+
+### Review & QA Events
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `review.started` | `{ objectiveId }` | Review meeting began |
+| `review.completed` | `{ objectiveId, summary }` | Review finished |
+| `qa.approved` | `{ objectiveId }` | QA approved the work |
+| `qa.rejected` | `{ objectiveId, reason, revisionCount }` | QA rejected |
+| `qa.escalated` | `{ objectiveId, reason }` | Escalated after max rejections |
+
+### PR Events
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `pr.created` | `{ objectiveId, prUrl }` | PR created |
+| `pr.merged` | `{ objectiveId, prUrl }` | PR merged |
 
 ### Inbox Events
 
 | Event | Payload | Description |
 |-------|---------|-------------|
-| `inbox.new_item` | `{ id, type, title, squadId }` | New inbox item |
-| `inbox.reply` | `{ id, message }` | Reply sent to inbox item |
-
-### System Events
-
-| Event | Payload | Description |
-|-------|---------|-------------|
-| `system.connected` | `{ version }` | WebSocket connected |
-| `system.session_reset` | `{ conversationId }` | Rolling window reset occurred |
+| `inbox.new_item` | `{ item }` | New inbox item |
+| `inbox.replied` | `{ itemId, reply }` | Reply sent to inbox item |
+| `notification` | `{ title, body, channel }` | General notification |
 
 ## Client Example
 
 ```javascript
 const ws = new WebSocket('ws://localhost:7777');
 
+ws.onopen = () => {
+  ws.send(JSON.stringify({ type: 'subscribe', channels: ['chat', 'activity'] }));
+};
+
 ws.onmessage = (event) => {
   const { type, payload } = JSON.parse(event.data);
 
   switch (type) {
-    case 'chat.chunk':
-      appendToChat(payload.text);
+    case 'chat.stream_chunk':
+      appendToChat(payload.content);
       break;
-    case 'squad.pr.created':
+    case 'pr.created':
       showNotification(`PR created: ${payload.prUrl}`);
       break;
     case 'inbox.new_item':

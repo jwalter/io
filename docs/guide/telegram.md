@@ -11,10 +11,8 @@ IO integrates with Telegram via the [grammY](https://grammy.dev/) bot framework,
 
 ```json
 {
-  "telegram": {
-    "token": "123456:ABC-DEF...",
-    "allowedUsers": [your_user_id]
-  }
+  "telegramToken": "123456:ABC-DEF...",
+  "telegramUserId": "your_user_id"
 }
 ```
 
@@ -24,7 +22,7 @@ IO integrates with Telegram via the [grammY](https://grammy.dev/) bot framework,
 
 | Command | Description |
 |---------|-------------|
-| `/start` | Welcome message and status |
+| `/start` | Welcome message |
 | `/status` | Daemon and squad status |
 | `/squads` | List active squads |
 
@@ -39,7 +37,7 @@ Io:  "The my-app squad is idle. Last activity: PR #42 merged 2 hours ago."
 
 ## Notifications
 
-IO sends proactive notifications to Telegram for:
+IO sends proactive notifications to Telegram when `telegramUserId` is configured:
 
 - **Inbox items** — Squad deliverables and blocking questions
 - **Squad completions** — When a squad finishes an objective
@@ -49,6 +47,6 @@ Notifications are rate-limited to avoid spam.
 
 ## Security
 
-- Only user IDs in `allowedUsers` can interact with the bot
-- Messages from unknown users are silently ignored
-- The bot token should be kept secret (never commit it)
+- The `telegramUserId` config tells IO where to send notifications
+- The bot itself responds to any user who messages it — keep your bot token secret
+- The bot token should never be committed to source control

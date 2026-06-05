@@ -14,10 +14,10 @@ For every incoming message, a lightweight classifier determines the complexity t
 
 ### Classification Method
 
-1. Keyword overrides checked first (e.g., "hello" → fast)
-2. If no override, a fast LLM call classifies the message
+1. Keyword matching checked first (e.g., "hello" → fast, "architecture" → premium)
+2. Word count and message structure heuristics (short simple questions → fast)
 3. Cooldown prevents rapid tier switching (avoids oscillation)
-4. Falls back to "standard" if classification is uncertain
+4. Falls back to "standard" if no rules match
 
 ## Team Lead Model Selection
 
@@ -39,16 +39,14 @@ The routing system aims to minimize cost while maintaining quality:
 
 All token usage is tracked per-agent and viewable in the Usage dashboard.
 
-## Overriding
+## Default Model Override
 
-You can configure model assignments in `~/.io/config.json`:
+You can set the fallback model (used when no tier matches) in `~/.io/config.json`:
 
 ```json
 {
-  "models": {
-    "fast": "gpt-4.1-mini",
-    "standard": "claude-sonnet-4.6",
-    "premium": "claude-sonnet-4.6"
-  }
+  "defaultModel": "gpt-4.1"
 }
 ```
+
+The tier-specific models (`gpt-4.1-mini`, `claude-sonnet-4.6`) are currently hardcoded constants. Only the default fallback model is configurable.

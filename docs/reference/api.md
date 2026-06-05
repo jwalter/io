@@ -30,16 +30,29 @@ Content-Type: application/json
 
 {
   "message": "What's the status of my squads?",
-  "conversationId": "optional-existing-id"
+  "conversationId": "optional-existing-id",
+  "source": "web"
 }
 ```
 
-**Response:** Server-Sent Events (streaming)
+**Response:** JSON with conversation and message data. Streaming happens via WebSocket (`chat.stream_chunk` events).
 
 ### List Conversations
 
 ```http
-GET /api/conversations
+GET /api/conversations?limit=50&offset=0
+```
+
+### Get Conversation
+
+```http
+GET /api/conversations/:id
+```
+
+### Delete Conversation
+
+```http
+DELETE /api/conversations/:id
 ```
 
 ---
@@ -89,10 +102,10 @@ Content-Type: application/json
 DELETE /api/squads/:id
 ```
 
-### Get Squad Status
+### Get Squad Members
 
 ```http
-GET /api/squads/:id/status
+GET /api/squads/:id/members
 ```
 
 ### Create Objective
@@ -104,6 +117,12 @@ Content-Type: application/json
 {
   "description": "Add dark mode support"
 }
+```
+
+### List Objectives
+
+```http
+GET /api/squads/:id/objectives
 ```
 
 ---
@@ -190,7 +209,7 @@ GET /api/wiki/pages
 GET /api/wiki/pages/:path
 ```
 
-### Create/Update Page
+### Create Page
 
 ```http
 POST /api/wiki/pages
@@ -199,6 +218,18 @@ Content-Type: application/json
 {
   "path": "projects/my-app",
   "content": "# My App\n\nA React dashboard...",
+  "tags": ["project", "react"]
+}
+```
+
+### Update Page
+
+```http
+PUT /api/wiki/pages/:path
+Content-Type: application/json
+
+{
+  "content": "# My App\n\nUpdated content...",
   "tags": ["project", "react"]
 }
 ```
@@ -245,8 +276,10 @@ DELETE /api/skills/:id
 ### Discover Skills
 
 ```http
-GET /api/skills/discover?source=skillssh&q=frontend
+GET /api/skills/discover
 ```
+
+> Note: This endpoint is a placeholder and currently returns an empty array.
 
 ---
 

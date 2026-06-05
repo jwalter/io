@@ -21,14 +21,7 @@ A skill is a markdown file (`SKILL.md`) with YAML frontmatter that describes:
 # Via API
 curl -X POST http://localhost:7777/api/skills/install \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://github.com/user/repo/tree/main/skills/my-skill"}'
-```
-
-### From skills.sh
-
-```bash
-"Search for a frontend design skill"
-"Install the frontend-design skill from skills.sh"
+  -d '{"url": "https://raw.githubusercontent.com/user/repo/main/skills/my-skill/SKILL.md"}'
 ```
 
 ### Manual
@@ -59,8 +52,8 @@ Instructions for the AI when this skill is active...
 
 | Action | Method |
 |--------|--------|
-| List installed | `io skill list` or GET `/api/skills` |
-| Search marketplace | GET `/api/skills/discover?source=skillssh&q=query` |
+| List installed | GET `/api/skills` |
+| Search marketplace | GET `/api/skills/discover` |
 | Install | POST `/api/skills/install` |
 | Remove | DELETE `/api/skills/:id` |
 
