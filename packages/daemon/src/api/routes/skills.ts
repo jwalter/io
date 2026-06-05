@@ -65,8 +65,26 @@ router.delete("/api/skills/:id", async (req, res) => {
 	}
 });
 
-router.get("/api/skills/discover", async (_req, res) => {
-	res.status(200).json([]);
+router.get("/api/skills/discover", async (req, res) => {
+	try {
+		const source = typeof req.query.source === "string" ? req.query.source : "";
+		const query = typeof req.query.q === "string" ? req.query.q.trim() : "";
+
+		if (source === "skillssh") {
+			const skills = await discoverSkillsSh(query);
+			res.status(200).json(skills);
+		} else if (source === "awesome-copilot") {
+			const skills = await discoverAwesomeCopilot(query);
+			res.status(200).json(skills);
+		} else {
+			res.status(400).json({ error: `Unknown source: ${source}` });
+		}
+	} catch (error) {
+		res.status(500).json({
+			error: "Failed to discover skills",
+			details: error instanceof Error ? error.message : "Unknown error",
+		});
+	}
 });
 
 async function installSkill(
@@ -196,6 +214,134 @@ function chooseEntryFileName(url: string, contentType: string | null): string {
 
 function isMissingFileError(error: unknown): boolean {
 	return !!error && typeof error === "object" && "code" in error && error.code === "ENOENT";
+}
+
+// --- Discovery sources ---
+
+interface DiscoveredSkill {
+	name: string;
+	title: string;
+	description: string;
+	url: string;
+	source: string;
+	installed: boolean;
+	registrySource?: string;
+	skillId?: string;
+	installs?: number;
+}
+
+interface SkillsShSearchResponse {
+	skills: Array<{
+		id: string;
+		skillId: string;
+		name: string;
+		installs: number;
+		source: string;
+	}>;
+	count: number;
+}
+
+async function discoverSkillsSh(query: string): Promise<DiscoveredSkill[]> {
+	if (!query) return [];
+
+	const endpoint = `https://skills.sh/api/search?q=${encodeURIComponent(query)}&limit=50`;
+	const response = await fetch(endpoint, { signal: AbortSignal.timeout(10_000) });
+	if (!response.ok) {
+		throw new Error(`skills.sh returned ${response.status}`);
+	}
+
+	const data = (await response.json()) as SkillsShSearchResponse;
+	const installedSkills = await readInstalledSkills();
+	const installedIds = new Set(installedSkills.map((s) => s.id));
+
+	return (data.skills ?? []).map((entry) => {
+		const skillUrl = entry.source
+			? `https://raw.githubusercontent.com/${entry.source}/main/skills/${entry.skillId}/SKILL.md`
+			: "";
+		return {
+			name: entry.name || entry.skillId,
+			title: entry.name || entry.skillId,
+			description: `${entry.source ?? ""}`,
+			url: skillUrl,
+			source: "skillssh",
+			installed: installedIds.has(`skillssh:${normalizeSlug(entry.skillId || entry.name)}`),
+			registrySource: entry.source ?? undefined,
+			skillId: entry.skillId ?? undefined,
+			installs: entry.installs ?? 0,
+		};
+	});
+}
+
+let awesomeCopilotCache: { skills: DiscoveredSkill[]; fetchedAt: number } | null = null;
+const AWESOME_COPILOT_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+async function discoverAwesomeCopilot(query: string): Promise<DiscoveredSkill[]> {
+	const now = Date.now();
+	if (!awesomeCopilotCache || now - awesomeCopilotCache.fetchedAt > AWESOME_COPILOT_CACHE_TTL) {
+		awesomeCopilotCache = { skills: await fetchAwesomeCopilotList(), fetchedAt: now };
+	}
+
+	const skills = awesomeCopilotCache.skills;
+	if (!query) return skills;
+
+	const needle = query.toLowerCase();
+	return skills.filter(
+		(s) =>
+			s.name.toLowerCase().includes(needle) ||
+			s.title.toLowerCase().includes(needle) ||
+			s.description.toLowerCase().includes(needle),
+	);
+}
+
+interface GitHubTreeEntry {
+	path: string;
+	type: string;
+}
+
+async function fetchAwesomeCopilotList(): Promise<DiscoveredSkill[]> {
+	const treeUrl =
+		"https://api.github.com/repos/github/awesome-copilot/git/trees/main?recursive=1";
+	const headers: Record<string, string> = {
+		Accept: "application/vnd.github.v3+json",
+		"User-Agent": "io-daemon",
+	};
+	if (process.env.GITHUB_TOKEN) {
+		headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+	}
+
+	const response = await fetch(treeUrl, { headers, signal: AbortSignal.timeout(15_000) });
+	if (!response.ok) {
+		throw new Error(`GitHub API returned ${response.status}`);
+	}
+
+	const data = (await response.json()) as { tree: GitHubTreeEntry[] };
+	const installedSkills = await readInstalledSkills();
+	const installedIds = new Set(installedSkills.map((s) => s.id));
+
+	// Find all skills/{name}/SKILL.md entries
+	const skillEntries = (data.tree ?? []).filter(
+		(entry) =>
+			entry.type === "blob" &&
+			entry.path.startsWith("skills/") &&
+			entry.path.endsWith("/SKILL.md"),
+	);
+
+	return skillEntries.map((entry) => {
+		// path is "skills/{name}/SKILL.md"
+		const parts = entry.path.split("/");
+		const skillName = parts[1] ?? "unknown";
+		const slug = normalizeSlug(skillName);
+		const rawUrl = `https://raw.githubusercontent.com/github/awesome-copilot/main/${entry.path}`;
+
+		return {
+			name: skillName,
+			title: skillName.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+			description: "From github/awesome-copilot",
+			url: rawUrl,
+			source: "awesome-copilot",
+			installed: installedIds.has(`awesome-copilot:${slug}`),
+		};
+	});
 }
 
 export { router as skillsRouter };
