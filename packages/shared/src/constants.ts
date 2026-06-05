@@ -1,5 +1,5 @@
 export const APP_NAME = "io";
-export const APP_VERSION = "4.0.0";
+export const APP_VERSION = "4.0.3";
 
 export const API_PORT = 7777;
 export const API_HOST = "0.0.0.0";
