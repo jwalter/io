@@ -52,6 +52,15 @@ export function createApiServer(config: ApiServerConfig): ApiServer {
 		next();
 	});
 	app.use(express.json({ limit: "1mb" }));
+
+	// Public endpoint — must be registered before auth middleware
+	app.get("/api/auth/config", (_req, res) => {
+		res.json({
+			supabaseUrl: config.supabaseUrl ?? null,
+			supabaseAnonKey: config.supabaseAnonKey ?? null,
+		});
+	});
+
 	app.use("/api", createAuthMiddleware(config));
 	app.use(chatRouter);
 	app.use(squadsRouter);
