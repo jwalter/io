@@ -59,7 +59,7 @@ async function runGit(command: string, cwd: string): Promise<string> {
 	return stdout.trim();
 }
 
-async function resolveRepoPath(repoUrl: string, repoName: string): Promise<string> {
+export async function resolveRepoPath(repoUrl: string, repoName: string): Promise<string> {
 	const candidates = [
 		process.cwd(),
 		join(process.cwd(), repoName),
@@ -196,6 +196,7 @@ async function createFeedbackTask(
 export async function executeObjective(
 	squadId: string,
 	objectiveId: string,
+	instanceContext?: { instanceId: string; worktreePath: string; branch: string },
 ): Promise<ExecuteObjectiveResult> {
 	const squadRecord = await getSquad(squadId);
 	if (!squadRecord) {
@@ -217,10 +218,13 @@ export async function executeObjective(
 	const teamLead = requireMemberByRole(squadRecord.members, "team-lead");
 	const qaMember = requireMemberByRole(squadRecord.members, "qa");
 	const repoPath = await resolveRepoPath(squadRecord.repoUrl, squadRecord.repoName);
-	const baseBranch = (await runGit("git branch --show-current", repoPath)) || "main";
-	const branchName = buildBranchName(objectiveId);
-	let worktreePath: string | null = null;
+	const baseBranch = instanceContext
+		? instanceContext.branch.replace(/^squad\//, "")
+		: (await runGit("git branch --show-current", repoPath)) || "main";
+	const branchName = instanceContext?.branch ?? buildBranchName(objectiveId);
+	let worktreePath: string | null = instanceContext?.worktreePath ?? null;
 	let currentObjective: Objective = objectiveRecord;
+	const ownsWorktree = !instanceContext;
 
 	try {
 		await updateSquad(squadId, { status: "executing" });
@@ -230,7 +234,9 @@ export async function executeObjective(
 		}
 		eventBus.emit(EVENT_NAMES.OBJECTIVE_STARTED, { objective: currentObjective });
 
-		worktreePath = await createWorktree(repoPath, branchName, baseBranch);
+		if (!worktreePath) {
+			worktreePath = await createWorktree(repoPath, branchName, baseBranch);
+		}
 		const objectiveWithBranch = await updateObjectiveBranch(objectiveId, branchName);
 		if (objectiveWithBranch) {
 			currentObjective = objectiveWithBranch;
@@ -353,7 +359,7 @@ export async function executeObjective(
 		});
 		return { success: false, error: message };
 	} finally {
-		if (worktreePath) {
+		if (ownsWorktree && worktreePath) {
 			await cleanupWorktree(worktreePath).catch(() => undefined);
 		}
 		await updateSquad(squadId, { status: "active" }).catch(() => null);

@@ -3,7 +3,15 @@ import { z } from "zod";
 
 import type { Config } from "../../config.js";
 import type { ToolDefinition } from "../../copilot/session.js";
-import { executeObjective } from "../../execution/runner.js";
+import {
+	completeInstance,
+	countRunningInstances,
+	failInstance,
+	getNextQueued,
+	spawnInstance,
+	startInstance,
+} from "../../execution/instances.js";
+import { executeObjective, resolveRepoPath } from "../../execution/runner.js";
 import { hireSquad, proposeSquadComposition } from "../../squad/hiring.js";
 import { getSquadStatus } from "../../squad/manager.js";
 import {
@@ -99,6 +107,50 @@ function formatSquadList(squads: Squad[]): string {
 		.join("\n");
 }
 
+async function startAndExecuteInstance(
+	instanceId: string,
+	squad: Squad,
+	objectiveId: string,
+): Promise<void> {
+	try {
+		const repoPath = await resolveRepoPath(squad.repoUrl, squad.repoName);
+		const baseBranch = "main";
+		const started = await startInstance(instanceId, repoPath, baseBranch);
+
+		const result = await executeObjective(squad.id, objectiveId, {
+			instanceId: started.id,
+			worktreePath: started.worktreePath ?? "",
+			branch: started.branch ?? "",
+		});
+
+		if (result.success) {
+			await completeInstance(instanceId);
+		} else {
+			await failInstance(instanceId, result.error ?? "Unknown execution failure");
+		}
+	} catch (error: unknown) {
+		const message = error instanceof Error ? error.message : String(error);
+		await failInstance(instanceId, message).catch(() => {});
+	} finally {
+		// Process queue: start next instance if capacity allows
+		try {
+			const running = await countRunningInstances(squad.id);
+			const config = (await import("../../config.js")).loadConfig();
+			if (running < config.maxInstancesPerSquad) {
+				const next = await getNextQueued(squad.id);
+				if (next) {
+					const freshSquad = await getSquad(squad.id);
+					if (freshSquad) {
+						void startAndExecuteInstance(next.id, freshSquad, next.objectiveId);
+					}
+				}
+			}
+		} catch {
+			// Non-fatal — queue will be processed on next trigger
+		}
+	}
+}
+
 export function createSquadToolExecutor(config: Config): OrchestratorToolExecutor {
 	return async (toolName, rawArgs) => {
 		switch (toolName) {
@@ -155,14 +207,23 @@ export function createSquadToolExecutor(config: Config): OrchestratorToolExecuto
 				}
 
 				const createdObjective = await createObjective(squadId, objective);
-				void executeObjective(squadId, createdObjective.id).catch(async (error: unknown) => {
-					const message = error instanceof Error ? error.message : String(error);
-					await updateSquad(squadId, { status: "active" }).catch(() => undefined);
-					console.error(`Failed to execute objective ${createdObjective.id}: ${message}`);
+				const { instance, queued } = await spawnInstance({
+					squadId,
+					objectiveId: createdObjective.id,
 				});
+
+				if (!queued) {
+					// Start the instance in the background
+					void startAndExecuteInstance(instance.id, squad, createdObjective.id);
+				}
+
 				return {
-					message: `Delegated objective to squad ${squad.name}. Execution started in the background.`,
+					message: queued
+						? `Objective queued for squad ${squad.name} (at capacity). Instance ${instance.id} will start when a slot opens.`
+						: `Delegated objective to squad ${squad.name}. Instance ${instance.id} started.`,
 					objective: createdObjective,
+					instanceId: instance.id,
+					queued,
 				};
 			}
 			default:

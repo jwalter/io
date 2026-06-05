@@ -19,7 +19,13 @@ import {
 } from "../store/index.js";
 import { cleanupWorktree, createWorktree } from "./worktree.js";
 
-export { listInstancesBySquad, listActiveInstances, getInstance };
+export {
+	listInstancesBySquad,
+	listActiveInstances,
+	getInstance,
+	getNextQueued,
+	countRunningInstances,
+};
 
 export interface SpawnInstanceResult {
 	instance: SquadInstance;
