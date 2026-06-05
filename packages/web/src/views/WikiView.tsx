@@ -387,9 +387,7 @@ export function WikiView() {
 	async function confirmDeleteFolder() {
 		if (!confirmDelete) return;
 		try {
-			// Delete all pages under this folder path
-			const folderPages = pages.filter((p) => !p.isDir && p.path.startsWith(`${confirmDelete}/`));
-			await Promise.all(folderPages.map((p) => api.delete(`/wiki/pages/${p.path}`)));
+			await api.delete(`/wiki/directories/${confirmDelete}`);
 			toast.success(`Deleted ${confirmDelete}`);
 			// If the selected page was inside the deleted folder, clear selection
 			if (selectedPage?.startsWith(`${confirmDelete}/`) || selectedPage === confirmDelete) {

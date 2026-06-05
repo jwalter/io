@@ -138,6 +138,24 @@ export async function deletePage(pagePath: string): Promise<void> {
 	await pruneEmptyDirectories(dirname(filePath), getWikiPagesDir());
 }
 
+export async function deleteDirectory(dirPath: string): Promise<void> {
+	const normalizedDir = dirPath.replace(/[\\/]+/g, "/").replace(/^\/+|\/+$/g, "");
+	if (!normalizedDir) {
+		throw new Error("Directory path is required");
+	}
+
+	const wikiPagesDir = getWikiPagesDir();
+	const resolvedDir = resolve(wikiPagesDir, ...normalizedDir.split("/"));
+	const relativePath = relative(wikiPagesDir, resolvedDir);
+
+	if (relativePath.startsWith("..") || relativePath === "") {
+		throw new Error(`Invalid wiki directory path: ${dirPath}`);
+	}
+
+	await rm(resolvedDir, { recursive: true });
+	await pruneEmptyDirectories(dirname(resolvedDir), wikiPagesDir);
+}
+
 async function collectMarkdownFiles(directory: string): Promise<string[]> {
 	try {
 		const entries = await readdir(directory, { withFileTypes: true });

@@ -5,6 +5,7 @@ import { eventBus } from "../../event-bus.js";
 import { createLogger } from "../../logging/logger.js";
 import {
 	createPage,
+	deleteDirectory,
 	deletePage,
 	getPage,
 	listDirectories,
@@ -149,6 +150,25 @@ router.delete("/api/wiki/pages/*pagePath", async (req, res) => {
 			error: "Failed to delete wiki page",
 			details: error instanceof Error ? error.message : "Unknown error",
 		});
+	}
+});
+
+router.delete("/api/wiki/directories/*dirPath", async (req, res) => {
+	try {
+		const dirPath = extractPagePath(req.params.dirPath);
+		if (!dirPath) {
+			res.status(400).json({ error: "Directory path is required" });
+			return;
+		}
+
+		logger.debug({ dirPath }, "Wiki directory delete requested");
+		await deleteDirectory(dirPath);
+		eventBus.emit(EVENT_NAMES.WIKI_UPDATED, { path: dirPath, action: "deleted" });
+		res.status(200).json({ deleted: true });
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "Unknown error";
+		const status = message.includes("no such file or directory") ? 404 : 500;
+		res.status(status).json({ error: "Failed to delete directory", details: message });
 	}
 });
 
