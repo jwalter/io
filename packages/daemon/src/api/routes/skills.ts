@@ -299,8 +299,7 @@ interface GitHubTreeEntry {
 }
 
 async function fetchAwesomeCopilotList(): Promise<DiscoveredSkill[]> {
-	const treeUrl =
-		"https://api.github.com/repos/github/awesome-copilot/git/trees/main?recursive=1";
+	const treeUrl = "https://api.github.com/repos/github/awesome-copilot/git/trees/main?recursive=1";
 	const headers: Record<string, string> = {
 		Accept: "application/vnd.github.v3+json",
 		"User-Agent": "io-daemon",
@@ -321,9 +320,7 @@ async function fetchAwesomeCopilotList(): Promise<DiscoveredSkill[]> {
 	// Find all skills/{name}/SKILL.md entries
 	const skillEntries = (data.tree ?? []).filter(
 		(entry) =>
-			entry.type === "blob" &&
-			entry.path.startsWith("skills/") &&
-			entry.path.endsWith("/SKILL.md"),
+			entry.type === "blob" && entry.path.startsWith("skills/") && entry.path.endsWith("/SKILL.md"),
 	);
 
 	return skillEntries.map((entry) => {
