@@ -206,12 +206,12 @@ export function SkillsView() {
 	const loadInstalledSkills = useCallback(async () => {
 		try {
 			const data = await api.get<{ skills: InstalledSkillSummary[] }>("/skills");
-			const installedNames = new Set(data.skills.map((skill) => skill.name.toLowerCase()));
+			const installedNames = new Set(data.skills.map((skill) => (skill.name || "").toLowerCase()));
 			setInstalledSkills(data.skills);
 			setRemoteSkills((previous) =>
 				previous.map((skill) => ({
 					...skill,
-					installed: installedNames.has(skill.name.toLowerCase()),
+					installed: installedNames.has((skill.name || "").toLowerCase()),
 				})),
 			);
 		} catch (error) {
@@ -280,8 +280,8 @@ export function SkillsView() {
 		const needle = search.trim().toLowerCase();
 		if (!needle) return installedSkills;
 		return installedSkills.filter((skill) =>
-			[skill.name, skill.description, skill.preview].some((value) =>
-				value.toLowerCase().includes(needle),
+			[skill.name, skill.description, skill.preview].some(
+				(value) => value && value.toLowerCase().includes(needle),
 			),
 		);
 	}, [installedSkills, search]);
