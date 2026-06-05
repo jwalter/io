@@ -17,12 +17,7 @@ await build({
 	outdir: resolve(root, "dist/daemon"),
 	sourcemap: true,
 	minify: false,
-	external: [
-		"@github/copilot-sdk",
-		"@libsql/client",
-		"better-sqlite3",
-		"fsevents",
-	],
+	external: ["@github/copilot-sdk", "@libsql/client", "better-sqlite3", "fsevents"],
 	banner: {
 		js: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);",
 	},
