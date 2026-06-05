@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { type Server as HttpServer, createServer } from "node:http";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { API_HOST } from "@io/shared";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
@@ -31,10 +32,13 @@ export interface ApiServer {
 	start(): Promise<HttpServer>;
 }
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 export function createApiServer(config: ApiServerConfig): ApiServer {
 	const app = express();
 	const server = createServer(app);
-	const webDirectory = resolve(config.webDir ?? resolve(process.cwd(), "dist", "web"));
+	const webDirectory = resolve(config.webDir ?? resolve(__dirname, "..", "web"));
 
 	app.use((req, res, next) => {
 		res.header("Access-Control-Allow-Origin", "*");
