@@ -19,7 +19,8 @@ interface InstalledSkill {
 
 router.get("/api/skills", async (_req, res) => {
 	try {
-		res.status(200).json(await readInstalledSkills());
+		const skills = await readInstalledSkills();
+		res.status(200).json({ skills });
 	} catch (error) {
 		res.status(500).json({
 			error: "Failed to list skills",
@@ -81,10 +82,10 @@ router.get("/api/skills/discover", async (req, res) => {
 
 		if (source === "skillssh") {
 			const skills = await discoverSkillsSh(query);
-			res.status(200).json(skills);
+			res.status(200).json({ skills });
 		} else if (source === "awesome-copilot") {
 			const skills = await discoverAwesomeCopilot(query);
-			res.status(200).json(skills);
+			res.status(200).json({ skills });
 		} else {
 			res.status(400).json({ error: `Unknown source: ${source}` });
 		}
