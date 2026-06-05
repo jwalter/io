@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { type Server as HttpServer, createServer } from "node:http";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { API_HOST } from "@io/shared";
@@ -77,6 +77,10 @@ export function createApiServer(config: ApiServerConfig): ApiServer {
 
 	if (existsSync(webDirectory)) {
 		app.use(express.static(webDirectory));
+		// SPA fallback: serve index.html for all non-API routes
+		app.get("*", (_req, res) => {
+			res.sendFile(join(webDirectory, "index.html"));
+		});
 	}
 
 	app.use((error: unknown, _req: Request, res: Response, next: NextFunction) => {

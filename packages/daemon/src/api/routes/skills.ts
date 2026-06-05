@@ -30,13 +30,22 @@ router.get("/api/skills", async (_req, res) => {
 
 router.post("/api/skills/install", async (req, res) => {
 	try {
-		const body = req.body as InstallSkillRequest | undefined;
-		if (!body?.url && !(body?.source && body?.slug)) {
+		const body = req.body as
+			| (InstallSkillRequest & { skillId?: string; name?: string })
+			| undefined;
+		if (!body?.url && !(body?.source && (body?.slug || body?.skillId || body?.name))) {
 			res.status(400).json({ error: "Provide url or source+slug to install a skill" });
 			return;
 		}
 
-		const result = await installSkill(body);
+		// Accept skillId or name as slug aliases from the web UI
+		const normalized: InstallSkillRequest = {
+			url: body.url,
+			source: body.source,
+			slug: body.slug || body.skillId || body.name,
+		};
+
+		const result = await installSkill(normalized);
 		res.status(result.created ? 201 : 200).json(result.skill);
 	} catch (error) {
 		const statusCode =
@@ -99,15 +108,25 @@ async function installSkill(
 	const directory = join(SKILLS_DIR, directoryName);
 	const existing = installedSkills.find((skill) => skill.id === id);
 	let entryFile: string | null = existing?.entryFile ?? null;
+	let resolvedUrl = request.url;
 
-	if (request.url) {
-		const response = await fetch(request.url);
+	// For skills.sh skills, resolve the actual SKILL.md URL from the repo tree
+	if (source === "skillssh" && resolvedUrl) {
+		const fetchResult = await fetch(resolvedUrl);
+		if (!fetchResult.ok) {
+			// URL didn't work — try resolving from the repo tree
+			resolvedUrl = (await resolveSkillsShUrl(request)) ?? resolvedUrl;
+		}
+	}
+
+	if (resolvedUrl) {
+		const response = await fetch(resolvedUrl);
 		if (!response.ok) {
-			throw new Error(`Failed to fetch skill from ${request.url}`);
+			throw new Error(`Failed to fetch skill from ${resolvedUrl} (${response.status})`);
 		}
 
 		const body = await response.text();
-		entryFile = chooseEntryFileName(request.url, response.headers.get("content-type"));
+		entryFile = chooseEntryFileName(resolvedUrl, response.headers.get("content-type"));
 		await mkdir(directory, { recursive: true });
 		await writeFile(join(directory, entryFile), body, "utf8");
 	} else {
@@ -214,6 +233,54 @@ function chooseEntryFileName(url: string, contentType: string | null): string {
 
 function isMissingFileError(error: unknown): boolean {
 	return !!error && typeof error === "object" && "code" in error && error.code === "ENOENT";
+}
+
+// Resolve the actual SKILL.md path for a skills.sh skill by searching the repo tree
+async function resolveSkillsShUrl(request: InstallSkillRequest): Promise<string | null> {
+	// We need to find the skill in the source repo's tree
+	// First, try the skills.sh API to get the source info
+	const slug = request.slug?.trim();
+	if (!slug) return null;
+
+	try {
+		const searchResponse = await fetch(
+			`https://skills.sh/api/search?q=${encodeURIComponent(slug)}&limit=10`,
+			{ signal: AbortSignal.timeout(10_000) },
+		);
+		if (!searchResponse.ok) return null;
+
+		const data = (await searchResponse.json()) as SkillsShSearchResponse;
+		const match = data.skills?.find(
+			(s) => s.skillId === slug || s.name === slug || s.id.endsWith(`/${slug}`),
+		);
+		if (!match?.source) return null;
+
+		// Fetch the repo tree and find the SKILL.md for this skillId
+		const headers: Record<string, string> = {
+			Accept: "application/vnd.github.v3+json",
+			"User-Agent": "io-daemon",
+		};
+		if (process.env.GITHUB_TOKEN) {
+			headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+		}
+
+		const treeResponse = await fetch(
+			`https://api.github.com/repos/${match.source}/git/trees/main?recursive=1`,
+			{ headers, signal: AbortSignal.timeout(15_000) },
+		);
+		if (!treeResponse.ok) return null;
+
+		const treeData = (await treeResponse.json()) as { tree: Array<{ path: string; type: string }> };
+		// Find SKILL.md in a directory named after the skillId
+		const skillFile = treeData.tree?.find(
+			(entry) => entry.type === "blob" && entry.path.endsWith(`/${match.skillId}/SKILL.md`),
+		);
+		if (!skillFile) return null;
+
+		return `https://raw.githubusercontent.com/${match.source}/main/${skillFile.path}`;
+	} catch {
+		return null;
+	}
 }
 
 // --- Discovery sources ---
