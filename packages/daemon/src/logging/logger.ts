@@ -23,25 +23,12 @@ type SubsystemName = (typeof SUBSYSTEM_NAMES)[number];
 
 let rootLogger: Logger | null = null;
 
-function shouldPrettyPrint(logLevel: Config["logLevel"]): boolean {
-	return (
-		process.env.NODE_ENV !== "production" ||
-		process.env.LOG_LEVEL === "debug" ||
-		logLevel === "debug" ||
-		logLevel === "trace"
-	);
-}
-
-function createConsoleStream(logLevel: Config["logLevel"]): DestinationStream {
-	if (!shouldPrettyPrint(logLevel)) {
-		return pino.destination({ dest: 1, sync: false });
-	}
-
+function createConsoleStream(): DestinationStream {
 	return pretty({
-		colorize: true,
+		colorize: process.stdout.isTTY ?? false,
 		translateTime: "SYS:standard",
 		ignore: "pid,hostname",
-		singleLine: false,
+		singleLine: true,
 	}) as unknown as DestinationStream;
 }
 
@@ -57,7 +44,7 @@ function getRootLogger(): Logger {
 }
 
 export function initLogger(config: Config): Logger {
-	const consoleStream = createConsoleStream(config.logLevel);
+	const consoleStream = createConsoleStream();
 	const fileStream = pino.destination({ dest: LOG_FILE_PATH, sync: false });
 
 	rootLogger = pino(
