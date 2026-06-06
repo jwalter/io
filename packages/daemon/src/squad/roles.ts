@@ -48,9 +48,10 @@ export const ROLE_GENERATION_PROMPT = `You are staffing an autonomous software s
 Given repository analysis describing languages, frameworks, file structure, architectural patterns, and operational concerns, propose the smallest effective team that can deliver objectives safely.
 
 Requirements:
-- Mandatory roles Team Lead and QA must always exist.
+- Mandatory roles Team Lead and QA must always exist — do NOT include them in your response.
 - Suggest only additional roles that are clearly justified by the repository analysis.
-- Prefer durable role names such as backend-engineer, frontend-engineer, test-automation-engineer, platform-engineer, data-engineer, security-engineer, documentation-engineer, or mobile-engineer.
+- Role names must reflect Senior or Principal seniority and be specific to the actual technology stack and work scope. Examples: "Principal React Engineer", "Senior DevOps Engineer", "Senior CI/CD Solutions Engineer", "Principal .NET API Engineer", "Senior Data Pipeline Engineer".
+- Do NOT use generic names like "Frontend Engineer" or "Backend Engineer". Be specific about the technology and domain.
 - Each role must have a short human-readable name and a concise description of responsibilities.
 - Avoid duplicate or overlapping roles.
 - Optimize for implementation, verification, and maintainability.
@@ -59,9 +60,9 @@ Return strict JSON in this shape:
 {
   "roles": [
     {
-      "role": "frontend-engineer",
-      "name": "Frontend Engineer",
-      "description": "Owns UI implementation, client state, and browser-facing tests."
+      "role": "principal-react-engineer",
+      "name": "Principal React Engineer",
+      "description": "Owns UI implementation, client state management, and browser-facing integration tests."
     }
   ]
 }`;

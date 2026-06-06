@@ -1,6 +1,6 @@
 import type { EVENT_NAMES } from "../constants.js";
 import type { StreamChunk } from "./conversation.js";
-import type { Objective, Squad, Task } from "./squad.js";
+import type { Objective, Squad, SquadMember, Task } from "./squad.js";
 import type { InboxItem } from "./store.js";
 
 export type EventName = (typeof EVENT_NAMES)[keyof typeof EVENT_NAMES];
@@ -17,6 +17,7 @@ export interface EventPayloads {
 	[EVENT_NAMES.SQUAD_CREATED]: { squad: Squad };
 	[EVENT_NAMES.SQUAD_DELETED]: { squadId: string };
 	[EVENT_NAMES.SQUAD_UPDATED]: { squad: Squad };
+	[EVENT_NAMES.SQUAD_MEMBER_UPDATED]: { squadId: string; member: SquadMember };
 	[EVENT_NAMES.INSTANCE_CREATED]: InstanceEventPayload;
 	[EVENT_NAMES.INSTANCE_STARTED]: InstanceEventPayload;
 	[EVENT_NAMES.INSTANCE_COMPLETED]: InstanceEventPayload;

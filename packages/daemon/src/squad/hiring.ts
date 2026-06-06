@@ -81,16 +81,16 @@ function detectRolesFromAnalysis(repoAnalysis: string): ProposedComposition["rol
 
 	if (/(react|next|vue|angular|frontend|ui|xaml)/.test(analysis)) {
 		roles.push({
-			role: "frontend-engineer",
-			name: "Frontend Engineer",
+			role: "senior-frontend-engineer",
+			name: "Senior Frontend Engineer",
 			description: "Implements user-facing experiences, UI state, and presentation-layer changes.",
 		});
 	}
 
 	if (/(node|express|api|backend|server|daemon|database|sql|postgres|sqlite)/.test(analysis)) {
 		roles.push({
-			role: "backend-engineer",
-			name: "Backend Engineer",
+			role: "senior-backend-engineer",
+			name: "Senior Backend Engineer",
 			description:
 				"Implements server-side logic, data access, integrations, and execution flow changes.",
 		});
@@ -98,16 +98,16 @@ function detectRolesFromAnalysis(repoAnalysis: string): ProposedComposition["rol
 
 	if (/(infra|docker|kubernetes|deploy|ci|cd|workflow|github actions)/.test(analysis)) {
 		roles.push({
-			role: "platform-engineer",
-			name: "Platform Engineer",
+			role: "senior-platform-engineer",
+			name: "Senior Platform Engineer",
 			description: "Owns automation, pipelines, environments, and operational tooling.",
 		});
 	}
 
 	if (/(security|auth|oauth|secret|policy)/.test(analysis)) {
 		roles.push({
-			role: "security-engineer",
-			name: "Security Engineer",
+			role: "senior-security-engineer",
+			name: "Senior Security Engineer",
 			description:
 				"Reviews authentication, authorization, secrets handling, and security-sensitive changes.",
 		});
@@ -180,10 +180,14 @@ function systemPromptForRole(role: string, repoContext: string): string {
 export async function proposeSquadComposition(
 	repoUrl: string,
 	repoAnalysis: string,
+	context?: string,
 ): Promise<ProposedComposition> {
 	const mandatory = buildMandatoryRoles();
 	const fallbackAdditional = dedupeRoles(detectRolesFromAnalysis(repoAnalysis));
-	const prompt = `Repository URL: ${repoUrl}\n\nRepository analysis:\n${repoAnalysis}\n\n${ROLE_GENERATION_PROMPT}`;
+	const contextSection = context
+		? `\n\nAdditional context from user:\n${context}`
+		: "";
+	const prompt = `Repository URL: ${repoUrl}\n\nRepository analysis:\n${repoAnalysis}${contextSection}\n\n${ROLE_GENERATION_PROMPT}`;
 
 	let client: CopilotClient | null = null;
 	try {

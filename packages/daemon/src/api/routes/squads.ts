@@ -250,14 +250,21 @@ router.put("/api/squads/:id/members/:memberId", async (req, res) => {
 			return;
 		}
 
-		const { systemPrompt, model } = req.body as {
+		const { role, systemPrompt, model } = req.body as {
+			role?: string;
 			systemPrompt?: string;
 			model?: string;
 		};
 
 		const updated = await updateMember(member.id, {
+			role,
 			systemPrompt,
 			model: model === "" ? null : model,
+		});
+
+		eventBus.emit(EVENT_NAMES.SQUAD_MEMBER_UPDATED, {
+			squadId: member.squadId,
+			member: updated!,
 		});
 
 		res.status(200).json(updated);

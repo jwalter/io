@@ -15,6 +15,7 @@ import {
 	getConversationMessageCount,
 	getDueSchedules,
 	getInboxItem,
+	getMember,
 	getMembers,
 	getPendingBlockingQuestions,
 	getRecentActivity,
@@ -37,6 +38,7 @@ import {
 	removeMember,
 	replyToItem,
 	resolveItem,
+	updateMember,
 	updateObjectiveStatus,
 	updateSchedule,
 	updateSquad,
@@ -384,5 +386,46 @@ describe("daemon store", () => {
 		expect(tasks).toHaveLength(1);
 		expect(completedTask).toMatchObject({ status: "done", result: "Added summary queries" });
 		expect(await updateObjectiveStatus("missing", "completed", db)).toBeNull();
+	});
+
+	it("updates squad member role, systemPrompt, and model", async () => {
+		const squad = await createSquadFixture();
+		const member = await addMember(
+			squad.id,
+			{
+				role: "team-lead",
+				name: "Taylor",
+				systemPrompt: "Lead the squad",
+				model: "claude-sonnet-4.6",
+			},
+			db,
+		);
+
+		const updatedRole = await updateMember(member.id, { role: "qa" }, db);
+		expect(updatedRole?.role).toBe("qa");
+		expect(updatedRole?.systemPrompt).toBe("Lead the squad");
+
+		const updatedPrompt = await updateMember(
+			member.id,
+			{ systemPrompt: "Review all code carefully" },
+			db,
+		);
+		expect(updatedPrompt?.role).toBe("qa");
+		expect(updatedPrompt?.systemPrompt).toBe("Review all code carefully");
+
+		const updatedModel = await updateMember(member.id, { model: "gpt-4.1" }, db);
+		expect(updatedModel?.model).toBe("gpt-4.1");
+
+		const updatedAll = await updateMember(
+			member.id,
+			{ role: "frontend-engineer", systemPrompt: "Build UI", model: "" },
+			db,
+		);
+		expect(updatedAll?.role).toBe("frontend-engineer");
+		expect(updatedAll?.systemPrompt).toBe("Build UI");
+		expect(updatedAll?.model).toBeNull();
+
+		const noOp = await updateMember(member.id, {}, db);
+		expect(noOp?.role).toBe("frontend-engineer");
 	});
 });

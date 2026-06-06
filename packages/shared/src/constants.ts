@@ -18,6 +18,7 @@ export const EVENT_NAMES = {
 	SQUAD_CREATED: "squad.created",
 	SQUAD_DELETED: "squad.deleted",
 	SQUAD_UPDATED: "squad.updated",
+	SQUAD_MEMBER_UPDATED: "squad.member_updated",
 	INSTANCE_CREATED: "instance.created",
 	INSTANCE_STARTED: "instance.started",
 	INSTANCE_COMPLETED: "instance.completed",

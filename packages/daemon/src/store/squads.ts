@@ -263,6 +263,7 @@ export async function getMember(
 }
 
 export interface UpdateMemberInput {
+	role?: string;
 	systemPrompt?: string;
 	model?: string | null;
 }
@@ -276,6 +277,10 @@ export async function updateMember(
 	const sets: string[] = [];
 	const args: unknown[] = [];
 
+	if (data.role !== undefined) {
+		sets.push("role = ?");
+		args.push(data.role);
+	}
 	if (data.systemPrompt !== undefined) {
 		sets.push("system_prompt = ?");
 		args.push(data.systemPrompt);
