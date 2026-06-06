@@ -19,15 +19,18 @@ import {
 	startInstance,
 } from "../../execution/instances.js";
 import { executeObjective, resolveRepoPath } from "../../execution/runner.js";
-import { hireSquad, proposeSquadComposition } from "../../squad/hiring.js";
 import { getSquadStatus } from "../../squad/manager.js";
 import {
+	addMember,
 	createObjective,
+	createSquad,
 	deleteSquad,
 	getActiveObjectives,
 	getMember,
 	getSquad,
+	getSquadByRepo,
 	listSquads,
+	removeMember,
 	updateMember,
 	updateSquad,
 } from "../../store/index.js";
@@ -49,19 +52,61 @@ export type OrchestratorToolExecutor = (
 	args: Record<string, unknown>,
 ) => Promise<OrchestratorToolResult>;
 
-const hireSquadSchema = z.object({
-	repoUrl: z.string().trim().min(1).describe("The repository URL to hire a squad for"),
-	context: z
+const createSquadSchema = z.object({
+	repoUrl: z.string().trim().min(1).describe("The repository URL to create a squad for"),
+	name: z
 		.string()
+		.trim()
 		.optional()
-		.describe(
-			"Additional context from the user to guide squad composition and role selection. Include any specifics about what areas of the codebase the squad will focus on, what technologies matter most, or what kind of work they will do.",
-		),
+		.describe("Squad name. Defaults to '<RepoName> Squad' if not provided."),
+	config: z
+		.object({
+			prMode: z
+				.enum(["draft-pr", "branch-only", "ready-pr", "auto-merge"])
+				.optional()
+				.describe("PR creation mode. Defaults to 'draft-pr'."),
+			mcpServers: z
+				.array(z.string())
+				.optional()
+				.describe("MCP server URLs to configure for the squad."),
+			maxRevisions: z
+				.number()
+				.optional()
+				.describe("Max QA revision cycles. Defaults to system default."),
+		})
+		.optional()
+		.describe("Squad configuration. All fields are optional with sensible defaults."),
+});
+
+const addSquadMemberSchema = z.object({
+	squadId: z.string().trim().min(1),
+	role: z.string().trim().min(1).describe("Slug-style role identifier (e.g. 'senior-frontend-engineer', 'team-lead')"),
+	name: z.string().trim().min(1).describe("Display name for the member (e.g. 'Senior Frontend Engineer')"),
+	systemPrompt: z.string().min(1).describe("The system prompt defining this member's expertise, responsibilities, and behavior."),
+	model: z.string().optional().describe("Model override for this member. Uses squad default if not provided."),
+});
+
+const removeSquadMemberSchema = z.object({
+	squadId: z.string().trim().min(1),
+	memberId: z.string().trim().min(1),
+});
+
+const updateSquadConfigSchema = z.object({
+	squadId: z.string().trim().min(1),
+	config: z.object({
+		prMode: z.enum(["draft-pr", "branch-only", "ready-pr", "auto-merge"]).optional(),
+		mcpServers: z.array(z.string()).optional(),
+		maxRevisions: z.number().optional(),
+	}).describe("Partial config fields to update. Only provided fields are changed."),
+});
+
+const analyzeRepoSchema = z.object({
+	repoUrl: z.string().trim().min(1).describe("The repository URL to analyze"),
 	scanPaths: z
 		.array(z.string())
 		.optional()
 		.describe(
-			"Relative paths within the repository to focus the analysis on. When provided, only these directories are scanned for technology detection instead of the entire repo. Extract these from the user's context when they mention specific folders, solution files, or project subsets.",
+			"Relative paths within the repository to focus the analysis on. When provided, only these directories are scanned instead of the entire repo.",
 		),
 });
 
@@ -89,10 +134,36 @@ const updateSquadMemberSchema = z.object({
 
 export const squadToolDefinitions: ToolDefinition[] = [
 	{
-		name: "hire_squad",
+		name: "create_squad",
 		description:
-			"Hire or refresh a squad for a repository. Optionally provide context to guide role selection and scanPaths to focus the repo analysis on specific directories.",
-		parameters: hireSquadSchema,
+			"Create a new squad for a repository. After creating, use add_squad_member to populate it with agents. Always include team-lead and qa roles.",
+		parameters: createSquadSchema,
+		skipPermission: true,
+	},
+	{
+		name: "add_squad_member",
+		description:
+			"Add a member (agent) to an existing squad. Provide a role slug, display name, and a detailed system prompt defining the agent's expertise and responsibilities.",
+		parameters: addSquadMemberSchema,
+		skipPermission: true,
+	},
+	{
+		name: "remove_squad_member",
+		description: "Remove a member from a squad by their ID.",
+		parameters: removeSquadMemberSchema,
+		skipPermission: true,
+	},
+	{
+		name: "update_squad_config",
+		description: "Update a squad's configuration (prMode, mcpServers, maxRevisions).",
+		parameters: updateSquadConfigSchema,
+		skipPermission: true,
+	},
+	{
+		name: "analyze_repo",
+		description:
+			"Analyze a repository's structure and tech stack. Returns information about frameworks, languages, directory layout, and config files. Use this before creating a squad to inform role decisions.",
+		parameters: analyzeRepoSchema,
 		skipPermission: true,
 	},
 	{
@@ -134,12 +205,29 @@ export const squadToolDefinitions: ToolDefinition[] = [
 	},
 ];
 
-function getDefaultSquadConfig(_config: Config): SquadConfig {
-	return {
-		prMode: "draft-pr",
-		mcpServers: [],
-		maxRevisions: QA_MAX_REVISIONS,
-	};
+function parseRepoUrl(repoUrl: string): { owner: string; name: string } {
+	const trimmed = repoUrl.trim();
+	const sshMatch = trimmed.match(/^git@[^:]+:([^/]+)\/([^/]+?)(?:\.git)?$/i);
+	if (sshMatch) {
+		return { owner: sshMatch[1], name: sshMatch[2] };
+	}
+
+	const normalized = trimmed.replace(/\.git$/i, "");
+	const url = new URL(normalized);
+	const segments = url.pathname.split("/").filter(Boolean);
+	if (segments.length < 2) {
+		throw new Error(`Unable to parse owner/name from repo URL: ${repoUrl}`);
+	}
+
+	return { owner: segments[0], name: segments[1] };
+}
+
+function titleCase(value: string): string {
+	return value
+		.split(/[-_\s]+/)
+		.filter(Boolean)
+		.map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+		.join(" ");
 }
 
 const MANIFEST_FILES = [
@@ -360,21 +448,117 @@ async function startAndExecuteInstance(
 	}
 }
 
-async function handleHireSquad(
-	rawArgs: Record<string, unknown>,
-	config: Config,
-): Promise<OrchestratorToolResult> {
-	const { repoUrl, context, scanPaths } = hireSquadSchema.parse(rawArgs);
-	const composition = await proposeSquadComposition(
+async function handleCreateSquad(rawArgs: Record<string, unknown>): Promise<OrchestratorToolResult> {
+	const { repoUrl, name, config } = createSquadSchema.parse(rawArgs);
+	const parsedRepo = parseRepoUrl(repoUrl);
+
+	const existingSquad = await getSquadByRepo(parsedRepo.owner, parsedRepo.name);
+	if (existingSquad) {
+		return {
+			message: `A squad already exists for ${parsedRepo.owner}/${parsedRepo.name}.`,
+			squad: existingSquad,
+		};
+	}
+
+	const squadName = name || `${titleCase(parsedRepo.name)} Squad`;
+	const squadConfig: SquadConfig = {
+		prMode: config?.prMode ?? "draft-pr",
+		mcpServers: config?.mcpServers ?? [],
+		maxRevisions: config?.maxRevisions ?? QA_MAX_REVISIONS,
+	};
+
+	const squad = await createSquad({
+		name: squadName,
 		repoUrl,
-		await buildRepoAnalysis(repoUrl, scanPaths),
-		context,
-	);
-	const result = await hireSquad(repoUrl, composition, getDefaultSquadConfig(config));
+		repoOwner: parsedRepo.owner,
+		repoName: parsedRepo.name,
+		status: "active",
+		config: squadConfig,
+	});
+
+	eventBus.emit(EVENT_NAMES.SQUAD_CREATED, { squad });
 	return {
-		message: `Squad ready for ${repoUrl}.`,
-		squad: result.squad,
-		members: result.members,
+		message: `Squad "${squad.name}" created for ${parsedRepo.owner}/${parsedRepo.name}. Add members with add_squad_member.`,
+		squad,
+	};
+}
+
+async function handleAddSquadMember(rawArgs: Record<string, unknown>): Promise<OrchestratorToolResult> {
+	const { squadId, role, name, systemPrompt, model } = addSquadMemberSchema.parse(rawArgs);
+
+	const squad = await getSquad(squadId);
+	if (!squad) {
+		throw new Error(`Squad ${squadId} was not found.`);
+	}
+
+	const member = await addMember(squadId, {
+		role,
+		name,
+		systemPrompt,
+		model: model ?? null,
+	});
+
+	eventBus.emit(EVENT_NAMES.SQUAD_MEMBER_UPDATED, { squadId, member });
+	return {
+		message: `Added member "${member.name}" (${member.role}) to squad "${squad.name}".`,
+		member,
+	};
+}
+
+async function handleRemoveSquadMember(rawArgs: Record<string, unknown>): Promise<OrchestratorToolResult> {
+	const { squadId, memberId } = removeSquadMemberSchema.parse(rawArgs);
+
+	const squad = await getSquad(squadId);
+	if (!squad) {
+		throw new Error(`Squad ${squadId} was not found.`);
+	}
+
+	const member = await getMember(memberId);
+	if (!member || member.squadId !== squadId) {
+		throw new Error(`Member ${memberId} was not found in squad ${squadId}.`);
+	}
+
+	await removeMember(memberId);
+
+	eventBus.emit(EVENT_NAMES.SQUAD_UPDATED, { squad });
+	return {
+		message: `Removed member "${member.name}" (${member.role}) from squad "${squad.name}".`,
+		memberId,
+	};
+}
+
+async function handleUpdateSquadConfig(rawArgs: Record<string, unknown>): Promise<OrchestratorToolResult> {
+	const { squadId, config } = updateSquadConfigSchema.parse(rawArgs);
+
+	const squad = await getSquad(squadId);
+	if (!squad) {
+		throw new Error(`Squad ${squadId} was not found.`);
+	}
+
+	const mergedConfig: SquadConfig = {
+		prMode: config.prMode ?? squad.config.prMode,
+		mcpServers: config.mcpServers ?? squad.config.mcpServers,
+		maxRevisions: config.maxRevisions ?? squad.config.maxRevisions,
+	};
+
+	const updated = await updateSquad(squadId, { config: mergedConfig });
+	if (!updated) {
+		throw new Error(`Failed to update squad ${squadId}.`);
+	}
+
+	eventBus.emit(EVENT_NAMES.SQUAD_UPDATED, { squad: updated });
+	return {
+		message: `Updated config for squad "${updated.name}".`,
+		squad: updated,
+	};
+}
+
+async function handleAnalyzeRepo(rawArgs: Record<string, unknown>): Promise<OrchestratorToolResult> {
+	const { repoUrl, scanPaths } = analyzeRepoSchema.parse(rawArgs);
+	const analysis = await buildRepoAnalysis(repoUrl, scanPaths);
+	return {
+		message: "Repository analysis complete.",
+		analysis,
 	};
 }
 
@@ -467,8 +651,16 @@ async function handleUpdateSquadMember(
 export function createSquadToolExecutor(config: Config): OrchestratorToolExecutor {
 	return async (toolName, rawArgs) => {
 		switch (toolName) {
-			case "hire_squad":
-				return handleHireSquad(rawArgs, config);
+			case "create_squad":
+				return handleCreateSquad(rawArgs);
+			case "add_squad_member":
+				return handleAddSquadMember(rawArgs);
+			case "remove_squad_member":
+				return handleRemoveSquadMember(rawArgs);
+			case "update_squad_config":
+				return handleUpdateSquadConfig(rawArgs);
+			case "analyze_repo":
+				return handleAnalyzeRepo(rawArgs);
 			case "fire_squad":
 				return handleFireSquad(rawArgs);
 			case "list_squads": {
