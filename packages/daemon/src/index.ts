@@ -7,7 +7,7 @@ import { loadConfig } from "./config.js";
 import { ensureDataDirectories } from "./data-dir.js";
 import { eventBus } from "./event-bus.js";
 import { initLogger } from "./logging/logger.js";
-import { refreshModelPricing, seedFromFallback } from "./models/index.js";
+import { refreshModelPricing } from "./models/index.js";
 import { createOrchestrator } from "./orchestrator/index.js";
 import { createScheduler } from "./scheduler/index.js";
 import { scanSkills } from "./skills/index.js";
@@ -40,8 +40,7 @@ async function main(): Promise<void> {
 		// Fetch model catalog and pricing (blocks startup)
 		const pricingResult = await refreshModelPricing(logger);
 		if (pricingResult.modelsUpdated === 0) {
-			logger.warn("Model pricing refresh returned 0 models, seeding with fallback");
-			await seedFromFallback();
+			logger.warn("Model pricing refresh returned 0 models");
 		}
 		logger.info({ modelsUpdated: pricingResult.modelsUpdated }, "Model pricing initialized");
 

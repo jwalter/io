@@ -8,9 +8,7 @@ export {
 	getModelsForTier,
 	getNextTierUp,
 	refreshModelPricing,
-	seedFromFallback,
 } from "./registry.js";
-export { SEED_MODELS } from "./seed.js";
 export type {
 	CatalogModel,
 	ModelPricing,

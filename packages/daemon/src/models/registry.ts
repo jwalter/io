@@ -12,7 +12,6 @@ import {
 	scrapePremiumRequestPricing,
 	scrapeTokenUnitPricing,
 } from "./pricing-scraper.js";
-import { SEED_MODELS } from "./seed.js";
 import {
 	type ModelPricing,
 	type ModelTier,
@@ -174,16 +173,14 @@ export async function refreshModelPricing(logger?: RefreshLogger): Promise<Prici
 	await scrapeCopilotPricingIntoMap(modelMap, result, logger);
 	await scrapePremiumPricingIntoMap(modelMap, result, logger);
 
-	// If nothing succeeded, seed with fallback data
+	// If nothing succeeded, log and return — no fallback seeding
 	if (
 		!result.catalogFetched &&
 		!result.tokenPricingScraped &&
 		!result.premiumPricingScraped &&
 		!result.copilotPricingScraped
 	) {
-		logger?.warn("All pricing sources failed, using seed data");
-		await seedFromFallback();
-		result.modelsUpdated = SEED_MODELS.length;
+		logger?.warn("All pricing sources failed, no models available");
 		return result;
 	}
 
@@ -208,16 +205,6 @@ export async function refreshModelPricing(logger?: RefreshLogger): Promise<Prici
 	}
 
 	return result;
-}
-
-/** Populate the model_pricing table with hardcoded seed data */
-export async function seedFromFallback(): Promise<void> {
-	const db = await getDatabase();
-	const now = nowIso();
-
-	for (const model of SEED_MODELS) {
-		await upsertModel(db, { ...model, updatedAt: now });
-	}
 }
 
 /** Get all models in a given tier, sorted by cheapest premium multiplier first */
