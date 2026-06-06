@@ -199,6 +199,18 @@ const MIGRATIONS: Migration[] = [
 			"CREATE INDEX IF NOT EXISTS idx_squad_instances_objective_id ON squad_instances(objective_id)",
 		],
 	},
+	{
+		version: 4,
+		name: "denormalize-usage-names",
+		statements: [
+			"ALTER TABLE token_usage ADD COLUMN squad_name TEXT",
+			"ALTER TABLE token_usage ADD COLUMN agent_name TEXT",
+			`UPDATE token_usage SET
+				squad_name = (SELECT s.name FROM squads s WHERE s.id = token_usage.squad_id),
+				agent_name = (SELECT sm.name FROM squad_members sm WHERE sm.id = token_usage.agent_id)
+			WHERE squad_id IS NOT NULL OR agent_id IS NOT NULL`,
+		],
+	},
 ];
 
 let client: DatabaseClient | null = null;

@@ -17,7 +17,9 @@ interface QueryFilter {
 
 export interface RecordUsageInput {
 	squadId?: string | null;
+	squadName?: string | null;
 	agentId?: string | null;
+	agentName?: string | null;
 	model: string;
 	inputTokens: number;
 	outputTokens: number;
@@ -75,8 +77,8 @@ export async function recordUsage(
 	};
 
 	await database.execute({
-		sql: `INSERT INTO token_usage (id, squad_id, agent_id, model, input_tokens, output_tokens, cost, premium_request_cost, token_unit_cost, created_at)
-		      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		sql: `INSERT INTO token_usage (id, squad_id, agent_id, model, input_tokens, output_tokens, cost, premium_request_cost, token_unit_cost, squad_name, agent_name, created_at)
+		      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		args: [
 			usage.id,
 			usage.squadId,
@@ -87,6 +89,8 @@ export async function recordUsage(
 			usage.cost,
 			data.premiumRequestCost ?? null,
 			data.tokenUnitCost ?? null,
+			data.squadName ?? null,
+			data.agentName ?? null,
 			usage.createdAt,
 		],
 	});
@@ -110,7 +114,7 @@ export async function getUsageSummary(
 		}),
 		database.execute({
 			sql: `SELECT tu.squad_id,
-			             COALESCE(s.name, tu.squad_id, 'Unknown squad') AS squad_name,
+			             COALESCE(s.name, tu.squad_name, tu.squad_id, 'Unknown squad') AS squad_name,
 			             COALESCE(SUM(tu.input_tokens), 0) AS input_tokens,
 			             COALESCE(SUM(tu.output_tokens), 0) AS output_tokens,
 			             COALESCE(SUM(tu.cost), 0) AS cost
@@ -124,7 +128,7 @@ export async function getUsageSummary(
 		}),
 		database.execute({
 			sql: `SELECT tu.agent_id,
-			             COALESCE(sm.name, tu.agent_id, 'Unknown agent') AS agent_name,
+			             COALESCE(sm.name, tu.agent_name, tu.agent_id, 'Unknown agent') AS agent_name,
 			             COALESCE(tu.squad_id, '') AS squad_id,
 			             COALESCE(SUM(tu.input_tokens), 0) AS input_tokens,
 			             COALESCE(SUM(tu.output_tokens), 0) AS output_tokens,
@@ -378,8 +382,8 @@ export async function getUsageRecords(
 	const result = await database.execute({
 		sql: `SELECT tu.model, tu.input_tokens, tu.output_tokens, tu.cost,
 		             tu.created_at, tu.squad_id, tu.agent_id,
-		             COALESCE(s.name, '') AS squad_name,
-		             COALESCE(sm.name, '') AS agent_name
+		             COALESCE(s.name, tu.squad_name, '') AS squad_name,
+		             COALESCE(sm.name, tu.agent_name, '') AS agent_name
 		      FROM token_usage tu
 		      LEFT JOIN squads s ON s.id = tu.squad_id
 		      LEFT JOIN squad_members sm ON sm.id = tu.agent_id

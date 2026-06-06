@@ -14,7 +14,7 @@ import { DEFAULT_MODEL } from "@io/shared";
 import type { SquadMember, Task } from "@io/shared";
 
 import { calculateTokenUnitCost, getModelPricing } from "../models/registry.js";
-import { recordUsage } from "../store/index.js";
+import { getSquad, recordUsage } from "../store/index.js";
 import { getContextForAgent } from "./history.js";
 
 const execAsync = promisify(exec);
@@ -70,7 +70,13 @@ function mergeUsage(target: UsageData, usage: AssistantUsageData): void {
 	}
 }
 
-async function persistUsage(member: SquadMember, usageEvents: AssistantUsageData[]): Promise<void> {
+async function persistUsage(
+	member: SquadMember,
+	usageEvents: AssistantUsageData[],
+	squadName?: string,
+): Promise<void> {
+	const resolvedSquadName =
+		squadName ?? (member.squadId ? (await getSquad(member.squadId))?.name : null) ?? null;
 	for (const usage of usageEvents) {
 		const model = usage.model;
 		const pricing = await getModelPricing(model);
@@ -85,7 +91,9 @@ async function persistUsage(member: SquadMember, usageEvents: AssistantUsageData
 			: 0;
 		await recordUsage({
 			squadId: member.squadId,
+			squadName: resolvedSquadName,
 			agentId: member.id,
+			agentName: member.name,
 			model,
 			inputTokens: usage.inputTokens ?? 0,
 			outputTokens: usage.outputTokens ?? 0,
