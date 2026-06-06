@@ -66,11 +66,13 @@ function formatInstalls(installs?: number) {
 }
 
 function getRegistryUrl(skill: RemoteSkill): string | null {
-	if (skill.source === "skillssh" && skill.skillId) {
-		return `https://skills.sh/skills/${skill.skillId}`;
+	if (skill.source === "skillssh" && skill.registrySource && skill.skillId) {
+		return `https://www.skills.sh/${skill.registrySource}/${skill.skillId}`;
 	}
 	if (skill.source === "awesome-copilot") {
-		const match = skill.url?.match(/github\.com\/([^/]+\/[^/]+)\/(?:main|HEAD)\/(.+)\/SKILL\.md/);
+		const match = skill.url?.match(
+			/raw\.githubusercontent\.com\/([^/]+\/[^/]+)\/(?:main|HEAD)\/(.+)\/SKILL\.md/,
+		);
 		if (match) {
 			return `https://github.com/${match[1]}/tree/main/${match[2]}`;
 		}
