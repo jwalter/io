@@ -1,80 +1,116 @@
+import { DEFAULT_MODEL } from "@io/shared";
+
+import { CopilotClient, approveAll } from "@github/copilot-sdk";
+import { getCheapestAvailableModel, getCheapestInTier, getNextTierUp } from "../models/registry.js";
+import type { ModelTier } from "../models/types.js";
+
+const VALID_TIERS: ModelTier[] = ["trivial", "fast", "standard", "premium", "ultra"];
+
+const CLASSIFICATION_PROMPT = `You are a task complexity classifier. Given a task description, classify its complexity into exactly one tier.
+
+Tiers (from simplest to most complex):
+- trivial: Typos, renames, comment changes, config tweaks, formatting
+- fast: Simple bug fixes, small features, documentation updates, single-file changes
+- standard: Feature implementation, multi-file changes, moderate refactoring
+- premium: Architecture changes, complex refactoring, security work, performance optimization
+- ultra: System-wide redesigns, critical infrastructure, cross-cutting concerns
+
+Reply with ONLY the tier name (one word, lowercase). Nothing else.`;
+
 /**
- * Model selection logic for squad agents.
- *
- * Strategy:
- * - Fixed roles (scribe, technical-pm) have predetermined tiers
- * - Dynamic roles get their tier from the team lead's task assignment
- * - On retry after failed review, tier automatically escalates
+ * Use an LLM call to classify task complexity and select the cheapest capable model.
+ * Falls back to DEFAULT_MODEL if classification or model lookup fails.
  */
-
-import { type ModelTier, DEFAULT_MODELS } from '../models/registry.js';
-
-export type { ModelTier } from '../models/registry.js';
-
-/**
- * Tier escalation order: fast → standard → reasoning
- */
-const TIER_ORDER: ModelTier[] = ['fast', 'standard', 'reasoning'];
-
-/**
- * Select model for a fixed-role agent based on their role and current phase.
- */
-export function selectModelForRole(
-	role: string,
-	phase: 'meeting' | 'task' | 'review',
-): string {
-	const normalizedRole = role.toLowerCase().replace(/[\s_-]+/g, '');
-
-	// Scribe always uses fast tier
-	if (normalizedRole === 'scribe') {
-		return DEFAULT_MODELS.fast;
+export async function selectModelForTask(taskDescription: string): Promise<string> {
+	const classifierModel = await getCheapestAvailableModel();
+	if (!classifierModel) {
+		return DEFAULT_MODEL;
 	}
 
-	// Technical PM: standard for meetings/tasks, reasoning for final review
-	if (normalizedRole === 'technicalpm' || normalizedRole === 'teamlead') {
-		return phase === 'review' ? DEFAULT_MODELS.reasoning : DEFAULT_MODELS.standard;
+	let tier: ModelTier;
+	try {
+		tier = await classifyTaskComplexity(taskDescription, classifierModel.id);
+	} catch {
+		return DEFAULT_MODEL;
 	}
 
-	// All other roles default to standard during meetings
-	if (phase === 'meeting') {
-		return DEFAULT_MODELS.standard;
+	// Pick cheapest model in the classified tier
+	const selectedModel = await getCheapestInTier(tier);
+	if (selectedModel) {
+		return selectedModel.id;
 	}
 
-	// For task execution, return standard as default (team lead can override)
-	return DEFAULT_MODELS.standard;
+	// Escalate one tier up if nothing available in the classified tier
+	const nextTier = getNextTierUp(tier);
+	if (nextTier) {
+		const escalatedModel = await getCheapestInTier(nextTier);
+		if (escalatedModel) {
+			return escalatedModel.id;
+		}
+	}
+
+	return DEFAULT_MODEL;
 }
 
 /**
- * Select model for task execution based on team-lead-assigned tier and retry count.
- * Each retry bumps the tier up one level (fast→standard→reasoning).
+ * Send the task description to the cheapest model for complexity classification.
+ * Returns the classified tier.
  */
-export function selectModelForTask(
-	tierHint: ModelTier | undefined,
-	retryCount: number,
-): string {
-	const baseTier = tierHint ?? 'standard';
-	const escalatedTier = tierForRetry(baseTier, retryCount);
-	return DEFAULT_MODELS[escalatedTier];
-}
+async function classifyTaskComplexity(
+	taskDescription: string,
+	modelId: string,
+): Promise<ModelTier> {
+	let client: CopilotClient | null = null;
+	try {
+		client = new CopilotClient();
+		await client.start();
+		const session = await client.createSession({
+			model: modelId,
+			onPermissionRequest: approveAll,
+			systemMessage: { content: CLASSIFICATION_PROMPT },
+		});
 
-/**
- * Escalate tier based on retry count.
- * Each retry bumps up one tier. Max is 'reasoning'.
- */
-export function tierForRetry(baseTier: ModelTier, retries: number): ModelTier {
-	const baseIndex = TIER_ORDER.indexOf(baseTier);
-	const escalatedIndex = Math.min(baseIndex + retries, TIER_ORDER.length - 1);
-	return TIER_ORDER[escalatedIndex] as ModelTier;
-}
+		try {
+			const response = await session.sendAndWait({ prompt: `Task: ${taskDescription}` }, 15_000);
 
-/**
- * Parse a MODEL_TIER string into a validated ModelTier value.
- */
-export function parseTierHint(hint: string | undefined): ModelTier | undefined {
-	if (!hint) return undefined;
-	const normalized = hint.toLowerCase().trim();
-	if (normalized === 'fast' || normalized === 'standard' || normalized === 'reasoning') {
-		return normalized;
+			const raw = (response.text ?? "").trim().toLowerCase();
+			const tier = VALID_TIERS.find((t) => raw.includes(t));
+			return tier ?? "standard";
+		} finally {
+			await session.disconnect().catch(() => undefined);
+		}
+	} finally {
+		if (client) {
+			await client.stop().catch(() => undefined);
+		}
 	}
-	return undefined;
+}
+
+/**
+ * Select a model for a task with automatic retry on failure.
+ * If the selected model fails during use, call this with escalate=true
+ * to get the next tier up.
+ */
+export async function selectModelWithEscalation(
+	taskDescription: string,
+	failedModel?: string,
+): Promise<string> {
+	if (!failedModel) {
+		return selectModelForTask(taskDescription);
+	}
+
+	// Find the failed model's tier and escalate
+	const { getModelPricing } = await import("../models/registry.js");
+	const failedPricing = await getModelPricing(failedModel);
+	if (!failedPricing) {
+		return DEFAULT_MODEL;
+	}
+
+	const nextTier = getNextTierUp(failedPricing.tier);
+	if (!nextTier) {
+		return DEFAULT_MODEL;
+	}
+
+	const escalatedModel = await getCheapestInTier(nextTier);
+	return escalatedModel?.id ?? DEFAULT_MODEL;
 }

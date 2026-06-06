@@ -1,5 +1,8 @@
-import { DangerBtn, PrimaryBtn, SecondaryBtn } from '@/components/ui/shared';
-import { api } from '@/lib/api';
+import { configuredMarked as marked } from "@/components/ui/markdown";
+import { DangerBtn, PrimaryBtn, SecondaryBtn } from "@/components/ui/shared";
+import { type WsMessage, useWebSocket } from "@/hooks/use-websocket";
+import { api } from "@/lib/api";
+import { EVENT_NAMES } from "@io/shared";
 import {
 	BookOpen,
 	ChevronRight,
@@ -12,15 +15,14 @@ import {
 	Save,
 	Search,
 	Trash2,
-} from 'lucide-react';
-import { configuredMarked as marked } from '@/components/ui/markdown';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { toast } from 'sonner';
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 interface WikiPage {
 	name: string;
 	path: string;
-	scope?: string;
+	title?: string;
 	isDir?: boolean;
 }
 
@@ -44,9 +46,9 @@ function buildTree(pages: WikiPage[]): TreeNode[] {
 	const root: TreeNode[] = [];
 
 	for (const page of pages) {
-		const segments = page.path.split('/').filter(Boolean);
+		const segments = page.path.split("/").filter(Boolean);
 		let currentLevel = root;
-		let currentPath = '';
+		let currentPath = "";
 
 		// If this is a directory-only entry, ensure the directory path exists
 		if (page.isDir) {
@@ -124,9 +126,9 @@ function collectDirectoryPaths(nodes: TreeNode[]): Set<string> {
 }
 
 function getAncestorPaths(path: string): string[] {
-	const segments = path.split('/').filter(Boolean);
+	const segments = path.split("/").filter(Boolean);
 	const ancestors: string[] = [];
-	let currentPath = '';
+	let currentPath = "";
 
 	for (const segment of segments.slice(0, -1)) {
 		currentPath = currentPath ? `${currentPath}/${segment}` : segment;
@@ -158,9 +160,10 @@ function TreeItem({
 	onDeleteFolder: (folderPath: string) => void;
 }) {
 	const isSelected = selectedPage === node.path;
-	const isExpanded = node.isDir && (expandedPaths.has(node.path) || autoExpandedPaths.has(node.path));
+	const isExpanded =
+		node.isDir && (expandedPaths.has(node.path) || autoExpandedPaths.has(node.path));
 	const paddingLeft = 12 + depth * 16;
-	const isProtected = node.isDir && ['io', 'shared', 'squads', 'templates'].includes(node.path);
+	const isProtected = node.isDir && ["io", "shared", "squads", "templates"].includes(node.path);
 
 	if (node.isDir) {
 		return (
@@ -176,7 +179,7 @@ function TreeItem({
 					>
 						<ChevronRight
 							size={14}
-							className={`shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+							className={`shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
 						/>
 						{isExpanded ? (
 							<FolderOpen size={14} className="shrink-0 text-zinc-500" />
@@ -240,8 +243,8 @@ function TreeItem({
 			onClick={() => onSelect(node.path)}
 			className={`flex w-full items-center gap-2 rounded-lg py-2 pr-3 text-left text-[11px] font-mono transition-colors ${
 				isSelected
-					? 'border-l-2 border-[#E43A9C] bg-[#E43A9C]/10 text-[#E43A9C]'
-					: 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300'
+					? "border-l-2 border-[#E43A9C] bg-[#E43A9C]/10 text-[#E43A9C]"
+					: "text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300"
 			}`}
 			style={{ paddingLeft }}
 		>
@@ -254,19 +257,35 @@ function TreeItem({
 export function WikiView() {
 	const [pages, setPages] = useState<WikiPage[]>([]);
 	const [selectedPage, setSelectedPage] = useState<string | null>(null);
-	const [content, setContent] = useState('');
+	const [content, setContent] = useState("");
 	const [editing, setEditing] = useState(false);
-	const [editContent, setEditContent] = useState('');
-	const [newPageName, setNewPageName] = useState('');
-	const [search, setSearch] = useState('');
+	const [editContent, setEditContent] = useState("");
+	const [newPageName, setNewPageName] = useState("");
+	const [search, setSearch] = useState("");
 	const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
 	const [creating, setCreating] = useState(false);
 	const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 	const newPageInputRef = useRef<HTMLInputElement>(null);
 
-	useEffect(() => {
-		loadPages();
+	const loadPages = useCallback(async () => {
+		try {
+			const data = await api.get<{ path: string; title: string; isDir?: boolean }[]>("/wiki/pages");
+			setPages(
+				data.map((p) => ({
+					name: p.title || p.path.split("/").pop() || p.path,
+					path: p.path,
+					title: p.title,
+					isDir: p.isDir,
+				})),
+			);
+		} catch {
+			setPages([]);
+		}
 	}, []);
+
+	useEffect(() => {
+		void loadPages();
+	}, [loadPages]);
 
 	const tree = useMemo(() => buildTree(pages), [pages]);
 	const normalizedQuery = search.trim().toLowerCase();
@@ -290,7 +309,8 @@ export function WikiView() {
 				return null;
 			})(filteredTree)
 		: null;
-	const selectedPageName = selectedNode?.name ?? (selectedPage ? selectedPage.split('/').pop() ?? '' : '');
+	const selectedPageName =
+		selectedNode?.name ?? (selectedPage ? (selectedPage.split("/").pop() ?? "") : "");
 
 	useEffect(() => {
 		const directoryPaths = collectDirectoryPaths(tree);
@@ -301,75 +321,50 @@ export function WikiView() {
 		});
 	}, [tree]);
 
-	async function loadPages() {
-		try {
-			const data = await api.get<{ pages: WikiPage[] }>('/wiki/all');
-			setPages(data.pages);
-		} catch {
-			setPages([]);
-		}
-	}
-
-	function parseScopePath(fullPath: string): { scope: string; relativePath: string } {
-		if (fullPath.startsWith('squads/')) {
-			// squads/{squadName}/rest... → scope={squadName}, path=rest...
-			const parts = fullPath.split('/');
-			const squadName = parts[1] ?? '';
-			const relativePath = parts.slice(2).join('/');
-			return { scope: squadName, relativePath };
-		}
-		if (fullPath.startsWith('templates/')) {
-			return { scope: 'templates', relativePath: fullPath.slice(10) };
-		}
-		if (fullPath.startsWith('io/')) {
-			return { scope: 'io', relativePath: fullPath.slice(3) };
-		}
-		if (fullPath.startsWith('shared/')) {
-			return { scope: 'shared', relativePath: fullPath.slice(7) };
-		}
-		// Fallback: treat as shared scope
-		return { scope: 'shared', relativePath: fullPath };
-	}
-
 	async function loadPage(path: string) {
 		try {
-			const { scope, relativePath } = parseScopePath(path);
-			const data = await api.get<{ content: string }>(`/wiki/${scope}/${relativePath}`);
+			const data = await api.get<{ path: string; content: string }>(`/wiki/pages/${path}`);
 			setContent(data.content);
 			setEditContent(data.content);
-			setSelectedPage(path);
+			setSelectedPage(data.path || path);
 			setEditing(false);
 		} catch {
-			toast.error('Failed to load page');
+			toast.error("Failed to load page");
 		}
 	}
+
+	useWebSocket({
+		onEvent: (message: WsMessage) => {
+			if (message.type === "connected" || message.type === EVENT_NAMES.WIKI_UPDATED) {
+				void loadPages();
+			}
+		},
+	});
 
 	async function savePage() {
 		if (!selectedPage) return;
 		try {
-			const { scope, relativePath } = parseScopePath(selectedPage);
-			await api.put(`/wiki/${scope}/${relativePath}`, { content: editContent });
+			await api.put(`/wiki/pages/${selectedPage}`, { content: editContent });
 			setContent(editContent);
 			setEditing(false);
-			toast.success('Page saved');
+			toast.success("Page saved");
 		} catch {
-			toast.error('Failed to save page');
+			toast.error("Failed to save page");
 		}
 	}
 
 	async function deletePage() {
 		if (!selectedPage) return;
 		try {
-			const { scope, relativePath } = parseScopePath(selectedPage);
-			await api.delete(`/wiki/${scope}/${relativePath}`);
-			toast.success('Page deleted');
+			await api.delete(`/wiki/pages/${selectedPage}`);
+			toast.success("Page deleted");
 			setSelectedPage(null);
-			setContent('');
-			setEditContent('');
+			setContent("");
+			setEditContent("");
 			setEditing(false);
-			loadPages();
+			await loadPages();
 		} catch {
-			toast.error('Failed to delete page');
+			toast.error("Failed to delete page");
 		}
 	}
 
@@ -392,45 +387,46 @@ export function WikiView() {
 	async function confirmDeleteFolder() {
 		if (!confirmDelete) return;
 		try {
-			await api.delete(`/wiki/dir/${confirmDelete}`);
+			await api.delete(`/wiki/directories/${confirmDelete}`);
 			toast.success(`Deleted ${confirmDelete}`);
 			// If the selected page was inside the deleted folder, clear selection
-			if (selectedPage?.startsWith(confirmDelete)) {
+			if (selectedPage?.startsWith(`${confirmDelete}/`) || selectedPage === confirmDelete) {
 				setSelectedPage(null);
-				setContent('');
-				setEditContent('');
+				setContent("");
+				setEditContent("");
 				setEditing(false);
 			}
-			loadPages();
+			await loadPages();
 		} catch {
-			toast.error('Failed to delete directory');
+			toast.error("Failed to delete directory");
 		} finally {
 			setConfirmDelete(null);
 		}
 	}
 
 	async function createPage() {
-		let path = newPageName.trim().replace(/^\/+|\/+$/g, '');
+		let path = newPageName.trim().replace(/^\/+|\/+$/g, "");
 		if (!path) return;
 		// Strip .md extension if user included it (backend appends .md)
-		path = path.replace(/\.md$/i, '');
+		path = path.replace(/\.md$/i, "");
 
 		// Default to shared scope if no scope prefix
-		const fullPath = path.startsWith('io/') || path.startsWith('shared/') || path.startsWith('squads/')
-			? path
-			: `shared/${path}`;
+		const fullPath =
+			path.startsWith("io/") || path.startsWith("shared/") || path.startsWith("squads/")
+				? path
+				: `shared/${path}`;
+
+		const title = fullPath.split("/").pop() ?? fullPath;
 
 		setCreating(true);
 		try {
-			const { scope, relativePath } = parseScopePath(fullPath);
-			const title = relativePath.split('/').slice(-1)[0] ?? relativePath;
-			await api.put(`/wiki/${scope}/${relativePath}`, { content: `# ${title}\n\n` });
-			toast.success('Page created');
-			setNewPageName('');
+			await api.post("/wiki/pages", { path: fullPath, title, content: `# ${title}\n\n`, tags: [] });
+			toast.success("Page created");
+			setNewPageName("");
 			await loadPages();
 			await loadPage(fullPath);
 		} catch {
-			toast.error('Failed to create page');
+			toast.error("Failed to create page");
 		} finally {
 			setCreating(false);
 		}
@@ -493,8 +489,8 @@ export function WikiView() {
 							value={newPageName}
 							onChange={(event) => setNewPageName(event.target.value)}
 							onKeyDown={(event) => {
-								if (event.key === 'Enter') createPage();
-								if (event.key === 'Escape') setNewPageName('');
+								if (event.key === "Enter") createPage();
+								if (event.key === "Escape") setNewPageName("");
 							}}
 							placeholder="folder/new-page"
 							className="w-full rounded-lg border border-white/[0.07] bg-white/[0.04] px-3 py-2 text-[11px] font-mono text-zinc-300 outline-none placeholder:text-zinc-700 focus:border-[#E43A9C]/50"
@@ -524,7 +520,7 @@ export function WikiView() {
 						<div className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.07] px-6">
 							<div className="min-w-0">
 								<h3 className="truncate font-mono text-sm text-zinc-100">{selectedPageName}</h3>
-								<p className="truncate font-mono text-[11px] text-zinc-500">{selectedPage}.md</p>
+								<p className="truncate font-mono text-[11px] text-zinc-500">{selectedPage}</p>
 							</div>
 							<div className="flex items-center gap-2">
 								{editing ? (
@@ -593,7 +589,8 @@ export function WikiView() {
 					<div className="w-full max-w-sm rounded-2xl border border-white/[0.07] bg-[#1a1a1a] p-6 shadow-2xl">
 						<h3 className="mb-2 text-sm font-medium text-zinc-100">Delete directory?</h3>
 						<p className="mb-4 text-xs text-zinc-400">
-							This will permanently delete <span className="font-mono text-zinc-200">{confirmDelete}</span> and all its contents.
+							This will permanently delete{" "}
+							<span className="font-mono text-zinc-200">{confirmDelete}</span> and all its contents.
 						</p>
 						<div className="flex justify-end gap-2">
 							<SecondaryBtn onClick={() => setConfirmDelete(null)} className="px-3 py-1.5">

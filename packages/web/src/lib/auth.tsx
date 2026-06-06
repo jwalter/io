@@ -1,6 +1,6 @@
-import { type Session, type SupabaseClient, createClient } from '@supabase/supabase-js';
-import { type ReactNode, createContext, useContext, useEffect, useRef, useState } from 'react';
-import { api, setTokenGetter, setTokenRefresher } from './api';
+import { type Session, type SupabaseClient, createClient } from "@supabase/supabase-js";
+import { type ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
+import { setTokenGetter, setTokenRefresher } from "./api";
 
 interface AuthContextType {
 	session: Session | null;
@@ -14,7 +14,7 @@ const AuthContext = createContext<AuthContextType>({
 	session: null,
 	supabase: null,
 	loading: true,
-	signIn: async () => ({ error: 'Not initialized' }),
+	signIn: async () => ({ error: "Not initialized" }),
 	signOut: async () => {},
 });
 
@@ -49,17 +49,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		});
 	}, []);
 
-	// Fetch Supabase config from daemon and initialize client
+	// Fetch Supabase config from daemon's public auth config endpoint
 	useEffect(() => {
-		api
-			.get<{ config: { supabase: { projectUrl: string | null; anonKey: string | null } } }>(
-				'/config',
-			)
-			.then(({ config }) => {
-				if (config.supabase.projectUrl && config.supabase.anonKey) {
-					const client = createClient(config.supabase.projectUrl, config.supabase.anonKey);
+		fetch("/api/auth/config")
+			.then((res) => res.json())
+			.then((config: { supabaseUrl: string | null; supabaseAnonKey: string | null }) => {
+				if (config.supabaseUrl && config.supabaseAnonKey) {
+					const client = createClient(config.supabaseUrl, config.supabaseAnonKey);
 					setSupabase(client);
-						supabaseRef.current = client;
+					supabaseRef.current = client;
 
 					// Get existing session
 					client.auth.getSession().then(({ data }) => {
@@ -87,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 	}, []);
 
 	async function signIn(email: string, password: string) {
-		if (!supabase) return { error: 'Supabase not configured' };
+		if (!supabase) return { error: "Supabase not configured" };
 		const { error } = await supabase.auth.signInWithPassword({ email, password });
 		return { error: error?.message ?? null };
 	}

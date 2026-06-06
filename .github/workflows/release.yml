@@ -30,6 +30,8 @@ jobs:
           npm version "$VERSION" --no-git-tag-version --allow-same-version
           # Update workspace packages
           npm version "$VERSION" --no-git-tag-version --allow-same-version --workspaces
+          # Update APP_VERSION constant in shared package
+          sed -i "s/APP_VERSION = \".*\"/APP_VERSION = \"$VERSION\"/" packages/shared/src/constants.ts
 
       - name: Install dependencies
         run: npm ci
@@ -40,12 +42,28 @@ jobs:
       - name: Test
         run: npm test
 
+      - id: fetch_latest_release
+        uses: pozetroninc/github-action-get-latest-release@master
+        with:
+          repository: ${{ github.repository }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate release notes
+        id: notes
+        uses: github/copilot-release-notes@v1
+        with:
+          base-ref: ${{ steps.fetch_latest_release.outputs.release }}
+          head-ref: "v${{ env.VERSION }}"
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          model: claude-sonnet-4
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          generate_release_notes: true
+          body: ${{ steps.notes.outputs.release-notes }}
 
       - name: Publish to npm
-        run: npm publish --workspace=packages/daemon
+        run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

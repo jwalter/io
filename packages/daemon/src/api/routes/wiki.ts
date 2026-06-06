@@ -1,84 +1,207 @@
-import { Router } from 'express';
-import { deleteWikiDirectory, deleteWikiPage, listAllWikiPages, listWikiPages, readWikiPage, searchWiki, writeWikiPage } from '../../wiki/index.js';
+import { type CreateWikiPageRequest, EVENT_NAMES, type UpdateWikiPageRequest } from "@io/shared";
+import { Router } from "express";
 
-export const wikiRouter = Router();
+import { eventBus } from "../../event-bus.js";
+import { createLogger } from "../../logging/logger.js";
+import {
+	createPage,
+	deleteDirectory,
+	deletePage,
+	getPage,
+	listDirectories,
+	listPages,
+	searchPages,
+	updatePage,
+} from "../../wiki/index.js";
 
-// List ALL pages across all scopes
-wikiRouter.get('/all', (_req, res) => {
-	const pages = listAllWikiPages();
-	res.json({ pages });
-});
+const logger = createLogger("api");
 
-// Delete a directory (must come before /:scope/*page to avoid conflict)
-wikiRouter.delete('/dir/*path', (req, res) => {
-	const dirPath = Array.isArray(req.params.path) ? req.params.path.join('/') : req.params.path;
-	if (!dirPath) {
-		res.status(400).json({ error: 'Directory path is required' });
-		return;
+const router = Router();
+
+router.get("/api/wiki/pages", async (_req, res) => {
+	try {
+		const [pages, directories] = await Promise.all([listPages(), listDirectories()]);
+		const dirEntries = directories.map((d) => ({
+			path: d.path,
+			title: d.path.split("/").pop() ?? d.path,
+			tags: [],
+			content: "",
+			updatedAt: "",
+			isDir: true,
+		}));
+		res.status(200).json([...dirEntries, ...pages]);
+	} catch (error) {
+		res.status(500).json({
+			error: "Failed to list wiki pages",
+			details: error instanceof Error ? error.message : "Unknown error",
+		});
 	}
-	const deleted = deleteWikiDirectory(dirPath);
-	if (!deleted) {
-		res.status(400).json({ error: `Cannot delete '${dirPath}' — protected or not found` });
-		return;
+});
+
+router.get("/api/wiki/pages/*pagePath", async (req, res) => {
+	try {
+		const pagePath = extractPagePath(req.params.pagePath);
+		if (!pagePath) {
+			res.status(400).json({ error: "Wiki page path is required" });
+			return;
+		}
+
+		const page = await getPage(pagePath);
+		if (!page) {
+			res.status(404).json({ error: "Wiki page not found" });
+			return;
+		}
+
+		res.status(200).json(page);
+	} catch (error) {
+		res.status(500).json({
+			error: "Failed to fetch wiki page",
+			details: error instanceof Error ? error.message : "Unknown error",
+		});
 	}
-	res.json({ status: 'ok' });
 });
 
-// List pages in a scope
-wikiRouter.get('/:scope', (req, res) => {
-	const { scope } = req.params;
-	const pages = listWikiPages(scope);
-	res.json({ scope, pages });
-});
+router.post("/api/wiki/pages", async (req, res) => {
+	try {
+		const body = req.body as CreateWikiPageRequest | undefined;
+		if (!body?.path?.trim() || !body?.title?.trim() || typeof body.content !== "string") {
+			res.status(400).json({ error: "path, title, and content are required" });
+			return;
+		}
 
-// Read a specific page (supports nested paths like subdir/page)
-wikiRouter.get('/:scope/*page', (req, res) => {
-	const scope = req.params.scope;
-	const page = Array.isArray(req.params.page) ? req.params.page.join('/') : req.params.page;
-	const result = readWikiPage(scope, page);
-	if (!result) {
-		res.status(404).json({ error: `Page '${page}' not found in '${scope}' wiki` });
-		return;
+		const page = await createPage(
+			body.path.trim(),
+			body.title.trim(),
+			body.content,
+			body.tags ?? [],
+		);
+		eventBus.emit(EVENT_NAMES.WIKI_UPDATED, { path: page.path, action: "created" });
+		res.status(201).json(page);
+	} catch (error) {
+		const statusCode =
+			error instanceof Error && /already exists|invalid/i.test(error.message) ? 400 : 500;
+		res.status(statusCode).json({
+			error: "Failed to create wiki page",
+			details: error instanceof Error ? error.message : "Unknown error",
+		});
 	}
-	res.json(result);
 });
 
-// Write (create/overwrite) a page (supports nested paths)
-wikiRouter.put('/:scope/*page', (req, res) => {
-	const scope = req.params.scope;
-	const page = Array.isArray(req.params.page) ? req.params.page.join('/') : req.params.page;
-	const { content } = req.body;
-	if (!content || typeof content !== 'string') {
-		res.status(400).json({ error: 'Body must include "content" (string)' });
-		return;
+router.put("/api/wiki/pages/*pagePath", async (req, res) => {
+	try {
+		const pagePath = extractPagePath(req.params.pagePath);
+		if (!pagePath) {
+			res.status(400).json({ error: "Wiki page path is required" });
+			return;
+		}
+
+		const body = (req.body ?? {}) as UpdateWikiPageRequest;
+		const page = await updatePage(pagePath, {
+			title: typeof body.title === "string" ? body.title.trim() : undefined,
+			content: typeof body.content === "string" ? body.content : undefined,
+			tags: Array.isArray(body.tags) ? body.tags : undefined,
+		});
+		if (!page) {
+			res.status(404).json({ error: "Wiki page not found" });
+			return;
+		}
+
+		eventBus.emit(EVENT_NAMES.WIKI_UPDATED, { path: page.path, action: "updated" });
+		res.status(200).json(page);
+	} catch (error) {
+		res.status(500).json({
+			error: "Failed to update wiki page",
+			details: error instanceof Error ? error.message : "Unknown error",
+		});
 	}
-	const result = writeWikiPage(scope, page, content);
-	res.json(result);
 });
 
-// Delete a page (supports nested paths)
-wikiRouter.delete('/:scope/*page', (req, res) => {
-	const scope = req.params.scope;
-	const page = Array.isArray(req.params.page) ? req.params.page.join('/') : req.params.page;
-	const deleted = deleteWikiPage(scope, page);
-	if (!deleted) {
-		res.status(404).json({ error: `Page '${page}' not found in '${scope}' wiki` });
-		return;
+router.delete("/api/wiki/pages/*pagePath", async (req, res) => {
+	try {
+		const pagePath = extractPagePath(req.params.pagePath);
+		if (!pagePath) {
+			res.status(400).json({ error: "Wiki page path is required" });
+			return;
+		}
+
+		logger.debug({ pagePath }, "Wiki delete requested");
+
+		const existingPage = await getPage(pagePath);
+		if (!existingPage) {
+			res.status(404).json({ error: "Wiki page not found" });
+			return;
+		}
+
+		await deletePage(pagePath);
+
+		// Verify deletion succeeded
+		const verifyPage = await getPage(pagePath);
+		if (verifyPage) {
+			logger.error({ pagePath }, "Wiki page still exists after deletion");
+			res.status(500).json({ error: "Page deletion failed — file still exists" });
+			return;
+		}
+
+		eventBus.emit(EVENT_NAMES.WIKI_UPDATED, { path: existingPage.path, action: "deleted" });
+		res.status(200).json({ deleted: true });
+	} catch (error) {
+		logger.error({ error, pagePath: req.params.pagePath }, "Wiki delete failed");
+		res.status(500).json({
+			error: "Failed to delete wiki page",
+			details: error instanceof Error ? error.message : "Unknown error",
+		});
 	}
-	res.json({ status: 'ok' });
 });
 
-// Search across scopes
-wikiRouter.get('/', (req, res) => {
-	const keyword = req.query.q as string;
-	const scopesParam = req.query.scopes as string | undefined;
+router.delete("/api/wiki/directories/*dirPath", async (req, res) => {
+	try {
+		const dirPath = extractPagePath(req.params.dirPath);
+		if (!dirPath) {
+			res.status(400).json({ error: "Directory path is required" });
+			return;
+		}
 
-	if (!keyword) {
-		res.status(400).json({ error: 'Query parameter "q" is required' });
-		return;
+		logger.debug({ dirPath }, "Wiki directory delete requested");
+		await deleteDirectory(dirPath);
+		eventBus.emit(EVENT_NAMES.WIKI_UPDATED, { path: dirPath, action: "deleted" });
+		res.status(200).json({ deleted: true });
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "Unknown error";
+		const status = message.includes("no such file or directory") ? 404 : 500;
+		res.status(status).json({ error: "Failed to delete directory", details: message });
+	}
+});
+
+router.get("/api/wiki/search", async (req, res) => {
+	try {
+		const query = typeof req.query.q === "string" ? req.query.q.trim() : "";
+		const limit = parsePositiveInteger(req.query.limit, 10);
+		if (!query) {
+			res.status(400).json({ error: "q is required" });
+			return;
+		}
+
+		const pages = await searchPages(query, limit);
+		res.status(200).json(pages);
+	} catch (error) {
+		res.status(500).json({
+			error: "Failed to search wiki pages",
+			details: error instanceof Error ? error.message : "Unknown error",
+		});
+	}
+});
+
+function extractPagePath(value: unknown): string {
+	if (Array.isArray(value)) {
+		return value.join("/");
 	}
 
-	const scopes = scopesParam ? scopesParam.split(',') : ['io', 'shared'];
-	const results = searchWiki(keyword, scopes);
-	res.json({ keyword, results });
-});
+	return typeof value === "string" ? value : "";
+}
+
+function parsePositiveInteger(value: unknown, fallback: number): number {
+	const parsed = Number(value);
+	return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+export { router as wikiRouter };
