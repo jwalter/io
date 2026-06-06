@@ -1,5 +1,3 @@
-import { DEFAULT_MODEL } from "@io/shared";
-
 import { CopilotClient, approveAll } from "@github/copilot-sdk";
 import { getCheapestAvailableModel, getCheapestInTier, getNextTierUp } from "../models/registry.js";
 import type { ModelTier } from "../models/types.js";
@@ -19,19 +17,19 @@ Reply with ONLY the tier name (one word, lowercase). Nothing else.`;
 
 /**
  * Use an LLM call to classify task complexity and select the cheapest capable model.
- * Falls back to DEFAULT_MODEL if classification or model lookup fails.
+ * Throws if no models are available in the pricing database.
  */
 export async function selectModelForTask(taskDescription: string): Promise<string> {
 	const classifierModel = await getCheapestAvailableModel();
 	if (!classifierModel) {
-		return DEFAULT_MODEL;
+		throw new Error("No models available in pricing database");
 	}
 
 	let tier: ModelTier;
 	try {
 		tier = await classifyTaskComplexity(taskDescription, classifierModel.id);
 	} catch {
-		return DEFAULT_MODEL;
+		return classifierModel.id;
 	}
 
 	// Pick cheapest model in the classified tier
@@ -49,7 +47,7 @@ export async function selectModelForTask(taskDescription: string): Promise<strin
 		}
 	}
 
-	return DEFAULT_MODEL;
+	return classifierModel.id;
 }
 
 /**
@@ -103,14 +101,20 @@ export async function selectModelWithEscalation(
 	const { getModelPricing } = await import("../models/registry.js");
 	const failedPricing = await getModelPricing(failedModel);
 	if (!failedPricing) {
-		return DEFAULT_MODEL;
+		return selectModelForTask(taskDescription);
 	}
 
 	const nextTier = getNextTierUp(failedPricing.tier);
 	if (!nextTier) {
-		return DEFAULT_MODEL;
+		const cheapest = await getCheapestAvailableModel();
+		if (!cheapest) throw new Error("No models available in pricing database");
+		return cheapest.id;
 	}
 
 	const escalatedModel = await getCheapestInTier(nextTier);
-	return escalatedModel?.id ?? DEFAULT_MODEL;
+	if (escalatedModel) return escalatedModel.id;
+
+	const cheapest = await getCheapestAvailableModel();
+	if (!cheapest) throw new Error("No models available in pricing database");
+	return cheapest.id;
 }

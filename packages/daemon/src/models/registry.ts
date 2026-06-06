@@ -189,12 +189,17 @@ export async function refreshModelPricing(logger?: RefreshLogger): Promise<Prici
 	const now = nowIso();
 
 	for (const model of modelMap.values()) {
+		// Only store models that have known token pricing
+		if (model.tokenInputMultiplier == null) {
+			continue;
+		}
+
 		const tier = computeTierFromMultiplier(model.premiumMultiplier ?? null);
 		await upsertModel(db, {
 			id: model.id,
 			displayName: model.displayName,
 			premiumMultiplier: model.premiumMultiplier ?? null,
-			tokenInputMultiplier: model.tokenInputMultiplier ?? null,
+			tokenInputMultiplier: model.tokenInputMultiplier,
 			tokenOutputMultiplier: model.tokenOutputMultiplier ?? null,
 			cachedInputMultiplier: model.cachedInputMultiplier ?? null,
 			tier,

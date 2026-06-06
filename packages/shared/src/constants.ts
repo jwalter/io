@@ -4,7 +4,7 @@ export const APP_VERSION = "4.0.3";
 export const API_PORT = 7777;
 export const API_HOST = "0.0.0.0";
 
-export const DEFAULT_MODEL = "gpt-4o";
+export const DEFAULT_MODEL = "gpt-4.1-mini";
 
 export const SESSION_RESET_THRESHOLD = 50;
 export const SCHEDULER_INTERVAL_MS = 60_000;
