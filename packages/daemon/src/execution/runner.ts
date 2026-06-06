@@ -5,6 +5,7 @@ import { promisify } from "node:util";
 
 import { EVENT_NAMES } from "@io/shared";
 import type { Objective, SquadMember, Task } from "@io/shared";
+import { DATA_DIR } from "@io/shared/paths";
 
 import { eventBus } from "../event-bus.js";
 import { isSquadAvailable } from "../squad/manager.js";
@@ -61,7 +62,16 @@ async function runGit(command: string, cwd: string): Promise<string> {
 }
 
 export async function resolveRepoPath(repoUrl: string, repoName: string): Promise<string> {
+	// Derive owner--name directory from repoUrl for the managed repos dir
+	const urlSegments = repoUrl
+		.replace(/\.git$/i, "")
+		.split("/")
+		.filter(Boolean);
+	const owner = urlSegments.at(-2) ?? "";
+	const managedDir = owner && repoName ? join(DATA_DIR, "repos", `${owner}--${repoName}`) : null;
+
 	const candidates = [
+		...(managedDir ? [managedDir] : []),
 		process.cwd(),
 		join(process.cwd(), repoName),
 		join(process.cwd(), "repos", repoName),

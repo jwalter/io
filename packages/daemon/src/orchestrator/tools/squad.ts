@@ -1,4 +1,10 @@
+import { exec } from "node:child_process";
+import { mkdir, readFile, readdir, stat } from "node:fs/promises";
+import { join } from "node:path";
+import { promisify } from "node:util";
+
 import { QA_MAX_REVISIONS, type Squad, type SquadConfig } from "@io/shared";
+import { DATA_DIR } from "@io/shared/paths";
 import { z } from "zod";
 
 import type { Config } from "../../config.js";
@@ -22,6 +28,17 @@ import {
 	listSquads,
 	updateSquad,
 } from "../../store/index.js";
+
+const execAsync = promisify(exec);
+
+async function pathExists(path: string): Promise<boolean> {
+	try {
+		await stat(path);
+		return true;
+	} catch {
+		return false;
+	}
+}
 
 export type OrchestratorToolResult = string | Record<string, unknown> | null | undefined;
 export type OrchestratorToolExecutor = (
@@ -101,74 +118,107 @@ async function buildRepoAnalysis(repoUrl: string): Promise<string> {
 		return lines.join("\n");
 	}
 
-	const headers: Record<string, string> = { Accept: "application/vnd.github+json" };
-	if (process.env.GITHUB_TOKEN) {
-		headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+	// Clone or locate the repo locally for deep analysis
+	const repoDir = join(DATA_DIR, "repos", `${owner}--${name}`);
+	try {
+		await mkdir(join(DATA_DIR, "repos"), { recursive: true });
+		if (await pathExists(join(repoDir, ".git"))) {
+			// Pull latest
+			await execAsync("git pull --ff-only", { cwd: repoDir, timeout: 30_000 }).catch(
+				() => undefined,
+			);
+		} else {
+			await execAsync(`git clone --depth 50 ${normalized} "${repoDir}"`, {
+				timeout: 60_000,
+			});
+		}
+	} catch {
+		lines.push("Unable to clone repository locally; falling back to basic analysis.");
+		lines.push("Based on the repository name, propose roles that match common project patterns.");
+		return lines.join("\n");
 	}
 
+	// Scan the local filesystem for project structure
 	try {
-		// Fetch repo metadata
-		const metaRes = await fetch(`https://api.github.com/repos/${owner}/${name}`, { headers });
-		if (metaRes.ok) {
-			const meta = (await metaRes.json()) as {
-				description?: string;
-				language?: string;
-				topics?: string[];
-			};
-			if (meta.description) lines.push(`Description: ${meta.description}`);
-			if (meta.language) lines.push(`Primary language: ${meta.language}`);
-			if (meta.topics?.length) lines.push(`Topics: ${meta.topics.join(", ")}`);
-		}
+		const rootEntries = await readdir(repoDir, { withFileTypes: true });
+		const rootFiles = rootEntries.filter((e) => e.isFile()).map((e) => e.name);
+		const rootDirs = rootEntries
+			.filter((e) => e.isDirectory() && e.name !== ".git")
+			.map((e) => e.name);
 
-		// Fetch repo tree (shallow)
-		const treeRes = await fetch(
-			`https://api.github.com/repos/${owner}/${name}/git/trees/HEAD?recursive=false`,
-			{ headers },
-		);
-		if (treeRes.ok) {
-			const tree = (await treeRes.json()) as { tree?: Array<{ path: string; type: string }> };
-			const rootFiles = (tree.tree ?? [])
-				.filter((entry) => entry.type === "blob")
-				.map((entry) => entry.path);
-			const rootDirs = (tree.tree ?? [])
-				.filter((entry) => entry.type === "tree")
-				.map((entry) => entry.path);
-			if (rootFiles.length) lines.push(`Root files: ${rootFiles.join(", ")}`);
-			if (rootDirs.length) lines.push(`Root directories: ${rootDirs.join(", ")}`);
-		}
+		if (rootFiles.length) lines.push(`Root files: ${rootFiles.join(", ")}`);
+		if (rootDirs.length) lines.push(`Root directories: ${rootDirs.join(", ")}`);
 
-		// Fetch key manifest files for tech detection
-		const manifests = [
+		// Read key manifest/config files for technology detection
+		const manifestFiles = [
 			"package.json",
 			"Cargo.toml",
 			"go.mod",
 			"requirements.txt",
 			"pyproject.toml",
+			"Gemfile",
+			"pom.xml",
+			"build.gradle",
+			"composer.json",
+			"Makefile",
+			"Dockerfile",
+			"docker-compose.yml",
+			"docker-compose.yaml",
+			".github/workflows",
 		];
-		for (const manifest of manifests) {
+
+		for (const manifest of manifestFiles) {
+			const fullPath = join(repoDir, manifest);
 			try {
-				const fileRes = await fetch(
-					`https://api.github.com/repos/${owner}/${name}/contents/${manifest}`,
-					{ headers },
-				);
-				if (fileRes.ok) {
-					const file = (await fileRes.json()) as { content?: string; encoding?: string };
-					if (file.content && file.encoding === "base64") {
-						const decoded = Buffer.from(file.content, "base64").toString("utf8");
-						// Truncate to first 2000 chars to avoid huge payloads
-						lines.push(`\n--- ${manifest} ---\n${decoded.slice(0, 2000)}`);
-					}
+				const fileStat = await stat(fullPath);
+				if (fileStat.isFile()) {
+					const content = await readFile(fullPath, "utf8");
+					lines.push(`\n--- ${manifest} ---\n${content.slice(0, 3000)}`);
+				} else if (fileStat.isDirectory()) {
+					// For directories like .github/workflows, list contents
+					const children = await readdir(fullPath);
+					lines.push(`\n--- ${manifest}/ ---\n${children.join(", ")}`);
 				}
 			} catch {
-				// Skip individual file fetch failures
+				// File doesn't exist, skip
+			}
+		}
+
+		// Scan src/ or similar directories one level deep for language detection
+		const srcDirs = rootDirs.filter((d) =>
+			["src", "lib", "app", "packages", "crates", "cmd", "internal"].includes(d),
+		);
+		for (const srcDir of srcDirs) {
+			try {
+				const srcEntries = await readdir(join(repoDir, srcDir), { withFileTypes: true });
+				const srcFiles = srcEntries.filter((e) => e.isFile()).map((e) => e.name);
+				const srcSubDirs = srcEntries.filter((e) => e.isDirectory()).map((e) => e.name);
+				lines.push(`\n--- ${srcDir}/ ---`);
+				if (srcSubDirs.length) lines.push(`  Directories: ${srcSubDirs.join(", ")}`);
+				if (srcFiles.length) lines.push(`  Files: ${srcFiles.slice(0, 30).join(", ")}`);
+			} catch {
+				// Skip
+			}
+		}
+
+		// Check README for project description
+		const readmeCandidates = ["README.md", "README.rst", "README.txt", "README"];
+		for (const readme of readmeCandidates) {
+			try {
+				const content = await readFile(join(repoDir, readme), "utf8");
+				// First 1500 chars of README for context
+				lines.push(`\n--- ${readme} (excerpt) ---\n${content.slice(0, 1500)}`);
+				break;
+			} catch {
+				// Next candidate
 			}
 		}
 	} catch {
-		// If API calls fail, fall back to just the URL/name
+		lines.push("Filesystem scan failed; using minimal info.");
 	}
 
 	lines.push(
-		"\nBased on the above repository structure, propose roles that match the project's actual technology stack.",
+		"\nBased on the above repository structure and contents, propose roles that match the project's actual technology stack and architecture.",
 	);
 	return lines.join("\n");
 }
