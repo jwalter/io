@@ -77,7 +77,7 @@ export async function createSquad(data: CreateSquadInput, db?: DatabaseClient): 
 export async function getSquad(id: string, db?: DatabaseClient): Promise<SquadRecord | null> {
 	const database = db ?? (await getDatabase());
 	const squadResult = await database.execute({
-		sql: "SELECT * FROM squads WHERE id = ? LIMIT 1",
+		sql: "SELECT * FROM squads WHERE id = ? AND deleted_at IS NULL LIMIT 1",
 		args: [id],
 	});
 	const row = squadResult.rows[0];
@@ -100,7 +100,7 @@ export async function getSquadByName(
 ): Promise<SquadRecord | null> {
 	const database = db ?? (await getDatabase());
 	const result = await database.execute({
-		sql: "SELECT * FROM squads WHERE name = ? LIMIT 1",
+		sql: "SELECT * FROM squads WHERE name = ? AND deleted_at IS NULL LIMIT 1",
 		args: [name],
 	});
 	const row = result.rows[0];
