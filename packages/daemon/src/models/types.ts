@@ -34,6 +34,7 @@ export interface PricingRefreshResult {
 	catalogFetched: boolean;
 	tokenPricingScraped: boolean;
 	premiumPricingScraped: boolean;
+	copilotPricingScraped: boolean;
 	errors: string[];
 }
 

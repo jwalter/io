@@ -7,7 +7,11 @@ import {
 	nowIso,
 } from "../store/db.js";
 import { fetchModelCatalog } from "./catalog.js";
-import { scrapePremiumRequestPricing, scrapeTokenUnitPricing } from "./pricing-scraper.js";
+import {
+	scrapeCopilotPricing,
+	scrapePremiumRequestPricing,
+	scrapeTokenUnitPricing,
+} from "./pricing-scraper.js";
 import { SEED_MODELS } from "./seed.js";
 import {
 	type ModelPricing,
@@ -114,6 +118,41 @@ async function scrapePremiumPricingIntoMap(
 	}
 }
 
+async function scrapeCopilotPricingIntoMap(
+	modelMap: ModelMap,
+	result: PricingRefreshResult,
+	logger?: RefreshLogger,
+): Promise<void> {
+	try {
+		const copilotPricing = await scrapeCopilotPricing();
+		result.copilotPricingScraped = true;
+		for (const cp of copilotPricing) {
+			const key = normalizeModelName(cp.modelName);
+			const existing = modelMap.get(key) ?? findClosestKey(modelMap, key);
+			if (existing) {
+				existing.tokenInputMultiplier = cp.inputMultiplier;
+				existing.tokenOutputMultiplier = cp.outputMultiplier;
+				if (cp.cachedInputMultiplier !== null) {
+					existing.cachedInputMultiplier = cp.cachedInputMultiplier;
+				}
+			} else {
+				modelMap.set(key, {
+					id: key,
+					displayName: cp.modelName,
+					tokenInputMultiplier: cp.inputMultiplier,
+					tokenOutputMultiplier: cp.outputMultiplier,
+					cachedInputMultiplier: cp.cachedInputMultiplier,
+					available: true,
+				});
+			}
+		}
+	} catch (error) {
+		const msg = error instanceof Error ? error.message : String(error);
+		result.errors.push(`Copilot pricing scrape failed: ${msg}`);
+		logger?.warn(`Copilot pricing scrape failed: ${msg}`);
+	}
+}
+
 /**
  * Attempt a full refresh: catalog API + page scrapes + merge into DB.
  * Returns a summary of what succeeded/failed.
@@ -124,6 +163,7 @@ export async function refreshModelPricing(logger?: RefreshLogger): Promise<Prici
 		catalogFetched: false,
 		tokenPricingScraped: false,
 		premiumPricingScraped: false,
+		copilotPricingScraped: false,
 		errors: [],
 	};
 
@@ -131,10 +171,16 @@ export async function refreshModelPricing(logger?: RefreshLogger): Promise<Prici
 
 	await fetchCatalogIntoMap(modelMap, result, logger);
 	await scrapeTokenPricingIntoMap(modelMap, result, logger);
+	await scrapeCopilotPricingIntoMap(modelMap, result, logger);
 	await scrapePremiumPricingIntoMap(modelMap, result, logger);
 
 	// If nothing succeeded, seed with fallback data
-	if (!result.catalogFetched && !result.tokenPricingScraped && !result.premiumPricingScraped) {
+	if (
+		!result.catalogFetched &&
+		!result.tokenPricingScraped &&
+		!result.premiumPricingScraped &&
+		!result.copilotPricingScraped
+	) {
 		logger?.warn("All pricing sources failed, using seed data");
 		await seedFromFallback();
 		result.modelsUpdated = SEED_MODELS.length;

@@ -80,10 +80,26 @@ const createSquadSchema = z.object({
 
 const addSquadMemberSchema = z.object({
 	squadId: z.string().trim().min(1),
-	role: z.string().trim().min(1).describe("Slug-style role identifier (e.g. 'senior-frontend-engineer', 'team-lead')"),
-	name: z.string().trim().min(1).describe("Display name for the member (e.g. 'Senior Frontend Engineer')"),
-	systemPrompt: z.string().min(1).describe("The system prompt defining this member's expertise, responsibilities, and behavior."),
-	model: z.string().optional().describe("Model override for this member. Uses squad default if not provided."),
+	role: z
+		.string()
+		.trim()
+		.min(1)
+		.describe("Slug-style role identifier (e.g. 'senior-frontend-engineer', 'team-lead')"),
+	name: z
+		.string()
+		.trim()
+		.min(1)
+		.describe("Display name for the member (e.g. 'Senior Frontend Engineer')"),
+	systemPrompt: z
+		.string()
+		.min(1)
+		.describe(
+			"The system prompt defining this member's expertise, responsibilities, and behavior.",
+		),
+	model: z
+		.string()
+		.optional()
+		.describe("Model override for this member. Uses squad default if not provided."),
 });
 
 const removeSquadMemberSchema = z.object({
@@ -93,11 +109,13 @@ const removeSquadMemberSchema = z.object({
 
 const updateSquadConfigSchema = z.object({
 	squadId: z.string().trim().min(1),
-	config: z.object({
-		prMode: z.enum(["draft-pr", "branch-only", "ready-pr", "auto-merge"]).optional(),
-		mcpServers: z.array(z.string()).optional(),
-		maxRevisions: z.number().optional(),
-	}).describe("Partial config fields to update. Only provided fields are changed."),
+	config: z
+		.object({
+			prMode: z.enum(["draft-pr", "branch-only", "ready-pr", "auto-merge"]).optional(),
+			mcpServers: z.array(z.string()).optional(),
+			maxRevisions: z.number().optional(),
+		})
+		.describe("Partial config fields to update. Only provided fields are changed."),
 });
 
 const analyzeRepoSchema = z.object({
@@ -448,7 +466,9 @@ async function startAndExecuteInstance(
 	}
 }
 
-async function handleCreateSquad(rawArgs: Record<string, unknown>): Promise<OrchestratorToolResult> {
+async function handleCreateSquad(
+	rawArgs: Record<string, unknown>,
+): Promise<OrchestratorToolResult> {
 	const { repoUrl, name, config } = createSquadSchema.parse(rawArgs);
 	const parsedRepo = parseRepoUrl(repoUrl);
 
@@ -483,7 +503,9 @@ async function handleCreateSquad(rawArgs: Record<string, unknown>): Promise<Orch
 	};
 }
 
-async function handleAddSquadMember(rawArgs: Record<string, unknown>): Promise<OrchestratorToolResult> {
+async function handleAddSquadMember(
+	rawArgs: Record<string, unknown>,
+): Promise<OrchestratorToolResult> {
 	const { squadId, role, name, systemPrompt, model } = addSquadMemberSchema.parse(rawArgs);
 
 	const squad = await getSquad(squadId);
@@ -505,7 +527,9 @@ async function handleAddSquadMember(rawArgs: Record<string, unknown>): Promise<O
 	};
 }
 
-async function handleRemoveSquadMember(rawArgs: Record<string, unknown>): Promise<OrchestratorToolResult> {
+async function handleRemoveSquadMember(
+	rawArgs: Record<string, unknown>,
+): Promise<OrchestratorToolResult> {
 	const { squadId, memberId } = removeSquadMemberSchema.parse(rawArgs);
 
 	const squad = await getSquad(squadId);
@@ -527,7 +551,9 @@ async function handleRemoveSquadMember(rawArgs: Record<string, unknown>): Promis
 	};
 }
 
-async function handleUpdateSquadConfig(rawArgs: Record<string, unknown>): Promise<OrchestratorToolResult> {
+async function handleUpdateSquadConfig(
+	rawArgs: Record<string, unknown>,
+): Promise<OrchestratorToolResult> {
 	const { squadId, config } = updateSquadConfigSchema.parse(rawArgs);
 
 	const squad = await getSquad(squadId);
@@ -553,7 +579,9 @@ async function handleUpdateSquadConfig(rawArgs: Record<string, unknown>): Promis
 	};
 }
 
-async function handleAnalyzeRepo(rawArgs: Record<string, unknown>): Promise<OrchestratorToolResult> {
+async function handleAnalyzeRepo(
+	rawArgs: Record<string, unknown>,
+): Promise<OrchestratorToolResult> {
 	const { repoUrl, scanPaths } = analyzeRepoSchema.parse(rawArgs);
 	const analysis = await buildRepoAnalysis(repoUrl, scanPaths);
 	return {
@@ -648,7 +676,7 @@ async function handleUpdateSquadMember(
 	};
 }
 
-export function createSquadToolExecutor(config: Config): OrchestratorToolExecutor {
+export function createSquadToolExecutor(_config: Config): OrchestratorToolExecutor {
 	return async (toolName, rawArgs) => {
 		switch (toolName) {
 			case "create_squad":
