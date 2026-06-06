@@ -29,8 +29,10 @@ import {
 	getMember,
 	getSquad,
 	getSquadByRepo,
+	listDeletedSquads,
 	listSquads,
 	removeMember,
+	restoreSquad,
 	updateMember,
 	updateSquad,
 } from "../../store/index.js";
@@ -186,8 +188,20 @@ export const squadToolDefinitions: ToolDefinition[] = [
 	},
 	{
 		name: "fire_squad",
-		description: "Deactivate or delete a squad.",
+		description: "Soft-delete a squad. The squad can be restored later with restore_squad.",
 		parameters: squadIdSchema,
+		skipPermission: true,
+	},
+	{
+		name: "restore_squad",
+		description: "Restore a previously deleted squad and all its members.",
+		parameters: squadIdSchema,
+		skipPermission: true,
+	},
+	{
+		name: "list_deleted_squads",
+		description: "List all soft-deleted squads that can be restored.",
+		parameters: z.object({}),
 		skipPermission: true,
 	},
 	{
@@ -427,7 +441,7 @@ async function processQueue(squadId: string): Promise<void> {
 			const next = await getNextQueued(squadId);
 			if (next) {
 				const freshSquad = await getSquad(squadId);
-				if (freshSquad) {
+				if (freshSquad && next.objectiveId) {
 					void startAndExecuteInstance(next.id, freshSquad, next.objectiveId);
 				}
 			}
@@ -601,14 +615,33 @@ async function handleFireSquad(rawArgs: Record<string, unknown>): Promise<Orches
 	if (activeObjectives.length > 0) {
 		const updated = await updateSquad(squadId, { status: "inactive" });
 		return {
-			message: `Squad ${squadId} was deactivated because it still has active objectives.`,
+			message: `Squad ${squadId} was deactivated because it still has active objectives. Use fire_squad again after objectives complete to delete it.`,
 			squad: updated,
 			activeObjectives,
 		};
 	}
 
 	await deleteSquad(squadId);
-	return { message: `Squad ${squadId} was deleted.`, squadId };
+	return {
+		message: `Squad "${squad.name}" has been deleted. It can be restored with restore_squad if needed.`,
+		squadId,
+	};
+}
+
+async function handleRestoreSquad(
+	rawArgs: Record<string, unknown>,
+): Promise<OrchestratorToolResult> {
+	const { squadId } = squadIdSchema.parse(rawArgs);
+	const restored = await restoreSquad(squadId);
+	if (!restored) {
+		throw new Error(`Squad ${squadId} was not found or is not deleted.`);
+	}
+
+	eventBus.emit(EVENT_NAMES.SQUAD_UPDATED, { squad: restored });
+	return {
+		message: `Squad "${restored.name}" has been restored.`,
+		squad: restored,
+	};
 }
 
 async function handleDelegateToSquad(
@@ -691,11 +724,29 @@ export function createSquadToolExecutor(_config: Config): OrchestratorToolExecut
 				return handleAnalyzeRepo(rawArgs);
 			case "fire_squad":
 				return handleFireSquad(rawArgs);
+			case "restore_squad":
+				return handleRestoreSquad(rawArgs);
+			case "list_deleted_squads": {
+				const deletedSquads = await listDeletedSquads();
+				if (deletedSquads.length === 0) {
+					return { message: "No deleted squads.", squads: [] };
+				}
+				const list = deletedSquads
+					.map((s) => `${s.id}: ${s.name} (${s.repoOwner}/${s.repoName}) [deleted ${s.deletedAt}]`)
+					.join("\n");
+				return { message: list, squads: deletedSquads };
+			}
 			case "list_squads": {
 				const squads = await listSquads();
+				const deletedCount = (await listDeletedSquads()).length;
+				const suffix =
+					deletedCount > 0
+						? `\n\n${deletedCount} deleted squad(s) available for restore (use list_deleted_squads to view).`
+						: "";
 				return {
-					message: formatSquadList(squads),
+					message: formatSquadList(squads) + suffix,
 					squads,
+					deletedCount,
 				};
 			}
 			case "get_squad_status": {

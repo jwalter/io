@@ -211,6 +211,11 @@ const MIGRATIONS: Migration[] = [
 			WHERE squad_id IS NOT NULL OR agent_id IS NOT NULL`,
 		],
 	},
+	{
+		version: 5,
+		name: "add-squad-soft-delete",
+		statements: ["ALTER TABLE squads ADD COLUMN deleted_at TEXT"],
+	},
 ];
 
 let client: DatabaseClient | null = null;

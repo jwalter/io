@@ -26,8 +26,10 @@ import {
 	getSquad,
 	getSquadActivity,
 	getSquadByName,
+	listDeletedSquads,
 	listSquads,
 	logActivity,
+	restoreSquad,
 	updateMember,
 	updateSquad,
 } from "../../store/index.js";
@@ -220,6 +222,42 @@ router.delete("/api/squads/:id", async (req, res) => {
 	} catch (error) {
 		res.status(500).json({
 			error: "Failed to delete squad",
+			details: error instanceof Error ? error.message : "Unknown error",
+		});
+	}
+});
+
+router.get("/api/squads/deleted", async (_req, res) => {
+	try {
+		const squads = await listDeletedSquads();
+		res.status(200).json({ squads });
+	} catch (error) {
+		res.status(500).json({
+			error: "Failed to list deleted squads",
+			details: error instanceof Error ? error.message : "Unknown error",
+		});
+	}
+});
+
+router.post("/api/squads/:id/restore", async (req, res) => {
+	try {
+		const restored = await restoreSquad(req.params.id);
+		if (!restored) {
+			res.status(404).json({ error: "Squad not found or not deleted" });
+			return;
+		}
+
+		await logActivity({
+			squadId: restored.id,
+			event: EVENT_NAMES.SQUAD_UPDATED,
+			description: `Restored squad ${restored.name}`,
+			metadata: { repoUrl: restored.repoUrl },
+		});
+		eventBus.emit(EVENT_NAMES.SQUAD_UPDATED, { squad: restored });
+		res.status(200).json({ squad: restored });
+	} catch (error) {
+		res.status(500).json({
+			error: "Failed to restore squad",
 			details: error instanceof Error ? error.message : "Unknown error",
 		});
 	}

@@ -52,6 +52,7 @@ export async function createSquad(data: CreateSquadInput, db?: DatabaseClient): 
 		config: data.config,
 		createdAt: timestamp,
 		updatedAt: timestamp,
+		deletedAt: null,
 	};
 
 	await database.execute({
@@ -115,7 +116,9 @@ export async function getSquadByName(
 
 export async function listSquads(db?: DatabaseClient): Promise<Squad[]> {
 	const database = db ?? (await getDatabase());
-	const result = await database.execute("SELECT * FROM squads ORDER BY created_at DESC, id DESC");
+	const result = await database.execute(
+		"SELECT * FROM squads WHERE deleted_at IS NULL ORDER BY created_at DESC, id DESC",
+	);
 
 	return result.rows.map((row) => mapSquad(row));
 }
@@ -143,6 +146,7 @@ export async function updateSquad(
 		config: data.config ?? existing.config,
 		createdAt: existing.createdAt,
 		updatedAt,
+		deletedAt: existing.deletedAt,
 	};
 
 	await database.execute({
@@ -166,12 +170,34 @@ export async function updateSquad(
 
 export async function deleteSquad(id: string, db?: DatabaseClient): Promise<boolean> {
 	const database = db ?? (await getDatabase());
+	const now = nowIso();
 	const result = await database.execute({
-		sql: "DELETE FROM squads WHERE id = ?",
-		args: [id],
+		sql: "UPDATE squads SET status = 'deleted', deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL",
+		args: [now, now, id],
 	});
 
 	return result.rowsAffected > 0;
+}
+
+export async function restoreSquad(id: string, db?: DatabaseClient): Promise<Squad | null> {
+	const database = db ?? (await getDatabase());
+	const now = nowIso();
+	const result = await database.execute({
+		sql: "UPDATE squads SET status = 'active', deleted_at = NULL, updated_at = ? WHERE id = ? AND deleted_at IS NOT NULL",
+		args: [now, id],
+	});
+
+	if (result.rowsAffected === 0) return null;
+	return getSquadRow(id, database);
+}
+
+export async function listDeletedSquads(db?: DatabaseClient): Promise<Squad[]> {
+	const database = db ?? (await getDatabase());
+	const result = await database.execute(
+		"SELECT * FROM squads WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC, id DESC",
+	);
+
+	return result.rows.map((row) => mapSquad(row));
 }
 
 export async function getSquadByRepo(
@@ -181,7 +207,7 @@ export async function getSquadByRepo(
 ): Promise<SquadRecord | null> {
 	const database = db ?? (await getDatabase());
 	const result = await database.execute({
-		sql: "SELECT * FROM squads WHERE repo_owner = ? AND repo_name = ? LIMIT 1",
+		sql: "SELECT * FROM squads WHERE repo_owner = ? AND repo_name = ? AND deleted_at IS NULL LIMIT 1",
 		args: [repoOwner, repoName],
 	});
 	const row = result.rows[0];
@@ -275,7 +301,7 @@ export async function updateMember(
 ): Promise<SquadMember | null> {
 	const database = db ?? (await getDatabase());
 	const sets: string[] = [];
-	const args: unknown[] = [];
+	const args: (string | number | null)[] = [];
 
 	if (data.role !== undefined) {
 		sets.push("role = ?");
@@ -322,6 +348,7 @@ function mapSquad(row: Record<string, unknown>): Squad {
 		config: parseJson<SquadConfig>(asString(row.config)),
 		createdAt: asString(row.created_at),
 		updatedAt: asString(row.updated_at),
+		deletedAt: asNullableString(row.deleted_at),
 	};
 }
 

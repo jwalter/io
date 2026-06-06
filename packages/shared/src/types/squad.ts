@@ -2,7 +2,7 @@ import type { PR_MODES } from "../constants.js";
 
 export type PrMode = (typeof PR_MODES)[number];
 
-export type SquadStatus = "active" | "inactive" | "executing";
+export type SquadStatus = "active" | "inactive" | "executing" | "deleted";
 
 export type MemberRole = "team-lead" | "qa" | string;
 
@@ -22,6 +22,7 @@ export interface Squad {
 	config: SquadConfig;
 	createdAt: string;
 	updatedAt: string;
+	deletedAt: string | null;
 }
 
 export interface SquadMember {
