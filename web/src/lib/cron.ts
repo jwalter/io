@@ -1,191 +1,85 @@
-const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const MONTH_NAMES = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
+export function describeCron(expression: string): string {
+  const parts = expression.trim().split(/\s+/);
+  if (parts.length < 5) return expression;
 
-function parseCronField(spec: string, min: number, max: number): number[] {
-  const values = new Set<number>();
+  const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
 
-  if (spec === "*") {
-    for (let i = min; i <= max; i += 1) values.add(i);
-    return Array.from(values);
+  // Every minute
+  if (minute === "*" && hour === "*" && dayOfMonth === "*" && month === "*" && dayOfWeek === "*") {
+    return "Runs every minute";
   }
 
-  if (spec.startsWith("*/")) {
-    const step = Number.parseInt(spec.slice(2), 10);
-    if (Number.isNaN(step) || step <= 0) return [];
-    for (let i = min; i <= max; i += step) values.add(i);
-    return Array.from(values);
+  // Every N minutes
+  if (minute?.startsWith("*/") && hour === "*" && dayOfMonth === "*" && month === "*" && dayOfWeek === "*") {
+    const n = minute.slice(2);
+    return `Runs every ${n} minute${n === "1" ? "" : "s"}`;
   }
 
-  const parsedSegments = spec
-    .split(",")
-    .map((segment) => segment.trim())
-    .filter(Boolean);
-  for (const segment of parsedSegments) {
-    if (segment.includes("-")) {
-      const [startRaw, endRaw] = segment.split("-");
-      const start = Number.parseInt(startRaw, 10);
-      const end = Number.parseInt(endRaw, 10);
-      if (Number.isNaN(start) || Number.isNaN(end)) continue;
-      for (let i = Math.min(start, end); i <= Math.max(start, end); i += 1) {
-        if (i >= min && i <= max) values.add(i);
-      }
-      continue;
-    }
-
-    const exact = Number.parseInt(segment, 10);
-    if (!Number.isNaN(exact) && exact >= min && exact <= max) values.add(exact);
+  // Every N hours
+  if (minute !== "*" && hour?.startsWith("*/") && dayOfMonth === "*" && month === "*" && dayOfWeek === "*") {
+    const n = hour.slice(2);
+    return `Runs every ${n} hour${n === "1" ? "" : "s"} at minute ${minute}`;
   }
 
-  return Array.from(values);
+  // Specific time every day
+  if (minute !== "*" && hour !== "*" && !hour?.includes("/") && !hour?.includes(",") && dayOfMonth === "*" && month === "*" && dayOfWeek === "*") {
+    return `Runs daily at ${pad(hour)}:${pad(minute)}`;
+  }
+
+  // Specific time on specific days of the week
+  if (minute !== "*" && hour !== "*" && dayOfMonth === "*" && month === "*" && dayOfWeek !== "*") {
+    const days = parseDaysOfWeek(dayOfWeek);
+    return `Runs at ${pad(hour)}:${pad(minute)} on ${days}`;
+  }
+
+  // Specific time on specific day of month
+  if (minute !== "*" && hour !== "*" && dayOfMonth !== "*" && month === "*" && dayOfWeek === "*") {
+    return `Runs at ${pad(hour)}:${pad(minute)} on day ${dayOfMonth} of every month`;
+  }
+
+  // Hourly at specific minute
+  if (minute !== "*" && !minute?.includes("/") && hour === "*" && dayOfMonth === "*" && month === "*" && dayOfWeek === "*") {
+    return `Runs hourly at minute ${minute}`;
+  }
+
+  return `Cron: ${expression}`;
 }
 
-function formatTime(hourValue: number, minuteValue: number): string {
-  const hour12 = ((hourValue + 11) % 12) + 1;
-  const amPm = hourValue < 12 ? "AM" : "PM";
-  const minute = minuteValue.toString().padStart(2, "0");
-
-  return `${hour12}:${minute} ${amPm}`;
+function pad(value: string | undefined): string {
+  if (!value) return "00";
+  return value.padStart(2, "0");
 }
 
-function formatDayList(values: number[], labels: string[]): string {
-  if (values.length === 0) return "";
-  if (values.length === 1) return labels[values[0]];
+function parseDaysOfWeek(dow: string): string {
+  const dayNames: Record<string, string> = {
+    "0": "Sunday",
+    "1": "Monday",
+    "2": "Tuesday",
+    "3": "Wednesday",
+    "4": "Thursday",
+    "5": "Friday",
+    "6": "Saturday",
+    "7": "Sunday",
+    SUN: "Sunday",
+    MON: "Monday",
+    TUE: "Tuesday",
+    WED: "Wednesday",
+    THU: "Thursday",
+    FRI: "Friday",
+    SAT: "Saturday",
+  };
 
-  const mapped = values.map((value) => labels[value]);
-  if (mapped.length === 2) return `${mapped[0]} and ${mapped[1]}`;
-
-  return `${mapped.slice(0, -1).join(", ")}, and ${mapped[mapped.length - 1]}`;
-}
-
-function describeDayOfWeek(spec: string): string {
-  const values = parseCronField(spec, 0, 6);
-  if (values.length === 0) return "";
-
-  const normalized = values.map((value) => (value === 7 ? 0 : value));
-  const sorted = Array.from(new Set(normalized)).sort((a, b) => a - b);
-
-  if (sorted.length === 7) return "every day";
-
-  const weekdays = [1, 2, 3, 4, 5];
-  const weekend = [0, 6];
-  const weekdaysMatch =
-    weekdays.every((day) => sorted.includes(day)) && sorted.length === weekdays.length;
-  const weekendMatch =
-    weekend.every((day) => sorted.includes(day)) && sorted.length === weekend.length;
-
-  if (weekdaysMatch) return "weekdays";
-  if (weekendMatch) return "weekends";
-
-  return formatDayList(sorted, DAY_NAMES);
-}
-
-function describeMonth(spec: string): string {
-  const values = parseCronField(spec, 1, 12);
-  if (values.length === 0) return "";
-  if (values.length === 12) return "";
-  return formatDayList(
-    values.map((value) => value - 1),
-    MONTH_NAMES
-  );
-}
-
-function describeDayOfMonth(spec: string): string {
-  const values = parseCronField(spec, 1, 31);
-  if (values.length === 0) return "";
-  if (values.length === 31) return "";
-
-  const ordinals = values.map((value) => {
-    const suffix = [11, 12, 13].includes(value)
-      ? "th"
-      : [1, 21, 31].includes(value)
-        ? "st"
-        : [2, 22].includes(value)
-          ? "nd"
-          : [3, 23].includes(value)
-            ? "rd"
-            : "th";
-    return `${value}${suffix}`;
-  });
-
-  if (ordinals.length === 1) return `on the ${ordinals[0]} of the month`;
-
-  return `on the ${ordinals.join(", ")}`;
-}
-
-function describeTime(minuteSpec: string, hourSpec: string): string {
-  const minuteValues = parseCronField(minuteSpec, 0, 59);
-  const hourValues = parseCronField(hourSpec, 0, 23);
-
-  if (minuteValues.length === 0 || hourValues.length === 0) return "custom times";
-
-  if (minuteSpec === "*" && hourSpec === "*") return "every minute";
-  if (minuteSpec === "*" && hourSpec.startsWith("*/")) {
-    const step = Number.parseInt(hourSpec.slice(2), 10);
-    if (!Number.isNaN(step) && step > 0) return `every ${step} hours`;
-  }
-  if (minuteSpec.startsWith("*/") && hourSpec === "*") {
-    const step = Number.parseInt(minuteSpec.slice(2), 10);
-    if (!Number.isNaN(step) && step > 0) return `every ${step} minutes`;
-  }
-  if (minuteSpec === "*" && hourValues.length === 24) return "every hour";
-  if (minuteSpec === "*" && hourValues.length === 1)
-    return `once each hour at ${formatTime(hourValues[0], 0)}`;
-
-  if (minuteValues.length === 1 && hourValues.length === 1) {
-    return `at ${formatTime(hourValues[0], minuteValues[0])}`;
+  // Handle ranges like 1-5
+  if (dow.includes("-")) {
+    const [start, end] = dow.split("-");
+    const startName = dayNames[start?.toUpperCase() ?? ""] ?? start;
+    const endName = dayNames[end?.toUpperCase() ?? ""] ?? end;
+    return `${startName} through ${endName}`;
   }
 
-  if (minuteValues.length > 1 && hourValues.length === 1) {
-    return `at ${minuteValues.map((minute) => formatTime(hourValues[0], minute)).join(", ")}`;
-  }
-
-  if (hourValues.length > 1 && minuteValues.length === 1) {
-    return `at ${hourValues.map((hour) => formatTime(hour, minuteValues[0])).join(", ")}`;
-  }
-
-  return "at matching times";
-}
-
-export function describeCronExpression(cron: string): string {
-  const parts = cron.trim().split(/\s+/);
-  if (parts.length !== 5) return "custom schedule";
-
-  const [minuteSpec, hourSpec, dayOfMonthSpec, monthSpec, dayOfWeekSpec] = parts;
-  const timePart = describeTime(minuteSpec, hourSpec);
-  const dayOfWeekPart = describeDayOfWeek(dayOfWeekSpec);
-  const dayOfMonthPart = describeDayOfMonth(dayOfMonthSpec);
-  const monthPart = describeMonth(monthSpec);
-
-  if (timePart === "every minute") return "every minute";
-
-  const dayDescriptor =
-    dayOfWeekSpec !== "*" && dayOfMonthSpec === "*"
-      ? `on ${dayOfWeekPart}`
-      : dayOfMonthSpec !== "*" && dayOfWeekSpec === "*"
-        ? dayOfMonthPart
-        : dayOfWeekSpec === "*" && dayOfMonthSpec === "*"
-          ? "each day"
-          : "on matching days";
-
-  const fragments = [timePart, dayDescriptor].filter(
-    (fragment) => fragment && fragment !== "custom times" && fragment !== "at matching times"
-  );
-  if (monthPart) fragments.push(`in ${monthPart}`);
-
-  if (fragments.length === 0) return "custom schedule";
-
-  return fragments.join(" ");
+  // Handle comma-separated lists
+  const days = dow.split(",").map((d) => dayNames[d.toUpperCase()] ?? d);
+  if (days.length === 1) return days[0];
+  if (days.length === 2) return `${days[0]} and ${days[1]}`;
+  return days.slice(0, -1).join(", ") + ", and " + days[days.length - 1];
 }

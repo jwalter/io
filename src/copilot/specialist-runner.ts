@@ -3,7 +3,7 @@ import { getClient } from "./client.js";
 import { selectModel, classifyComplexity } from "./model-router.js";
 import { attachTokenTracker } from "./token-tracker.js";
 import { createSquadTools } from "./squad-tools.js";
-import { loadSkillDirectories } from "./skills.js";
+import { loadSkillDirectories, loadSquadSkillDirectories } from "./skills.js";
 import { getMcpServersForSession } from "../mcp/registry.js";
 import { addAgentEvent } from "../store/agent-events.js";
 import { addAuditEntry } from "../store/audit-log.js";
@@ -17,7 +17,6 @@ export interface SpecialistTaskRequest {
   squadSlug: string;
   squadId: string;
   task: string;
-  wikiKnowledge: string;
   workDir: string;
   instanceId?: string;
   parentTaskId: string;
@@ -32,23 +31,12 @@ export interface SpecialistTaskResult {
 
 /**
  * Build the system message for a specialist agent session.
- * Wiki knowledge is placed at the END for maximum LLM attention (recency bias).
  */
-function buildSpecialistSystemMessage(agent: Agent, squad: Squad, wikiKnowledge: string, roster: string): string {
+function buildSpecialistSystemMessage(agent: Agent, squad: Squad): string {
   return `# Squad Specialist: ${agent.character_name}
 
-## 🚨 CRITICAL SECURITY RULE — ABSOLUTE, NON-NEGOTIABLE 🚨
-
-You must NEVER expose secrets, credentials, or sensitive values in ANY publicly visible location. This includes:
-- GitHub issues, pull requests, PR descriptions, comments, or commit messages
-- Log output, error messages, or stack traces shared externally
-- Wiki pages, feed items, or any content viewable by others
-
-What counts as a secret: API keys, access tokens, passwords, connection strings, environment variable values, private config file contents, SSH keys, certificates, webhook URLs with tokens.
-
-If you need to reference that a secret exists, use \`<REDACTED>\` or \`***\` as a placeholder. NEVER include the actual value.
-
-Violation of this rule is a HARD FAILURE — no exceptions, no workarounds, no "just this once."
+## 🚨 Security Rule
+NEVER expose secrets (API keys, tokens, passwords, connection strings, private config) in any public-facing content (PRs, issues, commits, logs, wiki, feed). Use \`<REDACTED>\` as placeholder. Violation = hard failure.
 
 ## Identity & Role
 
@@ -65,16 +53,12 @@ You are an independent specialist — you execute implementation work within you
 ## Squad Wiki = Your Source of Truth
 Your squad wiki contains workflow rules set by the project owner. Read it (use \`wiki_read\`) and follow those rules exactly — branching, PR process, review format, merge criteria. If your task involves reviewing a PR, follow the wiki's review process precisely.
 
-## Your Team (for context):
-${roster}
-
 ## Workflow Rules:
 - Always use the gh CLI for GitHub interactions
 - Use \`--comment\` with "LGTM" for approvals (not \`--approve\`)
 - When your work is complete, provide a clear summary of what was done
 - Consult the squad wiki (wiki_read) for additional context when needed
 - Follow all squad rules from the wiki — they are non-negotiable
-${wikiKnowledge}
 ${agent.persona ? `## Personality:\n${agent.persona}` : ""}
 `;
 }
@@ -84,20 +68,13 @@ ${agent.persona ? `## Personality:\n${agent.persona}` : ""}
  * Creates a full Copilot SDK session with tools, executes the task, returns the result.
  */
 export async function runSpecialistSession(request: SpecialistTaskRequest): Promise<SpecialistTaskResult> {
-  const { agent, squad, squadSlug, squadId, task, wikiKnowledge, workDir, instanceId, parentTaskId } = request;
+  const { agent, squad, squadSlug, squadId, task, workDir, instanceId, parentTaskId } = request;
 
   // Select model based on task complexity
   const tier = classifyComplexity(task);
   const model = await selectModel(tier);
 
-  // Build roster for context
-  const { getAgentsForSquad } = await import("../store/squads.js");
-  const agents = getAgentsForSquad(squadId);
-  const roster = agents
-    .map((a) => `- ${a.character_name} (${a.role_title})${a.is_lead ? " [LEAD]" : ""}${a.is_qa ? " [QA]" : ""}${a.is_test ? " [TEST]" : ""}`)
-    .join("\n");
-
-  const systemMessage = buildSpecialistSystemMessage(agent, squad, wikiKnowledge, roster);
+  const systemMessage = buildSpecialistSystemMessage(agent, squad);
 
   // Update agent status
   updateAgentStatus(agent.id, "working");
@@ -126,7 +103,7 @@ export async function runSpecialistSession(request: SpecialistTaskRequest): Prom
   try {
     // Load squad-scoped tools, skills, and MCP servers
     const squadTools = createSquadTools(squadSlug, squadId, squad.repo_url);
-    const skillDirs = await loadSkillDirectories();
+    const skillDirs = [...await loadSkillDirectories(), ...loadSquadSkillDirectories(squadSlug)];
     const mcpServers = getMcpServersForSession();
 
     const session = await client.createSession({
@@ -138,11 +115,6 @@ export async function runSpecialistSession(request: SpecialistTaskRequest): Prom
       skillDirectories: skillDirs,
       mcpServers,
       onPermissionRequest: approveAll,
-      infiniteSessions: {
-        enabled: true,
-        backgroundCompactionThreshold: 0.8,
-        bufferExhaustionThreshold: 0.95,
-      },
     });
 
     const flushTokens = attachTokenTracker(session, {
@@ -201,7 +173,7 @@ export async function runSpecialistSession(request: SpecialistTaskRequest): Prom
       agentName: agent.character_name,
       role: agent.role_title,
       success: true,
-      result,
+      result: result.length > 1500 ? result.slice(0, 1500) + "\n\n[...truncated]" : result,
     };
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : "Unknown error";

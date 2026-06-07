@@ -38,7 +38,6 @@ import {
   getTokenUsageByAgent,
   getDailyTokenUsage,
 } from "../store/token-usage.js";
-import { DEFAULT_MODEL_PRICING } from "../copilot/token-tracker.js";
 import { randomUUID } from "node:crypto";
 import { validateMessageAttachments } from "../chat/attachments.js";
 
@@ -648,37 +647,6 @@ export async function startApiServer(config: Config): Promise<void> {
   app.get("/api/token-usage/daily", (req, res) => {
     const days = parseInt(req.query.days as string) || 30;
     res.json(getDailyTokenUsage(days));
-  });
-
-  app.get("/api/token-usage/pricing", (_req, res) => {
-    const config = loadConfig();
-    const merged = { ...DEFAULT_MODEL_PRICING, ...(config.modelPricing ?? {}) };
-    res.json(merged);
-  });
-
-  app.put("/api/token-usage/pricing", (req, res) => {
-    const pricing = req.body;
-    if (typeof pricing !== "object" || pricing === null) {
-      res.status(400).json({ error: "Expected object body" });
-      return;
-    }
-    saveConfig({ modelPricing: pricing });
-    res.json({ ok: true });
-  });
-
-  app.get("/api/token-usage/alert-threshold", (_req, res) => {
-    const config = loadConfig();
-    res.json({ tokenAlertThreshold: config.tokenAlertThreshold ?? null });
-  });
-
-  app.put("/api/token-usage/alert-threshold", (req, res) => {
-    const { tokenAlertThreshold } = req.body;
-    if (tokenAlertThreshold !== null && typeof tokenAlertThreshold !== "number") {
-      res.status(400).json({ error: "tokenAlertThreshold must be a number or null" });
-      return;
-    }
-    saveConfig({ tokenAlertThreshold: tokenAlertThreshold ?? undefined });
-    res.json({ ok: true });
   });
 
   // --- Health (unauthenticated) ---

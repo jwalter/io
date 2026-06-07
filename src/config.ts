@@ -3,11 +3,6 @@ import { dirname } from "node:path";
 import { z } from "zod";
 import { PATHS } from "./paths.js";
 
-const ModelPriceSchema = z.object({
-  inputPer1M: z.number(),
-  outputPer1M: z.number(),
-});
-
 const ConfigSchema = z.object({
   telegramBotToken: z.string().optional(),
   authorizedUserId: z.number().optional(),
@@ -24,7 +19,6 @@ const ConfigSchema = z.object({
     .default("meaningful"),
   backgroundNotifyTelegram: z.boolean().default(true),
   watchdogEnabled: z.boolean().default(true),
-  modelPricing: z.record(z.string(), ModelPriceSchema).optional(),
   tokenAlertThreshold: z.number().optional(),
 });
 

@@ -23,7 +23,7 @@ after(() => {
   rmSync(tempHome, { recursive: true, force: true });
 });
 
-test("attachTokenTracker uses billed AIU cost from Copilot usage events when present", () => {
+test("attachTokenTracker records token usage from Copilot usage events", () => {
   const handlers: Array<(event: any) => void> = [];
   const session = {
     on: (_event: string, handler: (event: any) => void) => {
@@ -39,9 +39,6 @@ test("attachTokenTracker uses billed AIU cost from Copilot usage events when pre
       model: "gpt-4.1",
       inputTokens: 1_000_000,
       outputTokens: 1_000_000,
-      copilotUsage: {
-        totalNanoAiu: 1_250_000_000_000_000,
-      },
     },
   });
 
@@ -49,14 +46,14 @@ test("attachTokenTracker uses billed AIU cost from Copilot usage events when pre
 
   assert.equal(totals.totalInputTokens, 1_000_000);
   assert.equal(totals.totalOutputTokens, 1_000_000);
-  assert.equal(totals.totalCostUsd, 12.5);
 
   const summary = getTokenUsageSummary();
   assert.equal(summary.total_records, 1);
-  assert.equal(summary.total_cost_usd, 12.5);
+  assert.equal(summary.total_input_tokens, 1_000_000);
+  assert.equal(summary.total_output_tokens, 1_000_000);
 });
 
-test("attachTokenTracker falls back to estimated pricing when billed AIU data is absent", () => {
+test("attachTokenTracker accumulates multiple usage events across models", () => {
   const handlers: Array<(event: any) => void> = [];
   const session = {
     on: (_event: string, handler: (event: any) => void) => {
@@ -70,16 +67,26 @@ test("attachTokenTracker falls back to estimated pricing when billed AIU data is
   handlers[0]({
     data: {
       model: "gpt-4.1",
-      inputTokens: 1_000_000,
-      outputTokens: 1_000_000,
+      inputTokens: 500_000,
+      outputTokens: 200_000,
+    },
+  });
+
+  handlers[0]({
+    data: {
+      model: "claude-sonnet-4.6",
+      inputTokens: 300_000,
+      outputTokens: 100_000,
     },
   });
 
   const totals = flush();
 
-  assert.equal(totals.totalCostUsd, 10);
+  assert.equal(totals.totalInputTokens, 800_000);
+  assert.equal(totals.totalOutputTokens, 300_000);
 
   const summary = getTokenUsageSummary();
-  assert.equal(summary.total_records, 1);
-  assert.equal(summary.total_cost_usd, 10);
+  assert.equal(summary.total_records, 2);
+  assert.equal(summary.total_input_tokens, 800_000);
+  assert.equal(summary.total_output_tokens, 300_000);
 });

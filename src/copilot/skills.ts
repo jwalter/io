@@ -1,10 +1,14 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join, basename, resolve, sep } from "node:path";
+import { join, basename, resolve, sep, dirname } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 import { PATHS } from "../paths.js";
 
 const execFileAsync = promisify(execFile);
+
+/** Path to bundled skills shipped with the daemon (repo/skills/) */
+const BUNDLED_SKILLS = resolve(dirname(fileURLToPath(import.meta.url)), "../../skills");
 
 export interface SkillInfo {
   name: string;
@@ -111,12 +115,43 @@ export async function createSkill(slug: string, content: string): Promise<void> 
 }
 
 export async function loadSkillDirectories(): Promise<string[]> {
-  if (!existsSync(PATHS.skills)) return [];
+  const dirs: string[] = [];
 
-  const entries = readdirSync(PATHS.skills, { withFileTypes: true });
+  // User-installed skills (~/.io/skills/)
+  if (existsSync(PATHS.skills)) {
+    const entries = readdirSync(PATHS.skills, { withFileTypes: true });
+    for (const e of entries) {
+      if (e.isDirectory() && existsSync(join(PATHS.skills, e.name, "SKILL.md"))) {
+        dirs.push(join(PATHS.skills, e.name));
+      }
+    }
+  }
+
+  // Bundled skills shipped with the daemon (repo/skills/)
+  if (existsSync(BUNDLED_SKILLS)) {
+    const entries = readdirSync(BUNDLED_SKILLS, { withFileTypes: true });
+    for (const e of entries) {
+      if (e.isDirectory() && existsSync(join(BUNDLED_SKILLS, e.name, "SKILL.md"))) {
+        dirs.push(join(BUNDLED_SKILLS, e.name));
+      }
+    }
+  }
+
+  return dirs;
+}
+
+/**
+ * Load squad-specific skill directories from the squad's wiki area.
+ * Skills are stored at ~/.io/wiki/pages/squads/<squadSlug>/skills/<name>/SKILL.md
+ */
+export function loadSquadSkillDirectories(squadSlug: string): string[] {
+  const squadSkillsDir = join(PATHS.wikiPages, "squads", squadSlug, "skills");
+  if (!existsSync(squadSkillsDir)) return [];
+
+  const entries = readdirSync(squadSkillsDir, { withFileTypes: true });
   return entries
-    .filter((e) => e.isDirectory() && existsSync(join(PATHS.skills, e.name, "SKILL.md")))
-    .map((e) => join(PATHS.skills, e.name));
+    .filter((e) => e.isDirectory() && existsSync(join(squadSkillsDir, e.name, "SKILL.md")))
+    .map((e) => join(squadSkillsDir, e.name));
 }
 
 // ---- Community skill discovery ----

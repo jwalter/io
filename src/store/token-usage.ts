@@ -9,7 +9,6 @@ export interface TokenUsageRecord {
   model: string;
   input_tokens: number;
   output_tokens: number;
-  cost_usd: number;
   created_at: string;
 }
 
@@ -18,7 +17,6 @@ export interface TokenUsageSummary {
   total_input_tokens: number;
   total_output_tokens: number;
   total_tokens: number;
-  total_cost_usd: number;
 }
 
 export interface TokenUsageByGroup {
@@ -27,7 +25,6 @@ export interface TokenUsageByGroup {
   total_input_tokens: number;
   total_output_tokens: number;
   total_tokens: number;
-  total_cost_usd: number;
   record_count: number;
 }
 
@@ -36,7 +33,6 @@ export interface DailyTokenUsage {
   total_input_tokens: number;
   total_output_tokens: number;
   total_tokens: number;
-  total_cost_usd: number;
 }
 
 export function recordTokenUsage(params: {
@@ -46,13 +42,12 @@ export function recordTokenUsage(params: {
   model: string;
   inputTokens: number;
   outputTokens: number;
-  costUsd: number;
 }): TokenUsageRecord {
   const db = getDb();
   const id = randomUUID();
   db.prepare(
-    `INSERT INTO token_usage (id, squad_id, agent_id, task_id, model, input_tokens, output_tokens, cost_usd)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO token_usage (id, squad_id, agent_id, task_id, model, input_tokens, output_tokens)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
   ).run(
     id,
     params.squadId ?? null,
@@ -60,8 +55,7 @@ export function recordTokenUsage(params: {
     params.taskId ?? null,
     params.model,
     params.inputTokens,
-    params.outputTokens,
-    params.costUsd
+    params.outputTokens
   );
   return db.prepare("SELECT * FROM token_usage WHERE id = ?").get(id) as TokenUsageRecord;
 }
@@ -72,8 +66,7 @@ export function getTokenUsageSummary(opts?: { since?: string }): TokenUsageSumma
     COUNT(*) as total_records,
     COALESCE(SUM(input_tokens), 0) as total_input_tokens,
     COALESCE(SUM(output_tokens), 0) as total_output_tokens,
-    COALESCE(SUM(input_tokens + output_tokens), 0) as total_tokens,
-    COALESCE(SUM(cost_usd), 0) as total_cost_usd
+    COALESCE(SUM(input_tokens + output_tokens), 0) as total_tokens
   FROM token_usage WHERE 1=1`;
   const params: string[] = [];
   if (opts?.since) {
@@ -91,7 +84,6 @@ export function getTokenUsageBySquad(opts?: { since?: string }): TokenUsageByGro
     COALESCE(SUM(t.input_tokens), 0) as total_input_tokens,
     COALESCE(SUM(t.output_tokens), 0) as total_output_tokens,
     COALESCE(SUM(t.input_tokens + t.output_tokens), 0) as total_tokens,
-    COALESCE(SUM(t.cost_usd), 0) as total_cost_usd,
     COUNT(t.id) as record_count
   FROM squads s
   LEFT JOIN token_usage t ON t.squad_id = s.id`;
@@ -112,7 +104,6 @@ export function getTokenUsageByAgent(opts?: { squadId?: string; since?: string }
     COALESCE(SUM(t.input_tokens), 0) as total_input_tokens,
     COALESCE(SUM(t.output_tokens), 0) as total_output_tokens,
     COALESCE(SUM(t.input_tokens + t.output_tokens), 0) as total_tokens,
-    COALESCE(SUM(t.cost_usd), 0) as total_cost_usd,
     COUNT(t.id) as record_count
   FROM agents a
   LEFT JOIN token_usage t ON t.agent_id = a.id`;
@@ -139,8 +130,7 @@ export function getDailyTokenUsage(days = 30): DailyTokenUsage[] {
     date(created_at) as date,
     COALESCE(SUM(input_tokens), 0) as total_input_tokens,
     COALESCE(SUM(output_tokens), 0) as total_output_tokens,
-    COALESCE(SUM(input_tokens + output_tokens), 0) as total_tokens,
-    COALESCE(SUM(cost_usd), 0) as total_cost_usd
+    COALESCE(SUM(input_tokens + output_tokens), 0) as total_tokens
   FROM token_usage
   WHERE created_at >= date('now', '-' || ? || ' days')
   GROUP BY date(created_at)

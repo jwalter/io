@@ -1,21 +1,21 @@
-function parseHex(hex: string): { r: number; g: number; b: number } | null {
-  const clean = hex.trim().replace(/^#/, "");
-  if (!/^[0-9a-fA-F]{6}$/.test(clean)) return null;
+export function getSquadLabelStyle(color?: string): React.CSSProperties {
+  if (!color) {
+    return {
+      backgroundColor: "hsl(var(--muted))",
+      color: "hsl(var(--muted-foreground))",
+    };
+  }
+
   return {
-    r: parseInt(clean.slice(0, 2), 16),
-    g: parseInt(clean.slice(2, 4), 16),
-    b: parseInt(clean.slice(4, 6), 16),
+    backgroundColor: color,
+    color: getContrastColor(color),
   };
 }
 
-export function getSquadLabelStyle(color: string): Record<string, string> {
-  const rgb = parseHex(color);
-  if (!rgb) return {};
-  // ITU BT.601 relative luminance approximation to pick readable foreground text.
-  const luma = (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000;
-  const textColor = luma > 145 ? "#111827" : "#f9fafb";
-  return {
-    backgroundColor: color,
-    color: textColor,
-  };
+function getContrastColor(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.5 ? "#000000" : "#ffffff";
 }

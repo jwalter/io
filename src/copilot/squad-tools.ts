@@ -193,7 +193,6 @@ export function createLeadDelegationTools(
   squadId: string,
   squadSlug: string,
   squad: Squad,
-  wikiKnowledge: string,
   workDir: string,
   parentTaskId: string,
   instanceId?: string
@@ -228,7 +227,6 @@ export function createLeadDelegationTools(
           squadSlug,
           squadId,
           task: sub_task,
-          wikiKnowledge,
           workDir,
           instanceId,
           parentTaskId,
@@ -273,7 +271,6 @@ export function createLeadDelegationTools(
             squadSlug,
             squadId,
             task: assignment.sub_task,
-            wikiKnowledge,
             workDir,
             instanceId,
             parentTaskId,

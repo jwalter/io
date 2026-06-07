@@ -1,0 +1,36 @@
+import { useEffect } from "react";
+import { useLocation } from "react-router";
+import { useAuthStore } from "@/stores/auth";
+import { AppSidebar } from "@/components/AppSidebar";
+import { AppHeader } from "@/components/AppHeader";
+import { ChatOverlay } from "@/components/ChatOverlay";
+import { AppRoutes } from "@/routes";
+
+export function App() {
+  const token = useAuthStore((s) => s.token);
+  const initAuthListener = useAuthStore((s) => s.initAuthListener);
+  const refreshToken = useAuthStore((s) => s.refreshToken);
+  const location = useLocation();
+
+  const showChrome = !!token && location.pathname !== "/login";
+
+  useEffect(() => {
+    initAuthListener();
+    if (token) {
+      refreshToken();
+    }
+  }, []);
+
+  return (
+    <div className="flex h-screen overflow-hidden">
+      {showChrome && <AppSidebar />}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {showChrome && <AppHeader />}
+        <main className="flex-1 overflow-auto">
+          <AppRoutes />
+        </main>
+      </div>
+      {showChrome && <ChatOverlay />}
+    </div>
+  );
+}

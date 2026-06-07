@@ -1,88 +1,88 @@
 import { approveAll } from "@github/copilot-sdk";
 import { getClient } from "./client.js";
-import { getLeadForSquad, getAgentsForSquad, getSquad, type Agent } from "../store/squads.js";
-import { selectModel } from "./model-router.js";
+import { getLeadForSquad, getAgentsForSquad, getSquad, updateAgentStatus, type Agent } from "../store/squads.js";
+import { selectModel, classifyComplexity } from "./model-router.js";
 import { postFeedItem } from "../store/feed.js";
 import { attachTokenTracker } from "./token-tracker.js";
+import { createSquadTools, createLeadDelegationTools } from "./squad-tools.js";
+import { loadSkillDirectories, loadSquadSkillDirectories } from "./skills.js";
+import { getMcpServersForSession } from "../mcp/registry.js";
+import { addAuditEntry } from "../store/audit-log.js";
+import { addAgentEvent } from "../store/agent-events.js";
+import { createTask, updateTaskStatus } from "../store/tasks.js";
+import { touchInstanceActivity } from "../store/instances.js";
 import { buildAttachmentSummary, type MessageAttachment, toCopilotBlobAttachments } from "../chat/attachments.js";
 
-interface MeetingResult {
+export interface MeetingResult {
   plan: string;
   participants: string[];
 }
 
-function buildFacilitatorPrompt(lead: Agent, agents: Agent[], task: string): string {
-  const roster = agents
-    .filter((a) => !a.is_lead)
-    .map((a) => `- ${a.character_name} (${a.role_title})${a.is_qa ? " [QA]" : ""}${a.is_test ? " [TEST]" : ""}`)
+function buildRoster(agents: Agent[]): string {
+  return agents
+    .map(
+      (agent) =>
+        `- ${agent.character_name} (${agent.role_title})${agent.is_lead ? " [LEAD]" : ""}${agent.is_qa ? " [QA]" : ""}${agent.is_test ? " [TEST]" : ""}`
+    )
     .join("\n");
-
-  return `# Planning Meeting Facilitator: ${lead.character_name}
-
-You are facilitating a planning meeting for your squad. Your job is to gather input from specialists, then synthesize a clear action plan.
-
-## The Task
-${task}
-
-## Your Team (Specialists)
-${roster}
-
-## Instructions
-For each specialist who is relevant to this task, think about what their domain expertise would contribute. Then synthesize ALL perspectives into a structured plan.
-
-Consider each relevant specialist's likely concerns:
-${agents
-  .filter((a) => !a.is_lead)
-  .map((a) => `- ${a.character_name} (${a.role_title}): What risks, technical suggestions, or constraints would they raise?`)
-  .join("\n")}
-
-## Output Format
-Produce a plan in this exact format:
-
-### Task Summary
-(One sentence summary of what we're building)
-
-### Plan
-(Numbered list of work items with agent assignments)
-
-### Risks & Concerns
-(Bullet list of risks identified, with mitigation strategies)
-
-### Dependencies
-(What must happen in order, what can be parallel)
-
-### Assignments
-(Clear mapping: Agent → what they own)
-
-## Rules
-- You are ONLY planning — do NOT execute any work
-- Assign work to specialists based on their role titles
-- Identify what can be done in parallel vs what has dependencies
-- Flag if any expertise is missing from the team
-${lead.persona ? `\n## Your Style:\n${lead.persona}` : ""}
-`;
 }
 
-function buildSpecialistPrompt(agent: Agent, task: string): string {
-  return `# Planning Input: ${agent.character_name}
+function buildMeetingSummary(result: MeetingResult): string {
+  return `## Planning Meeting Complete\n\n**Participants:** ${result.participants.join(", ")}\n\n${result.plan}`;
+}
 
-You are ${agent.character_name}, a ${agent.role_title}. Your team is planning a new task and needs your expert input.
+function buildFacilitatorPrompt(lead: Agent, agents: Agent[]): string {
+  const roster = buildRoster(agents);
+  const specialistPrompts = agents
+    .filter((agent) => !agent.is_lead)
+    .map(
+      (agent) =>
+        `- ${agent.character_name} (${agent.role_title}): Include this perspective when their expertise is relevant.`
+    )
+    .join("\n");
 
-## The Task
-${task}
+  return `# Planning Meeting Lead: ${lead.character_name}
 
-## Your Role
-Provide input ONLY from your area of expertise (${agent.role_title}). Be specific and actionable.
+NEVER expose secrets, credentials, or sensitive values in any public-facing content. Use <REDACTED> for placeholders.
 
-## Respond With
-1. **Concerns/Risks**: What could go wrong in your domain?
-2. **Technical Suggestions**: How would you approach your part?
-3. **Dependencies**: What do you need from other team members before you can start?
-4. **Estimated Complexity**: Simple / Moderate / Complex for your portion
-5. **Questions**: Anything unclear that affects your work?
+You are the lead for a single-session planning meeting. First create a structured plan. If you are explicitly told to execute the approved plan, do so in this same session by delegating work to the appropriate specialists.
 
-Keep your response focused and concise — this is a planning meeting, not implementation.
-${agent.persona ? `\n## Your Style:\n${agent.persona}` : ""}
+## Squad Wiki
+Before planning, read the squad wiki with wiki_list/wiki_read and follow it as the source of truth.
+
+## Team Roster
+${roster || "- No additional specialists are currently configured."}
+
+## Planning Instructions
+- Consider the perspectives of team members whose expertise is relevant to this task, then create a structured plan.
+- You decide which specialists are relevant; do not force every specialist into the plan.
+- Assign likely owners based on role titles and expertise.
+- Call out what can be parallelized versus what must happen in sequence.
+- Flag missing expertise, blockers, or assumptions.
+- Do not begin execution unless you are explicitly instructed to do so.
+
+## Relevant Specialist Perspective Prompts
+${specialistPrompts || "- No specialist prompts available; plan with the current squad composition."}
+
+## Output Format
+### Task Summary
+(One sentence summary of the task)
+
+### Plan
+(Numbered work items with clear sequencing and ownership)
+
+### Risks & Concerns
+(Bullets with mitigations)
+
+### Dependencies
+(Ordered dependencies and parallel work)
+
+### Assignments
+(Agent -> responsibilities)
+${lead.persona ? `
+
+## Your Style
+${lead.persona}` : ""}
 `;
 }
 
@@ -91,128 +91,196 @@ export async function planningMeeting(
   task: string,
   attachments: MessageAttachment[] = []
 ): Promise<MeetingResult> {
-  const lead = getLeadForSquad(squadId);
-  if (!lead) {
-    throw new Error("Squad has no team lead. Add a lead agent first.");
-  }
-
-  const agents = getAgentsForSquad(squadId);
-  const relevantAgents = agents.filter((a) => !a.is_lead);
-
-  if (relevantAgents.length === 0) {
-    throw new Error("Squad has no specialists to consult. Add agents first.");
-  }
-
-  const client = await getClient();
-
-  // Phase 1: Gather specialist input in parallel
-  const specialistInputs = await Promise.allSettled(
-    relevantAgents.map(async (agent) => {
-      const model = await selectModel("low");
-      const session = await client.createSession({
-        model,
-        streaming: true,
-        workingDirectory: process.cwd(),
-        systemMessage: { content: buildSpecialistPrompt(agent, task) },
-        onPermissionRequest: approveAll,
-      });
-
-      const flushTokens = attachTokenTracker(session, { squadId, agentId: agent.id });
-
-      try {
-        const response = await session.sendAndWait(
-          {
-            prompt: `Please provide your planning input for this task.${buildAttachmentSummary(attachments)}`,
-            attachments: toCopilotBlobAttachments(attachments),
-          },
-          7_200_000 // 2 hours — watchdog handles stale detection
-        );
-        return {
-          agent: agent.character_name,
-          role: agent.role_title,
-          input: response?.data?.content ?? "(no response)",
-        };
-      } finally {
-        flushTokens();
-        await session.disconnect();
-      }
-    })
-  );
-
-  // Collect successful inputs
-  const inputs = specialistInputs
-    .filter((r): r is PromiseFulfilledResult<{ agent: string; role: string; input: string }> =>
-      r.status === "fulfilled"
-    )
-    .map((r) => r.value);
-
-  const inputsSummary = inputs
-    .map((i) => `### ${i.agent} (${i.role})\n${i.input}`)
-    .join("\n\n");
-
-  // Phase 2: Lead synthesizes the plan
-  const facilitatorModel = await selectModel("medium");
-  const facilitatorSession = await client.createSession({
-    model: facilitatorModel,
-    streaming: true,
-    workingDirectory: process.cwd(),
-    systemMessage: { content: buildFacilitatorPrompt(lead, agents, task) },
-    onPermissionRequest: approveAll,
-  });
-
-  const flushFacilitatorTokens = attachTokenTracker(facilitatorSession, {
-    squadId,
-    agentId: lead.id,
-  });
-
-  let plan: string;
-  try {
-    const prompt = `Here is the input gathered from your team:\n\n${inputsSummary}\n\nNow synthesize this into a clear, structured action plan.`;
-    const response = await facilitatorSession.sendAndWait(
-      {
-        prompt,
-        attachments: toCopilotBlobAttachments(attachments),
-      },
-      7_200_000 // 2 hours — watchdog handles stale detection
-    );
-    plan = response?.data?.content ?? "Planning meeting completed but no plan was produced.";
-  } finally {
-    flushFacilitatorTokens();
-    await facilitatorSession.disconnect();
-  }
-
-  return {
-    plan,
-    participants: [lead.character_name, ...inputs.map((i) => i.agent)],
-  };
+  return await squadMeeting(squadId, task, false, attachments);
 }
 
 export async function squadMeeting(
   squadId: string,
   task: string,
+  executeAfter: false,
+  attachments?: MessageAttachment[]
+): Promise<MeetingResult>;
+export async function squadMeeting(
+  squadId: string,
+  task: string,
+  executeAfter: true,
+  attachments?: MessageAttachment[]
+): Promise<string>;
+export async function squadMeeting(
+  squadId: string,
+  task: string,
+  executeAfter: boolean,
+  attachments?: MessageAttachment[]
+): Promise<string | MeetingResult>;
+export async function squadMeeting(
+  squadId: string,
+  task: string,
   executeAfter: boolean,
   attachments: MessageAttachment[] = []
-): Promise<string> {
-  const result = await planningMeeting(squadId, task, attachments);
-
-  const summary = `## Planning Meeting Complete\n\n**Participants:** ${result.participants.join(", ")}\n\n${result.plan}`;
-
-  if (!executeAfter) {
-    // Post to feed and wait for user to trigger execution
-    const squad = getSquad(squadId);
-    const squadSource = squad ? `squad-${squad.slug}` : `squad-${squadId}`;
-    postFeedItem(
-      squadSource,
-      "Planning meeting complete — awaiting approval",
-      summary
-    );
-    return summary;
+): Promise<string | MeetingResult> {
+  const lead = getLeadForSquad(squadId);
+  if (!lead) {
+    throw new Error("Squad has no team lead. Add a lead agent first.");
   }
 
-  // Execute: delegate with the plan as additional context
-  const { delegateTask } = await import("./agents.js");
-  const enrichedTask = `${task}\n\n---\n## Approved Plan (from team meeting)\n${result.plan}`;
-  const execResult = await delegateTask(squadId, enrichedTask, undefined, attachments);
+  const squad = getSquad(squadId);
+  if (!squad) {
+    throw new Error(`Squad not found: ${squadId}`);
+  }
 
-  return `Meeting held, then executed.\n\n${summary}\n\n---\n## Execution Result\n${execResult}`;
+  const agents = getAgentsForSquad(squadId);
+  const squadSlug = squad.slug ?? squadId;
+  const participants = [
+    lead.character_name,
+    ...agents.filter((agent) => !agent.is_lead).map((agent) => agent.character_name),
+  ];
+  const tier = classifyComplexity(task);
+  const model = await selectModel(tier);
+  const taskRecord = createTask(squadId, `Planning meeting: ${task}`, undefined, lead.id);
+
+  if (taskRecord.instance_id) {
+    touchInstanceActivity(taskRecord.instance_id);
+  }
+
+  updateAgentStatus(lead.id, "working");
+  addAuditEntry(
+    "planning_meeting_started",
+    `Planning meeting started by ${lead.character_name}`,
+    {
+      task: task.slice(0, 500),
+      executeAfter,
+      model,
+      attachments: attachments.map((attachment) => ({
+        name: attachment.name,
+        mimeType: attachment.mimeType,
+        size: attachment.size,
+      })),
+    },
+    { squad_id: squadId, agent_id: lead.id, task_id: taskRecord.id }
+  );
+  addAgentEvent(taskRecord.id, "status", `Planning meeting started by ${lead.character_name}`, {
+    agent: lead.character_name,
+    task: task.slice(0, 300),
+    executeAfter,
+  });
+
+  try {
+    const client = await getClient();
+    const skillDirectories = [...await loadSkillDirectories(), ...loadSquadSkillDirectories(squadSlug)];
+    const mcpServers = getMcpServersForSession();
+    const workingDirectory = process.cwd();
+    const squadTools = createSquadTools(squadSlug, squadId, squad.repo_url);
+    const leadTools = createLeadDelegationTools(
+      squadId,
+      squadSlug,
+      squad,
+      workingDirectory,
+      taskRecord.id
+    );
+
+    const session = await client.createSession({
+      model,
+      streaming: true,
+      workingDirectory,
+      systemMessage: { content: buildFacilitatorPrompt(lead, agents) },
+      tools: [...squadTools, ...leadTools],
+      skillDirectories,
+      mcpServers,
+      onPermissionRequest: approveAll,
+      infiniteSessions: {
+        enabled: true,
+        backgroundCompactionThreshold: 0.6,
+        bufferExhaustionThreshold: 0.95,
+      },
+    });
+
+    const flushTokens = attachTokenTracker(session, {
+      squadId,
+      agentId: lead.id,
+      taskId: taskRecord.id,
+    });
+
+    try {
+      updateTaskStatus(taskRecord.id, "in_progress");
+
+      const planResponse = await session.sendAndWait(
+        {
+          prompt: `Plan this task: ${task}${buildAttachmentSummary(attachments)}`,
+          attachments: toCopilotBlobAttachments(attachments),
+        },
+        7_200_000
+      );
+
+      const plan = planResponse?.data?.content ?? "Planning meeting completed but no plan was produced.";
+      const result: MeetingResult = { plan, participants };
+      const summary = buildMeetingSummary(result);
+
+      addAgentEvent(taskRecord.id, "message", `Plan created by ${lead.character_name}`, {
+        phase: "planning",
+        content: plan,
+      });
+
+      if (!executeAfter) {
+        postFeedItem(`squad-${squadSlug}`, "Planning meeting complete — awaiting approval", summary);
+        updateTaskStatus(taskRecord.id, "done", plan);
+        addAuditEntry(
+          "planning_meeting_completed",
+          `Planning meeting completed by ${lead.character_name}`,
+          { result: plan.slice(0, 500), executeAfter: false },
+          { squad_id: squadId, agent_id: lead.id, task_id: taskRecord.id }
+        );
+        addAgentEvent(taskRecord.id, "status", `Planning meeting completed by ${lead.character_name}`, {
+          phase: "planning",
+          result: plan.slice(0, 500),
+        });
+        return result;
+      }
+
+      const executionResponse = await session.sendAndWait(
+        {
+          prompt: `Now execute this plan by delegating work to the appropriate specialists.\n\n${buildAttachmentSummary(attachments)}`,
+          attachments: toCopilotBlobAttachments(attachments),
+        },
+        7_200_000
+      );
+
+      const executionResult =
+        executionResponse?.data?.content ?? "Execution completed but no result was produced.";
+      const combinedResult = `${summary}\n\n---\n## Execution Result\n${executionResult}`;
+
+      postFeedItem(`squad-${squadSlug}`, "Planning meeting complete — execution finished", combinedResult);
+      updateTaskStatus(taskRecord.id, "done", combinedResult);
+      addAuditEntry(
+        "planning_meeting_completed",
+        `Planning meeting executed by ${lead.character_name}`,
+        { result: combinedResult.slice(0, 500), executeAfter: true },
+        { squad_id: squadId, agent_id: lead.id, task_id: taskRecord.id }
+      );
+      addAgentEvent(taskRecord.id, "status", `Planning and execution completed by ${lead.character_name}`, {
+        phase: "execution",
+        result: executionResult.slice(0, 500),
+      });
+
+      return combinedResult;
+    } finally {
+      flushTokens();
+      await session.disconnect();
+    }
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : "Unknown error";
+    updateTaskStatus(taskRecord.id, "failed", errMsg);
+    addAuditEntry(
+      "planning_meeting_failed",
+      `Planning meeting failed: ${errMsg.slice(0, 200)}`,
+      { error: errMsg, executeAfter },
+      { squad_id: squadId, agent_id: lead.id, task_id: taskRecord.id }
+    );
+    addAgentEvent(taskRecord.id, "status", `Planning meeting failed: ${errMsg}`, {
+      error: errMsg,
+      executeAfter,
+    });
+    throw err;
+  } finally {
+    updateAgentStatus(lead.id, "idle");
+  }
 }

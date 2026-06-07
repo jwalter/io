@@ -12,7 +12,7 @@
   ],
   "scripts": {
     "build": "tsc",
-    "build:web": "cd web && npm install && npx vite build",
+    "build:web": "cd web && npm install && npx tsc --noEmit && npx vite build",
     "build:all": "npm run build && npm run build:web",
     "postinstall": "npm rebuild better-sqlite3",
     "daemon": "tsx src/daemon.ts",

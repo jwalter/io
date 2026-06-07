@@ -50,7 +50,7 @@ export function validateAttachmentSizes(
     if (attachment.size > MAX_ATTACHMENT_BYTES) {
       return {
         ok: false,
-        error: `\"${attachment.name}\" exceeds the 10MB per-file limit.`,
+        error: `"${attachment.name}" exceeds the 10MB per-file limit.`,
       };
     }
   }

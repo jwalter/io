@@ -1,12 +1,12 @@
 import { defineConfig } from "vite";
-import vue from "@vitejs/plugin-vue";
+import react from "@vitejs/plugin-react";
 import { resolve } from "node:path";
 import { readFileSync } from "node:fs";
 
 const pkg = JSON.parse(readFileSync(resolve(__dirname, "../package.json"), "utf-8"));
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [react()],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },

@@ -12,7 +12,7 @@ import { addAuditEntry } from "../store/audit-log.js";
 import { addAgentEvent } from "../store/agent-events.js";
 import { PATHS } from "../paths.js";
 import { createSquadTools, createLeadDelegationTools } from "./squad-tools.js";
-import { loadSkillDirectories } from "./skills.js";
+import { loadSkillDirectories, loadSquadSkillDirectories } from "./skills.js";
 import { getMcpServersForSession } from "../mcp/registry.js";
 import { buildAttachmentPathSummary, saveAttachmentsToDisk, type MessageAttachment, toCopilotBlobAttachments } from "../chat/attachments.js";
 import { existsSync, mkdirSync } from "node:fs";
@@ -133,42 +133,10 @@ export async function delegateTask(
     .map((a) => `- ${a.character_name} (${a.role_title})${a.is_lead ? " [LEAD]" : ""}${a.is_qa ? " [QA]" : ""}${a.is_test ? " [TEST]" : ""}`)
     .join("\n");
 
-  // Load squad wiki pages as immutable knowledge context
-  const { listPages, readPage } = await import("../wiki/fs.js");
-  const wikiPrefix = `squads/${squadSlug}`;
-  let wikiKnowledge = "";
-  try {
-    const pages = await listPages(wikiPrefix);
-    const pageContents: string[] = [];
-    for (const page of pages.slice(0, 20)) { // Cap at 20 pages to avoid token overload
-      try {
-        const content = await readPage(`${wikiPrefix}/${page}`);
-        pageContents.push(`### ${page}\n${content}`);
-      } catch {
-        // Skip unreadable pages
-      }
-    }
-    if (pageContents.length > 0) {
-      wikiKnowledge = `\n## ⚠️ MANDATORY SQUAD RULES & KNOWLEDGE (from squad wiki)\n\nThese rules were written by the project owner specifically for this squad. You MUST follow them in ALL work — every task, every PR, every decision. Violating them is a critical failure.\n\nBefore starting any task, re-read these rules. Before submitting any PR or review, verify compliance.\n\n${pageContents.join("\n\n---\n\n")}\n`;
-    }
-  } catch {
-    // Wiki not available — proceed without
-  }
-
   const systemMessage = `# Squad Team Lead: ${lead.character_name}
 
-## 🚨 CRITICAL SECURITY RULE — ABSOLUTE, NON-NEGOTIABLE 🚨
-
-You must NEVER expose secrets, credentials, or sensitive values in ANY publicly visible location. This includes:
-- GitHub issues, pull requests, PR descriptions, comments, or commit messages
-- Log output, error messages, or stack traces shared externally
-- Wiki pages, feed items, or any content viewable by others
-
-What counts as a secret: API keys, access tokens, passwords, connection strings, environment variable values, private config file contents, SSH keys, certificates, webhook URLs with tokens.
-
-If you need to reference that a secret exists, use \`<REDACTED>\` or \`***\` as a placeholder. NEVER include the actual value.
-
-Violation of this rule is a HARD FAILURE — no exceptions, no workarounds, no "just this once."
+## 🚨 Security Rule
+NEVER expose secrets (API keys, tokens, passwords, connection strings, private config) in any public-facing content (PRs, issues, commits, logs, wiki, feed). Use \`<REDACTED>\` as placeholder. Violation = hard failure.
 
 ## Identity & Role
 
@@ -219,7 +187,6 @@ Failure to follow squad wiki rules is a CRITICAL FAILURE.
 - Always use the gh CLI for GitHub interactions
 - Use \`--comment\` for review approvals (not \`--approve\` — GitHub blocks self-approval)
 - When work is complete, ALWAYS notify the user via feed_post with a summary
-${wikiKnowledge}
 ${lead.persona ? `## Personality:\n${lead.persona}` : ""}
 `;
 
@@ -227,7 +194,7 @@ ${lead.persona ? `## Personality:\n${lead.persona}` : ""}
   try {
     // Load squad-scoped tools, skills, and MCP servers
     const squadTools = createSquadTools(squadSlug, squadId, squad?.repo_url);
-    const skillDirs = await loadSkillDirectories();
+    const skillDirs = [...await loadSkillDirectories(), ...loadSquadSkillDirectories(squadSlug)];
     const mcpServers = getMcpServersForSession();
 
     // Resolve correct working directory for the squad's project
@@ -238,7 +205,6 @@ ${lead.persona ? `## Personality:\n${lead.persona}` : ""}
       squadId,
       squadSlug,
       squad!,
-      wikiKnowledge,
       workDir,
       taskRecord.id,
       instanceId
@@ -255,7 +221,7 @@ ${lead.persona ? `## Personality:\n${lead.persona}` : ""}
       onPermissionRequest: approveAll,
       infiniteSessions: {
         enabled: true,
-        backgroundCompactionThreshold: 0.8,
+        backgroundCompactionThreshold: 0.6,
         bufferExhaustionThreshold: 0.95,
       },
     });
