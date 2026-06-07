@@ -12,7 +12,7 @@ import {
 } from "@github/copilot-sdk";
 import type { SquadMember, Task } from "@io/shared";
 
-import { calculateTokenUnitCost, getModelPricing } from "../models/registry.js";
+import { calculateTokenUnitCost, getModelPricing, stripVendorPrefix } from "../models/registry.js";
 import { selectModelForTask } from "../squad/model-selector.js";
 import { getSquad, recordUsage } from "../store/index.js";
 import { getContextForAgent } from "./history.js";
@@ -360,7 +360,9 @@ export async function executeAgentTask(
 	try {
 		client = new CopilotClient({ workingDirectory: worktreePath });
 		await client.start();
-		const model = member.model ?? (await selectModelForTask(task.description));
+		const model = member.model
+			? stripVendorPrefix(member.model)
+			: await selectModelForTask(task.description);
 		const session = await client.createSession({
 			model,
 			workingDirectory: worktreePath,

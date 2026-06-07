@@ -19,6 +19,7 @@ import {
 	startInstance,
 } from "../../execution/instances.js";
 import { executeObjective, resolveRepoPath } from "../../execution/runner.js";
+import { getModelPricing, stripVendorPrefix } from "../../models/index.js";
 import { getSquadStatus } from "../../squad/manager.js";
 import {
 	addMember,
@@ -527,11 +528,23 @@ async function handleAddSquadMember(
 		throw new Error(`Squad ${squadId} was not found.`);
 	}
 
+	// Strip vendor prefix and validate model if provided
+	let validatedModel: string | null = null;
+	if (model) {
+		validatedModel = stripVendorPrefix(model);
+		const pricing = await getModelPricing(validatedModel);
+		if (!pricing) {
+			throw new Error(
+				`Model "${model}" is not available. Use a model from the pricing database (e.g. gpt-4.1-mini, gpt-4.1, claude-sonnet-4, o4-mini). Omit the model field to use dynamic selection.`,
+			);
+		}
+	}
+
 	const member = await addMember(squadId, {
 		role,
 		name,
 		systemPrompt,
-		model: model ?? null,
+		model: validatedModel,
 	});
 
 	eventBus.emit(EVENT_NAMES.SQUAD_MEMBER_UPDATED, { squadId, member });
@@ -688,10 +701,24 @@ async function handleUpdateSquadMember(
 		throw new Error(`Member ${memberId} was not found in squad ${squadId}.`);
 	}
 
+	// Validate model if provided
+	let validatedModel: string | null | undefined = undefined;
+	if (model === "") {
+		validatedModel = null;
+	} else if (model) {
+		validatedModel = stripVendorPrefix(model);
+		const pricing = await getModelPricing(validatedModel);
+		if (!pricing) {
+			throw new Error(
+				`Model "${model}" is not available. Use a model from the pricing database (e.g. gpt-4.1-mini, gpt-4.1, claude-sonnet-4, o4-mini). Set to empty string to clear and use dynamic selection.`,
+			);
+		}
+	}
+
 	const updated = await updateMember(memberId, {
 		role,
 		systemPrompt,
-		model: model === "" ? null : model,
+		model: validatedModel,
 	});
 
 	if (!updated) {

@@ -8,6 +8,7 @@ export {
 	getModelsForTier,
 	getNextTierUp,
 	refreshModelPricing,
+	stripVendorPrefix,
 } from "./registry.js";
 export type {
 	CatalogModel,

@@ -6,6 +6,7 @@ import { EVENT_NAMES, QA_MAX_REVISIONS } from "@io/shared";
 import type { Objective, SquadMember } from "@io/shared";
 
 import { eventBus } from "../event-bus.js";
+import { stripVendorPrefix } from "../models/registry.js";
 import { selectModelForTask } from "../squad/model-selector.js";
 import { QA_PROMPT } from "../squad/roles.js";
 import {
@@ -75,8 +76,9 @@ export async function runQAReview(
 	try {
 		client = new CopilotClient({ workingDirectory: worktreePath });
 		await client.start();
-		const model =
-			qaMember.model ?? (await selectModelForTask(`QA review: ${objective.description}`));
+		const model = qaMember.model
+			? stripVendorPrefix(qaMember.model)
+			: await selectModelForTask(`QA review: ${objective.description}`);
 		const session = await client.createSession({
 			model,
 			workingDirectory: worktreePath,

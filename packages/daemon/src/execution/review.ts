@@ -1,6 +1,7 @@
 import { CopilotClient, approveAll } from "@github/copilot-sdk";
 import type { Objective, SquadMember, Task } from "@io/shared";
 
+import { stripVendorPrefix } from "../models/registry.js";
 import { selectModelForTask } from "../squad/model-selector.js";
 import { TEAM_LEAD_PROMPT } from "../squad/roles.js";
 
@@ -64,8 +65,9 @@ export async function conductReview(
 	try {
 		client = new CopilotClient();
 		await client.start();
-		const model =
-			teamLead.model ?? (await selectModelForTask(`Code review: ${objective.description}`));
+		const model = teamLead.model
+			? stripVendorPrefix(teamLead.model)
+			: await selectModelForTask(`Code review: ${objective.description}`);
 		const session = await client.createSession({
 			model,
 			onPermissionRequest: approveAll,

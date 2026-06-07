@@ -21,7 +21,7 @@ import {
 } from "./types.js";
 
 /** Strip vendor prefix (e.g. "openai/gpt-4o" → "gpt-4o") */
-function stripVendorPrefix(id: string): string {
+export function stripVendorPrefix(id: string): string {
 	const slashIndex = id.indexOf("/");
 	return slashIndex >= 0 ? id.slice(slashIndex + 1) : id;
 }
