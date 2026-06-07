@@ -135,6 +135,16 @@ export async function resolveItem(id: string, db?: DatabaseClient): Promise<Inbo
 	return getInboxItem(id, database);
 }
 
+export async function deleteInboxItem(id: string, db?: DatabaseClient): Promise<boolean> {
+	const database = db ?? (await getDatabase());
+	const result = await database.execute({
+		sql: "DELETE FROM inbox WHERE id = ?",
+		args: [id],
+	});
+
+	return (result.rowsAffected ?? 0) > 0;
+}
+
 export async function getPendingBlockingQuestions(
 	squadId?: string,
 	db?: DatabaseClient,

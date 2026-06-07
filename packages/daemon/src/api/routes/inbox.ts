@@ -2,7 +2,13 @@ import { EVENT_NAMES, type InboxItemStatus, type InboxReplyRequest } from "@io/s
 import { Router } from "express";
 
 import { eventBus } from "../../event-bus.js";
-import { getInboxItem, listInboxItems, markRead, replyToItem } from "../../store/index.js";
+import {
+	deleteInboxItem,
+	getInboxItem,
+	listInboxItems,
+	markRead,
+	replyToItem,
+} from "../../store/index.js";
 
 const router = Router();
 const VALID_STATUSES = new Set<InboxItemStatus>(["pending", "read", "replied", "resolved"]);
@@ -82,6 +88,23 @@ router.put("/api/inbox/:id/read", async (req, res) => {
 	} catch (error) {
 		res.status(500).json({
 			error: "Failed to mark inbox item as read",
+			details: error instanceof Error ? error.message : "Unknown error",
+		});
+	}
+});
+
+router.delete("/api/inbox/:id", async (req, res) => {
+	try {
+		const deleted = await deleteInboxItem(req.params.id);
+		if (!deleted) {
+			res.status(404).json({ error: "Inbox item not found" });
+			return;
+		}
+
+		res.status(204).end();
+	} catch (error) {
+		res.status(500).json({
+			error: "Failed to delete inbox item",
 			details: error instanceof Error ? error.message : "Unknown error",
 		});
 	}
