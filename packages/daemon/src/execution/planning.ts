@@ -4,9 +4,9 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 
 import { CopilotClient, approveAll } from "@github/copilot-sdk";
-import { DEFAULT_MODEL } from "@io/shared";
 import type { Objective, SquadMember } from "@io/shared";
 
+import { selectModelForTask } from "../squad/model-selector.js";
 import { TEAM_LEAD_PROMPT } from "../squad/roles.js";
 
 const execAsync = promisify(exec);
@@ -122,8 +122,9 @@ export async function createPlan(
 	try {
 		client = new CopilotClient({ workingDirectory: repoPath });
 		await client.start();
+		const model = await selectModelForTask(`Create implementation plan: ${objective.description}`);
 		const session = await client.createSession({
-			model: DEFAULT_MODEL,
+			model,
 			workingDirectory: repoPath,
 			onPermissionRequest: approveAll,
 			systemMessage: {

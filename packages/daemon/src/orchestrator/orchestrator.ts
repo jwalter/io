@@ -1,12 +1,6 @@
 import type { EventEmitter } from "node:events";
 import type { CopilotSession } from "@github/copilot-sdk";
-import {
-	type Conversation,
-	DEFAULT_MODEL,
-	EVENT_NAMES,
-	type Message,
-	type StreamChunk,
-} from "@io/shared";
+import { type Conversation, EVENT_NAMES, type Message, type StreamChunk } from "@io/shared";
 
 import type { Config } from "../config.js";
 import {
@@ -284,14 +278,14 @@ export class Orchestrator {
 			});
 			this.activeModel = model;
 		} catch (error) {
-			// If the configured model isn't available, fall back to DEFAULT_MODEL
-			if (model !== DEFAULT_MODEL) {
+			// If the configured model isn't available, fall back to config.defaultModel
+			if (model !== this.config.defaultModel) {
 				this.activeSession = await createSession({
-					model: DEFAULT_MODEL,
+					model: this.config.defaultModel,
 					systemPrompt,
 					tools: createBoundOrchestratorTools(this.config),
 				});
-				this.activeModel = DEFAULT_MODEL;
+				this.activeModel = this.config.defaultModel;
 			} else {
 				throw error;
 			}

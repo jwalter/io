@@ -1,7 +1,7 @@
 import { CopilotClient, approveAll } from "@github/copilot-sdk";
-import { DEFAULT_MODEL } from "@io/shared";
 import type { Objective, SquadMember, Task } from "@io/shared";
 
+import { selectModelForTask } from "../squad/model-selector.js";
 import { TEAM_LEAD_PROMPT } from "../squad/roles.js";
 
 export interface ReviewOutcome {
@@ -64,8 +64,10 @@ export async function conductReview(
 	try {
 		client = new CopilotClient();
 		await client.start();
+		const model =
+			teamLead.model ?? (await selectModelForTask(`Code review: ${objective.description}`));
 		const session = await client.createSession({
-			model: teamLead.model ?? DEFAULT_MODEL,
+			model,
 			onPermissionRequest: approveAll,
 			systemMessage: {
 				content: `${TEAM_LEAD_PROMPT}\n\nYou are conducting a final coordination review before QA.`,
