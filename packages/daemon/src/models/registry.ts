@@ -195,6 +195,9 @@ export async function refreshModelPricing(logger?: RefreshLogger): Promise<Prici
 	const db = await getDatabase();
 	const now = nowIso();
 
+	// Purge stale entries with vendor-prefixed IDs (e.g. "openai/gpt-4o")
+	await db.execute("DELETE FROM model_pricing WHERE id LIKE '%/%'");
+
 	for (const model of modelMap.values()) {
 		// Only store models that have known token pricing
 		if (model.tokenInputMultiplier == null) {
@@ -342,7 +345,7 @@ async function upsertModel(db: DatabaseClient, model: ModelPricing): Promise<voi
 
 function rowToModelPricing(row: Record<string, unknown>): ModelPricing {
 	return {
-		id: asString(row.id),
+		id: stripVendorPrefix(asString(row.id)),
 		displayName: asString(row.display_name),
 		premiumMultiplier: asNullableNumber(row.premium_multiplier),
 		tokenInputMultiplier: asNullableNumber(row.token_input_multiplier),
