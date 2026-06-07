@@ -120,7 +120,10 @@ function normalizeRequest(path: string, method: string, body?: unknown) {
 
 	if (pathname === "/config") {
 		nextPath = "/settings";
-		nextBody = normalizeConfigBody(body);
+		if (nextMethod === "PATCH" || nextMethod === "PUT") {
+			nextMethod = "PUT";
+			nextBody = normalizeConfigBody(body);
+		}
 	}
 
 	if (pathname === "/skills/discover" && nextMethod === "GET") {
