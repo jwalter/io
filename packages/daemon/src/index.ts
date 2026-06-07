@@ -66,8 +66,13 @@ async function main(): Promise<void> {
 		setChatOrchestrator(orchestrator);
 		const apiServer = createApiServer(config);
 		const telegramBot = createTelegramBot(config, orchestrator);
-		telegramBot?.start();
-		createTelegramNotifier(telegramBot, config, eventBus);
+		if (telegramBot) {
+			telegramBot.start();
+			createTelegramNotifier(telegramBot, config, eventBus);
+			logger.info("Telegram bot initialized");
+		} else {
+			logger.info("Telegram bot disabled (no token configured)");
+		}
 
 		registerShutdownHandlers(logger, async () => {
 			if (pricingRefreshTimer) {

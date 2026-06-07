@@ -25,10 +25,21 @@ export class TelegramBot {
 		if (this.started) {
 			return;
 		}
-		this.registerHandlers();
-		this.bot.start().catch((error: unknown) => {
-			this.logger.error({ err: error }, "Telegram polling failed");
+
+		this.bot.catch((err) => {
+			this.logger.error({ err: err.error }, "Telegram bot error: %s", err.message);
 		});
+
+		this.registerHandlers();
+		this.bot
+			.start({
+				onStart: () => {
+					this.logger.info("Telegram bot connected and polling");
+				},
+			})
+			.catch((error: unknown) => {
+				this.logger.error({ err: error }, "Telegram polling failed to start");
+			});
 		this.started = true;
 	}
 
@@ -38,13 +49,31 @@ export class TelegramBot {
 		}
 		this.bot.stop();
 		this.started = false;
+		this.logger.info("Telegram bot stopped");
 	}
 
 	async sendText(chatId: string | number, text: string): Promise<void> {
 		await this.bot.api.sendMessage(chatId, text);
 	}
 
+	private isAuthorized(userId: number): boolean {
+		if (!this.config.telegramUserId) {
+			return false;
+		}
+		return String(userId) === this.config.telegramUserId;
+	}
+
 	private registerHandlers(): void {
+		// Authorization middleware — only respond to configured user
+		this.bot.use(async (ctx, next) => {
+			const userId = ctx.from?.id;
+			if (!userId || !this.isAuthorized(userId)) {
+				this.logger.warn({ userId }, "Unauthorized Telegram message, ignoring");
+				return;
+			}
+			await next();
+		});
+
 		this.bot.command("start", async (ctx) => {
 			await ctx.reply(
 				"Hello from Io. Send me a message and I will route it through the daemon orchestrator.",
