@@ -20,9 +20,15 @@ import {
 	computeTierFromMultiplier,
 } from "./types.js";
 
+/** Strip vendor prefix (e.g. "openai/gpt-4o" → "gpt-4o") */
+function stripVendorPrefix(id: string): string {
+	const slashIndex = id.indexOf("/");
+	return slashIndex >= 0 ? id.slice(slashIndex + 1) : id;
+}
+
 /** Normalize model names for fuzzy matching between different sources */
 function normalizeModelName(name: string): string {
-	return name
+	return stripVendorPrefix(name)
 		.toLowerCase()
 		.replace(/^openai\s+/i, "")
 		.replace(/\s+/g, "-")
@@ -46,7 +52,8 @@ async function fetchCatalogIntoMap(
 		result.catalogFetched = true;
 		for (const m of catalogModels) {
 			const key = normalizeModelName(m.id);
-			modelMap.set(key, { id: m.id, displayName: m.displayName, available: true });
+			const id = stripVendorPrefix(m.id);
+			modelMap.set(key, { id, displayName: m.displayName, available: true });
 		}
 	} catch (error) {
 		const msg = error instanceof Error ? error.message : String(error);
