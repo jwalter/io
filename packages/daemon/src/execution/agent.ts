@@ -21,6 +21,7 @@ const execAsync = promisify(exec);
 const MAX_FILE_SIZE = 200_000;
 const MAX_LIST_RESULTS = 200;
 const MAX_SEARCH_RESULTS = 100;
+const SESSION_CREATE_TIMEOUT_MS = 30_000;
 
 export interface UsageData {
 	inputTokens: number;
@@ -363,7 +364,7 @@ export async function executeAgentTask(
 		const model = member.model
 			? stripVendorPrefix(member.model)
 			: await selectModelForTask(task.description);
-		const session = await client.createSession({
+		const sessionPromise = client.createSession({
 			model,
 			workingDirectory: worktreePath,
 			tools,
@@ -373,6 +374,16 @@ export async function executeAgentTask(
 				content: `${member.systemPrompt}\n\nRecent agent history:\n${historyContext}\n\n${mcpServerNote}${options?.instancePromptSuffix ?? ""}`,
 			},
 		});
+		const session = await Promise.race([
+			sessionPromise,
+			new Promise<never>((_, reject) =>
+				setTimeout(
+					() =>
+						reject(new Error(`Session creation timed out after ${SESSION_CREATE_TIMEOUT_MS}ms`)),
+					SESSION_CREATE_TIMEOUT_MS,
+				),
+			),
+		]);
 		session.on("assistant.usage", (event) => {
 			usageEvents.push(event.data);
 			mergeUsage(usage, event.data);

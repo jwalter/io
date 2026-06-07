@@ -131,64 +131,53 @@ async function executePendingTasks(
 		return getTasksForObjective(objective.id);
 	}
 
-	const results = await Promise.allSettled(
-		pendingTasks.map(async (task) => {
-			const member = members.find((candidate) => candidate.id === task.assigneeId);
-			if (!member) {
-				const failedTask = await markTaskFailed(
-					task.id,
-					"No squad member matched the task assignee.",
-				);
-				eventBus.emit(EVENT_NAMES.TASK_FAILED, {
-					task: failedTask,
-					agentName: "unassigned",
-					reason: failedTask.result ?? "No assignee",
-				});
-				throw new Error(`Task ${task.id} has no matching assignee`);
-			}
-
-			const inProgressTask = await updateTaskStatus(
+	// Execute tasks sequentially to avoid resource exhaustion from parallel SDK clients
+	for (const task of pendingTasks) {
+		const member = members.find((candidate) => candidate.id === task.assigneeId);
+		if (!member) {
+			const failedTask = await markTaskFailed(
 				task.id,
-				"in_progress",
-				task.result ?? undefined,
+				"No squad member matched the task assignee.",
 			);
-			const startedTask = inProgressTask ?? task;
-			eventBus.emit(EVENT_NAMES.TASK_STARTED, { task: startedTask, agentName: member.name });
-			eventBus.emit(EVENT_NAMES.AGENT_EXECUTING, {
-				squadId: objective.squadId,
-				agentId: member.id,
-				taskId: task.id,
+			eventBus.emit(EVENT_NAMES.TASK_FAILED, {
+				task: failedTask,
+				agentName: "unassigned",
+				reason: failedTask.result ?? "No assignee",
 			});
+			throw new Error(`Task ${task.id} has no matching assignee`);
+		}
 
-			const execution = await executeAgentTask(member, task, worktreePath, {
-				mcpServers,
-				instancePromptSuffix,
+		const inProgressTask = await updateTaskStatus(task.id, "in_progress", task.result ?? undefined);
+		const startedTask = inProgressTask ?? task;
+		eventBus.emit(EVENT_NAMES.TASK_STARTED, { task: startedTask, agentName: member.name });
+		eventBus.emit(EVENT_NAMES.AGENT_EXECUTING, {
+			squadId: objective.squadId,
+			agentId: member.id,
+			taskId: task.id,
+		});
+
+		const execution = await executeAgentTask(member, task, worktreePath, {
+			mcpServers,
+			instancePromptSuffix,
+		});
+		if (!execution.success) {
+			const failedTask = await markTaskFailed(task.id, execution.result);
+			eventBus.emit(EVENT_NAMES.TASK_FAILED, {
+				task: failedTask,
+				agentName: member.name,
+				reason: execution.result,
 			});
-			if (!execution.success) {
-				const failedTask = await markTaskFailed(task.id, execution.result);
-				eventBus.emit(EVENT_NAMES.TASK_FAILED, {
-					task: failedTask,
-					agentName: member.name,
-					reason: execution.result,
-				});
-				throw new Error(execution.result);
-			}
+			throw new Error(execution.result);
+		}
 
-			const completedTask = await markTaskComplete(task.id, execution.result);
-			await extractLearnings(member.id, member.squadId, execution.result);
-			eventBus.emit(EVENT_NAMES.TASK_COMPLETED, { task: completedTask, agentName: member.name });
-			eventBus.emit(EVENT_NAMES.AGENT_COMPLETED, {
-				squadId: objective.squadId,
-				agentId: member.id,
-				taskId: task.id,
-			});
-			return completedTask;
-		}),
-	);
-
-	const failed = results.find((result) => result.status === "rejected");
-	if (failed && failed.status === "rejected") {
-		throw failed.reason instanceof Error ? failed.reason : new Error(String(failed.reason));
+		const completedTask = await markTaskComplete(task.id, execution.result);
+		await extractLearnings(member.id, member.squadId, execution.result);
+		eventBus.emit(EVENT_NAMES.TASK_COMPLETED, { task: completedTask, agentName: member.name });
+		eventBus.emit(EVENT_NAMES.AGENT_COMPLETED, {
+			squadId: objective.squadId,
+			agentId: member.id,
+			taskId: task.id,
+		});
 	}
 
 	return getTasksForObjective(objective.id);
