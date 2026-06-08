@@ -1,0 +1,39 @@
+{
+  "name": "io-web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check src/",
+    "format:check": "biome check --formatter-enabled=true --linter-enabled=false src/",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.107.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.17.0",
+    "marked": "^18.0.5",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-router": "^7.17.0",
+    "recharts": "^2.15.2",
+    "sonner": "^2.0.3",
+    "tailwind-merge": "^3.6.0",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.16",
+    "@tailwindcss/typography": "^0.5.19",
+    "@types/node": "^25.9.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "tailwindcss": "^4.3.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.16"
+  }
+}

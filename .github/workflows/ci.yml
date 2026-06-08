@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install (daemon)
+        run: npm ci
+
+      - name: Install (web)
+        run: cd web && npm ci
+
+      - name: Type check (daemon)
+        run: npx tsc --noEmit
+
+      - name: Lint & format (web)
+        run: cd web && npx biome check src/
+
+      - name: Type check (web)
+        run: cd web && npx tsc --noEmit
+
+      - name: Test with coverage
+        run: npm run test:coverage
+
+      - name: Enforce coverage threshold
+        run: npm run coverage:check
+
+      - name: Build
+        run: npm run build:all

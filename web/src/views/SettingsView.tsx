@@ -1,0 +1,535 @@
+import { Eye, EyeOff, Plus, Save, X } from "lucide-react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { Chip, PrimaryBtn, SecondaryBtn, Toggle } from "@/components/ui";
+import { notifyError, notifySuccess } from "@/lib/notify";
+import { useAuthStore } from "@/stores/auth";
+
+type SettingsTab = "General" | "Telegram" | "Auth" | "Models" | "Advanced";
+
+interface SettingsForm {
+  defaultModel: string;
+  port: string;
+  notificationMode: string;
+  telegramToken: string;
+  telegramUserId: string;
+  telegramEnabled: boolean;
+  supabaseUrl: string;
+  supabaseAnonKey: string;
+  authorizedEmail: string;
+  modelTiers: {
+    high: string[];
+    medium: string[];
+    low: string[];
+  };
+  selfEdit: boolean;
+  watchdog: boolean;
+}
+
+const tabs: SettingsTab[] = ["General", "Telegram", "Auth", "Models", "Advanced"];
+const MASK = "••••••••";
+const inputClass =
+  "bg-[#181818] border border-white/[0.06] rounded-xl px-3 py-2 text-[11px] text-zinc-300 font-mono placeholder:text-zinc-700 focus:outline-none focus:border-[#66FCF1]/30";
+const tabClass = "px-4 py-2 text-[11px] font-mono capitalize border-b-2 -mb-px";
+
+const emptySettings: SettingsForm = {
+  defaultModel: "",
+  port: "3170",
+  notificationMode: "meaningful",
+  telegramToken: "",
+  telegramUserId: "",
+  telegramEnabled: false,
+  supabaseUrl: "",
+  supabaseAnonKey: "",
+  authorizedEmail: "",
+  modelTiers: {
+    high: [],
+    medium: [],
+    low: [],
+  },
+  selfEdit: false,
+  watchdog: true,
+};
+
+async function authJson<T>(paths: string[], init?: RequestInit): Promise<T> {
+  const token = useAuthStore.getState().token;
+
+  for (let index = 0; index < paths.length; index += 1) {
+    const res = await fetch(paths[index], {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(init?.headers ?? {}),
+      },
+    });
+
+    if (res.ok) {
+      if (res.status === 204) return undefined as T;
+      return (await res.json()) as T;
+    }
+
+    if (res.status === 404 && index < paths.length - 1) continue;
+
+    const message = await res.text();
+    throw new Error(message || `Request failed: ${res.status}`);
+  }
+
+  throw new Error("Request failed");
+}
+
+function parseTier(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map(String)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function normalizeSettings(data: Record<string, unknown>): SettingsForm {
+  return {
+    defaultModel: String(data.defaultModel ?? data.model ?? ""),
+    port: String(data.port ?? "3170"),
+    notificationMode: String(data.notificationMode ?? data.backgroundNotifyMode ?? "meaningful"),
+    telegramToken: String(data.telegramToken ?? data.telegramBotToken ?? ""),
+    telegramUserId: String(data.telegramUserId ?? data.authorizedUserId ?? ""),
+    telegramEnabled: Boolean(data.telegramEnabled),
+    supabaseUrl: String(data.supabaseUrl ?? ""),
+    supabaseAnonKey: String(data.supabaseAnonKey ?? ""),
+    authorizedEmail: String(data.authorizedEmail ?? ""),
+    modelTiers: {
+      high: parseTier(
+        data.modelTiers && typeof data.modelTiers === "object"
+          ? (data.modelTiers as Record<string, unknown>).high
+          : data.highModels,
+      ),
+      medium: parseTier(
+        data.modelTiers && typeof data.modelTiers === "object"
+          ? (data.modelTiers as Record<string, unknown>).medium
+          : data.mediumModels,
+      ),
+      low: parseTier(
+        data.modelTiers && typeof data.modelTiers === "object"
+          ? (data.modelTiers as Record<string, unknown>).low
+          : data.lowModels,
+      ),
+    },
+    selfEdit: Boolean(data.selfEdit ?? data.selfEditEnabled),
+    watchdog: Boolean(data.watchdog ?? data.watchdogEnabled ?? true),
+  };
+}
+
+function buildPayload(settings: SettingsForm) {
+  const telegramToken = settings.telegramToken === MASK ? undefined : settings.telegramToken;
+  const supabaseAnonKey = settings.supabaseAnonKey === MASK ? undefined : settings.supabaseAnonKey;
+
+  return {
+    defaultModel: settings.defaultModel,
+    port: Number(settings.port || 3170),
+    notificationMode: settings.notificationMode,
+    backgroundNotifyMode: settings.notificationMode,
+    telegramToken,
+    telegramBotToken: telegramToken,
+    telegramUserId: settings.telegramUserId ? Number(settings.telegramUserId) : undefined,
+    authorizedUserId: settings.telegramUserId ? Number(settings.telegramUserId) : undefined,
+    telegramEnabled: settings.telegramEnabled,
+    supabaseUrl: settings.supabaseUrl,
+    supabaseAnonKey,
+    authorizedEmail: settings.authorizedEmail,
+    modelTiers: settings.modelTiers,
+    selfEdit: settings.selfEdit,
+    selfEditEnabled: settings.selfEdit,
+    watchdog: settings.watchdog,
+    watchdogEnabled: settings.watchdog,
+  };
+}
+
+function FormRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-2 border-b border-white/[0.04] py-4 first:pt-0 last:border-b-0 last:pb-0 md:flex-row md:items-start">
+      <div className="w-40 pt-2 text-[11px] font-mono text-zinc-500">{label}</div>
+      <div className="flex-1">{children}</div>
+    </div>
+  );
+}
+
+function SensitiveField({
+  value,
+  placeholder,
+  visible,
+  onToggle,
+  onChange,
+}: {
+  value: string;
+  placeholder?: string;
+  visible: boolean;
+  onToggle: () => void;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="relative">
+      <input
+        type={visible ? "text" : "password"}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className={`${inputClass} w-full pr-10`}
+      />
+      <button
+        type="button"
+        onClick={onToggle}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 transition-colors hover:text-zinc-300"
+      >
+        {visible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+      </button>
+    </div>
+  );
+}
+
+function TierEditor({
+  label,
+  items,
+  pending,
+  onPendingChange,
+  onAdd,
+  onRemove,
+}: {
+  label: string;
+  items: string[];
+  pending: string;
+  onPendingChange: (value: string) => void;
+  onAdd: () => void;
+  onRemove: (value: string) => void;
+}) {
+  return (
+    <FormRow label={label}>
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {items.map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => onRemove(item)}
+              className="rounded-full transition-transform hover:scale-[1.02]"
+            >
+              <Chip variant="muted">{item} ×</Chip>
+            </button>
+          ))}
+          {!items.length ? <span className="text-[11px] font-mono text-zinc-700">No models</span> : null}
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            value={pending}
+            onChange={(event) => onPendingChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === ",") {
+                event.preventDefault();
+                onAdd();
+              }
+            }}
+            onBlur={onAdd}
+            placeholder="Add model id"
+            className={`${inputClass} flex-1`}
+          />
+          <SecondaryBtn onClick={onAdd} className="px-3 py-2">
+            <Plus className="h-3.5 w-3.5" />
+            Add
+          </SecondaryBtn>
+        </div>
+      </div>
+    </FormRow>
+  );
+}
+
+export default function SettingsView() {
+  const [settings, setSettings] = useState<SettingsForm>(emptySettings);
+  const [initialSettings, setInitialSettings] = useState<SettingsForm>(emptySettings);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<SettingsTab>("General");
+  const [showTelegramToken, setShowTelegramToken] = useState(false);
+  const [showSupabaseKey, setShowSupabaseKey] = useState(false);
+  const [tierDrafts, setTierDrafts] = useState({ high: "", medium: "", low: "" });
+
+  const loadSettings = async () => {
+    const response = await authJson<Record<string, unknown>>(["/api/config", "/api/settings"]);
+    const normalized = normalizeSettings(response);
+    setSettings(normalized);
+    setInitialSettings(normalized);
+  };
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        await loadSettings();
+      } catch (error) {
+        notifyError(error instanceof Error ? error.message : "Failed to load settings");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [loadSettings]);
+
+  const dirty = useMemo(
+    () => JSON.stringify(settings) !== JSON.stringify(initialSettings),
+    [initialSettings, settings],
+  );
+
+  const updateField = <K extends keyof SettingsForm>(key: K, value: SettingsForm[K]) => {
+    setSettings((current) => ({ ...current, [key]: value }));
+  };
+
+  const updateTier = (tier: keyof SettingsForm["modelTiers"], items: string[]) => {
+    setSettings((current) => ({
+      ...current,
+      modelTiers: {
+        ...current.modelTiers,
+        [tier]: items,
+      },
+    }));
+  };
+
+  const addTierItem = (tier: keyof SettingsForm["modelTiers"]) => {
+    const nextValue = tierDrafts[tier].trim().replace(/,$/, "");
+    if (!nextValue) return;
+    if (!settings.modelTiers[tier].includes(nextValue)) {
+      updateTier(tier, [...settings.modelTiers[tier], nextValue]);
+    }
+    setTierDrafts((current) => ({ ...current, [tier]: "" }));
+  };
+
+  const removeTierItem = (tier: keyof SettingsForm["modelTiers"], value: string) => {
+    updateTier(
+      tier,
+      settings.modelTiers[tier].filter((item) => item !== value),
+    );
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await authJson(["/api/config", "/api/settings"], {
+        method: "PUT",
+        body: JSON.stringify(buildPayload(settings)),
+      });
+      setInitialSettings(settings);
+      notifySuccess("Settings saved");
+    } catch (error) {
+      notifyError(error instanceof Error ? error.message : "Failed to save settings");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="p-6 text-[11px] font-mono text-zinc-500">Loading settings…</div>;
+  }
+
+  return (
+    <div className="mx-auto flex h-full w-full max-w-5xl flex-col gap-6 p-6 text-zinc-200">
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <h1 className="text-4xl leading-none text-white" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
+            Settings
+          </h1>
+          <p className="mt-2 text-[11px] font-mono text-zinc-600">
+            Control auth, notifications, models, and runtime behavior.
+          </p>
+        </div>
+      </div>
+
+      <div className="glass-card border border-white/[0.07] rounded-2xl overflow-hidden flex-1 min-h-0 flex flex-col">
+        <div className="border-b border-white/[0.06] px-5 pt-4">
+          <div className="flex gap-1 overflow-x-auto border-b border-white/[0.06]">
+            {tabs.map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={`${tabClass} ${
+                  activeTab === tab
+                    ? "text-[#66FCF1] border-[#66FCF1]"
+                    : "text-zinc-600 hover:text-zinc-300 border-transparent"
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+          {activeTab === "General" ? (
+            <div className="space-y-1">
+              <FormRow label="Default model">
+                <input
+                  value={settings.defaultModel}
+                  onChange={(event) => updateField("defaultModel", event.target.value)}
+                  placeholder="gpt-5"
+                  className={`${inputClass} w-full`}
+                />
+              </FormRow>
+              <FormRow label="Port">
+                <input
+                  type="number"
+                  value={settings.port}
+                  onChange={(event) => updateField("port", event.target.value)}
+                  className={`${inputClass} w-full md:max-w-[180px]`}
+                />
+              </FormRow>
+              <FormRow label="Notification mode">
+                <select
+                  value={settings.notificationMode}
+                  onChange={(event) => updateField("notificationMode", event.target.value)}
+                  className={`${inputClass} w-full md:max-w-[220px]`}
+                >
+                  <option value="all">all</option>
+                  <option value="meaningful">meaningful</option>
+                  <option value="off">off</option>
+                </select>
+              </FormRow>
+            </div>
+          ) : null}
+
+          {activeTab === "Telegram" ? (
+            <div className="space-y-1">
+              <FormRow label="Enable">
+                <div className="flex items-center gap-3">
+                  <Toggle
+                    checked={settings.telegramEnabled}
+                    onChange={() => updateField("telegramEnabled", !settings.telegramEnabled)}
+                  />
+                  <span className="text-[11px] font-mono text-zinc-500">
+                    Allow Telegram notifications and bot access
+                  </span>
+                </div>
+              </FormRow>
+              <FormRow label="Bot token">
+                <SensitiveField
+                  value={settings.telegramToken}
+                  visible={showTelegramToken}
+                  onToggle={() => setShowTelegramToken((current) => !current)}
+                  onChange={(value) => updateField("telegramToken", value)}
+                  placeholder="Telegram bot token"
+                />
+              </FormRow>
+              <FormRow label="Authorized user ID">
+                <input
+                  value={settings.telegramUserId}
+                  onChange={(event) => updateField("telegramUserId", event.target.value)}
+                  placeholder="123456789"
+                  className={`${inputClass} w-full md:max-w-[220px]`}
+                />
+              </FormRow>
+            </div>
+          ) : null}
+
+          {activeTab === "Auth" ? (
+            <div className="space-y-1">
+              <FormRow label="Supabase URL">
+                <input
+                  value={settings.supabaseUrl}
+                  onChange={(event) => updateField("supabaseUrl", event.target.value)}
+                  placeholder="https://project.supabase.co"
+                  className={`${inputClass} w-full`}
+                />
+              </FormRow>
+              <FormRow label="Anon key">
+                <SensitiveField
+                  value={settings.supabaseAnonKey}
+                  visible={showSupabaseKey}
+                  onToggle={() => setShowSupabaseKey((current) => !current)}
+                  onChange={(value) => updateField("supabaseAnonKey", value)}
+                  placeholder="Supabase anon key"
+                />
+              </FormRow>
+              <FormRow label="Authorized email">
+                <input
+                  type="email"
+                  value={settings.authorizedEmail}
+                  onChange={(event) => updateField("authorizedEmail", event.target.value)}
+                  placeholder="you@example.com"
+                  className={`${inputClass} w-full`}
+                />
+              </FormRow>
+            </div>
+          ) : null}
+
+          {activeTab === "Models" ? (
+            <div className="space-y-1">
+              <TierEditor
+                label="High tier"
+                items={settings.modelTiers.high}
+                pending={tierDrafts.high}
+                onPendingChange={(value) => setTierDrafts((current) => ({ ...current, high: value }))}
+                onAdd={() => addTierItem("high")}
+                onRemove={(value) => removeTierItem("high", value)}
+              />
+              <TierEditor
+                label="Medium tier"
+                items={settings.modelTiers.medium}
+                pending={tierDrafts.medium}
+                onPendingChange={(value) => setTierDrafts((current) => ({ ...current, medium: value }))}
+                onAdd={() => addTierItem("medium")}
+                onRemove={(value) => removeTierItem("medium", value)}
+              />
+              <TierEditor
+                label="Low tier"
+                items={settings.modelTiers.low}
+                pending={tierDrafts.low}
+                onPendingChange={(value) => setTierDrafts((current) => ({ ...current, low: value }))}
+                onAdd={() => addTierItem("low")}
+                onRemove={(value) => removeTierItem("low", value)}
+              />
+            </div>
+          ) : null}
+
+          {activeTab === "Advanced" ? (
+            <div className="space-y-1">
+              <FormRow label="Self-edit">
+                <div className="flex items-center gap-3">
+                  <Toggle checked={settings.selfEdit} onChange={() => updateField("selfEdit", !settings.selfEdit)} />
+                  <span className="text-[11px] font-mono text-zinc-500">
+                    Allow modifying the IO installation when explicitly requested
+                  </span>
+                </div>
+              </FormRow>
+              <FormRow label="Watchdog">
+                <div className="flex items-center gap-3">
+                  <Toggle checked={settings.watchdog} onChange={() => updateField("watchdog", !settings.watchdog)} />
+                  <span className="text-[11px] font-mono text-zinc-500">Keep the background watchdog enabled</span>
+                </div>
+              </FormRow>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="border-t border-white/[0.06] px-5 py-4 flex items-center justify-between gap-3">
+          <p className="text-[11px] font-mono text-zinc-600">
+            {dirty ? "Unsaved changes" : `Secrets remain masked as ${MASK}`}
+          </p>
+          <div className="flex items-center gap-2">
+            <SecondaryBtn
+              onClick={() => setSettings(initialSettings)}
+              className={`px-4 py-2 ${dirty ? "" : "pointer-events-none opacity-50"}`}
+            >
+              <X className="h-3.5 w-3.5" />
+              Cancel
+            </SecondaryBtn>
+            <PrimaryBtn onClick={save} className={`px-4 py-2 ${saving ? "pointer-events-none opacity-60" : ""}`}>
+              <Save className="h-3.5 w-3.5" />
+              {saving ? "Saving…" : "Save"}
+            </PrimaryBtn>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
