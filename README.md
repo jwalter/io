@@ -40,7 +40,7 @@ IO is a personal AI assistant daemon built on the GitHub Copilot SDK. It runs 24
 ### Install
 
 ```bash
-npm install -g heyio
+npm install -g yoio
 ```
 
 ### Setup
