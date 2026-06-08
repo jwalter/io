@@ -37,12 +37,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const supabase = getSupabase();
     if (!supabase) return;
 
-    supabase.auth.onAuthStateChange((_event, session) => {
+    supabase.auth.onAuthStateChange((event, session) => {
       if (session) {
         set({ token: session.access_token, email: session.user?.email ?? null });
         localStorage.setItem("io_token", session.access_token);
         if (session.user?.email) localStorage.setItem("io_email", session.user.email);
-      } else {
+      } else if (event === "SIGNED_OUT") {
         set({ token: null, email: null });
         localStorage.removeItem("io_token");
         localStorage.removeItem("io_email");
