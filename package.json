@@ -1,5 +1,5 @@
 {
-  "name": "yoio",
+  "name": "@michaeljolley/heyio",
   "version": "0.0.1",
   "description": "IO \u2014 a personal AI assistant daemon built on the GitHub Copilot SDK",
   "bin": {
