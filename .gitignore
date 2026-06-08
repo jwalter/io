@@ -1,0 +1,12 @@
+node_modules/
+dist/
+web-dist/
+*.swp
+*.swo
+.env
+
+# Docs
+docs/node_modules
+docs/.vitepress/dist
+docs/.vitepress/cache
+web/tsconfig.tsbuildinfo
