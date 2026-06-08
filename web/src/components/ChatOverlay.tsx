@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect, type KeyboardEvent, type DragEvent } from "react";
+import { useState, useRef, useEffect } from "react";
+import { MessageSquare, Send, Paperclip, X, FileText } from "lucide-react";
+import { IoMark } from "./IoMark";
 import { useChatStore } from "@/stores/chat";
-import { useAuthStore } from "@/stores/auth";
-import { MarkdownContent } from "./MarkdownContent";
 import {
   fileToMessageAttachment,
   validateAttachmentSizes,
@@ -10,195 +10,175 @@ import {
   toDataUrl,
   type MessageAttachment,
 } from "@/lib/attachments";
-import { MessageSquare, X, Send, Paperclip, Square, Trash2 } from "lucide-react";
 
 export function ChatOverlay() {
-  const [isOpen, setIsOpen] = useState(false);
+  const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [pendingAttachments, setPendingAttachments] = useState<MessageAttachment[]>([]);
-  const [composerError, setComposerError] = useState("");
-  const [isDragging, setIsDragging] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
   const messages = useChatStore((s) => s.messages);
   const isStreaming = useChatStore((s) => s.isStreaming);
   const sendMessage = useChatStore((s) => s.sendMessage);
-  const stopStreaming = useChatStore((s) => s.stopStreaming);
-  const clearMessages = useChatStore((s) => s.clearMessages);
-  const email = useAuthStore((s) => s.email);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (isOpen) messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isOpen]);
-
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
-    }
-  }, [input]);
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isStreaming]);
 
   const handleSend = async () => {
-    const trimmed = input.trim();
-    if (!trimmed && pendingAttachments.length === 0) return;
+    if ((!input.trim() && pendingAttachments.length === 0) || isStreaming) return;
+    const text = input.trim();
     setInput("");
-    setComposerError("");
     const attachments = [...pendingAttachments];
     setPendingAttachments([]);
-    await sendMessage(trimmed, attachments);
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
+    await sendMessage(text, attachments);
   };
 
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
-
-  const handleFiles = async (files: FileList | File[]) => {
-    const results: MessageAttachment[] = [];
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files?.length) return;
+    const newAttachments: MessageAttachment[] = [];
     for (const file of Array.from(files)) {
-      results.push(await fileToMessageAttachment(file));
+      newAttachments.push(await fileToMessageAttachment(file));
     }
-    const all = [...pendingAttachments, ...results];
-    const validation = validateAttachmentSizes(all);
-    if (!validation.ok) {
-      setComposerError(validation.error);
-      return;
+    const combined = [...pendingAttachments, ...newAttachments];
+    const validated = validateAttachmentSizes(combined);
+    if (validated.ok) {
+      setPendingAttachments(combined);
     }
-    setPendingAttachments(all);
+    e.target.value = "";
   };
 
-  const handleDrop = (e: DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
-  const removeAttachment = (index: number) => {
-    setPendingAttachments((prev) => prev.filter((_, i) => i !== index));
+  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 100) + "px";
+    }
   };
-
-  const userInitial = email ? email[0].toUpperCase() : "U";
-
-  if (!isOpen) {
-    return (
-      <button
-        onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 w-14 h-14 rounded-full btn-gradient text-white flex items-center justify-center shadow-glow-lg z-50 hover:scale-105 transition-transform"
-      >
-        <MessageSquare size={24} />
-      </button>
-    );
-  }
 
   return (
-    <div className="fixed bottom-0 right-0 w-96 h-[70vh] max-h-[700px] bg-card border-l border-t border-border rounded-tl-lg shadow-glow-lg z-50 flex flex-col"
-      onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-      onDragLeave={() => setIsDragging(false)}
-      onDrop={handleDrop}
-    >
-      {isDragging && (
-        <div className="absolute inset-0 bg-primary/10 border-2 border-dashed border-primary rounded-tl-lg z-10 flex items-center justify-center">
-          <p className="text-primary font-medium">Drop files here</p>
+    <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-2.5">
+      {open && (
+        <div
+          className="w-[340px] flex flex-col rounded-2xl overflow-hidden shadow-2xl border border-white/[0.09]"
+          style={{ height: "460px", background: "#1c1c1c" }}
+        >
+          {/* Header */}
+          <div
+            className="flex items-center justify-between px-4 py-3 border-b border-white/[0.07] flex-shrink-0"
+            style={{ background: "linear-gradient(135deg, rgba(69,162,158,0.18) 0%, rgba(247,95,87,0.10) 100%)" }}
+          >
+            <div className="flex items-center gap-2.5">
+              <IoMark height={20} />
+              <span className="text-xl text-white tracking-wider leading-none" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>IO</span>
+              <span className="text-[10px] font-mono text-zinc-600 mt-0.5">quick chat</span>
+            </div>
+            <button onClick={() => setOpen(false)} className="p-1 rounded-lg hover:bg-white/[0.07] text-zinc-600 hover:text-zinc-300 transition-colors">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
+            {messages.map(msg => (
+              <div key={msg.id} className={`flex gap-2 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
+                <div
+                  className={`flex-shrink-0 w-5 h-5 rounded-lg flex items-center justify-center text-[9px] font-mono mt-0.5 ${msg.role === "user" ? "border border-[#66FCF1]/30" : "bg-[#282828] border border-white/[0.07]"}`}
+                  style={msg.role === "user" ? { background: "rgba(69,162,158,0.12)" } : undefined}
+                >
+                  {msg.role === "user" ? <span className="text-[#66FCF1]">U</span> : <IoMark height={9} />}
+                </div>
+                <div
+                  className={`max-w-[82%] rounded-xl px-3 py-2 text-xs leading-relaxed ${msg.role === "user" ? "text-[#1F2833] rounded-tr-sm" : "bg-[#282828] border border-white/[0.06] text-zinc-200 rounded-tl-sm"}`}
+                  style={msg.role === "user" ? { background: "linear-gradient(135deg, #45A29E 0%, #F75F57 100%)" } : undefined}
+                >
+                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                </div>
+              </div>
+            ))}
+            {isStreaming && (
+              <div className="flex gap-2">
+                <div className="flex-shrink-0 w-5 h-5 rounded-lg flex items-center justify-center bg-[#282828] border border-white/[0.07] mt-0.5">
+                  <IoMark height={9} />
+                </div>
+                <div className="bg-[#282828] border border-white/[0.06] rounded-xl rounded-tl-sm px-3 py-2.5 flex items-center gap-1">
+                  {[0, 110, 220].map(d => <span key={d} className="w-1 h-1 rounded-full bg-[#66FCF1] animate-bounce" style={{ animationDelay: `${d}ms` }} />)}
+                </div>
+              </div>
+            )}
+            <div ref={bottomRef} />
+          </div>
+
+          {/* Input */}
+          <div className="p-2.5 border-t border-white/[0.06] flex-shrink-0 space-y-2">
+            {pendingAttachments.length > 0 && (
+              <div className="flex items-center gap-2 bg-[#252525] border border-white/[0.08] rounded-xl px-3 py-2">
+                <div className="w-9 h-6 rounded bg-[#2e2e2e] border border-white/[0.08] flex items-center justify-center flex-shrink-0">
+                  <FileText className="w-3 h-3 text-zinc-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-mono text-zinc-300 truncate leading-tight">{pendingAttachments[0].name}</p>
+                  <p className="text-[9px] font-mono text-zinc-600 leading-tight">{formatAttachmentSize(pendingAttachments[0].size)}</p>
+                </div>
+                <button onClick={() => setPendingAttachments([])} className="p-0.5 rounded text-zinc-600 hover:text-zinc-300 transition-colors flex-shrink-0">
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            )}
+            <div className="bg-[#252525] border border-white/[0.08] rounded-xl flex items-end gap-1.5 px-2.5 py-2 focus-within:border-[#66FCF1]/30 transition-colors">
+              <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange} />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="p-1 rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06] transition-colors flex-shrink-0"
+                title="Attach file"
+              >
+                <Paperclip className="w-3.5 h-3.5" />
+              </button>
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={handleInput}
+                onKeyDown={handleKeyDown}
+                placeholder="Message IO…"
+                rows={1}
+                className="flex-1 bg-transparent text-xs text-zinc-200 placeholder:text-zinc-700 resize-none focus:outline-none leading-relaxed"
+                style={{ minHeight: "18px", maxHeight: "100px", fontFamily: "Inter, sans-serif" }}
+              />
+              <button
+                onClick={handleSend}
+                disabled={(!input.trim() && pendingAttachments.length === 0) || isStreaming}
+                className="p-1.5 rounded-lg text-[#1F2833] disabled:opacity-25 disabled:cursor-not-allowed transition-opacity hover:opacity-90 flex-shrink-0"
+                style={{ background: "linear-gradient(135deg, #45A29E, #F75F57)" }}
+              >
+                <Send className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-xs text-primary-foreground font-medium">
-            {userInitial}
-          </div>
-          <span className="text-sm font-medium">Chat</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <button onClick={clearMessages} className="text-muted-foreground hover:text-foreground p-1" title="Clear">
-            <Trash2 size={14} />
-          </button>
-          <button onClick={() => setIsOpen(false)} className="text-muted-foreground hover:text-foreground p-1">
-            <X size={18} />
-          </button>
-        </div>
-      </div>
-
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
-        {messages.map((msg) => (
-          <div key={msg.id} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
-              msg.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
-            }`}>
-              {msg.role === "assistant" ? (
-                <MarkdownContent content={msg.content || (msg.streaming ? "..." : "")} className="text-sm" />
-              ) : (
-                <p className="whitespace-pre-wrap">{msg.content}</p>
-              )}
-              {msg.attachments.length > 0 && (
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {msg.attachments.map((att, i) => (
-                    <span key={i} className="text-xs px-1.5 py-0.5 bg-black/20 rounded">
-                      {isImageAttachment(att) ? (
-                        <img src={toDataUrl(att)} alt={att.name} className="max-w-20 max-h-20 rounded" />
-                      ) : (
-                        <>{att.name} ({formatAttachmentSize(att.size)})</>
-                      )}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {msg.streaming && (
-                <span className="inline-flex gap-0.5 ml-1">
-                  <span className="w-1 h-1 rounded-full bg-current animate-bounce" style={{ animationDelay: "0ms" }} />
-                  <span className="w-1 h-1 rounded-full bg-current animate-bounce" style={{ animationDelay: "150ms" }} />
-                  <span className="w-1 h-1 rounded-full bg-current animate-bounce" style={{ animationDelay: "300ms" }} />
-                </span>
-              )}
-            </div>
-          </div>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Composer */}
-      <div className="border-t border-border p-3">
-        {composerError && <p className="text-xs text-destructive mb-1">{composerError}</p>}
-        {pendingAttachments.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-2">
-            {pendingAttachments.map((att, i) => (
-              <div key={i} className="flex items-center gap-1 text-xs px-1.5 py-0.5 bg-muted rounded">
-                <span className="truncate max-w-20">{att.name}</span>
-                <button onClick={() => removeAttachment(i)} className="text-muted-foreground hover:text-foreground"><X size={10} /></button>
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="flex items-end gap-2">
-          <label className="cursor-pointer text-muted-foreground hover:text-foreground self-end pb-1">
-            <Paperclip size={16} />
-            <input type="file" multiple className="hidden" onChange={(e) => e.target.files && handleFiles(e.target.files)} />
-          </label>
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Message..."
-            rows={1}
-            className="flex-1 resize-none bg-input border border-border rounded-md px-2 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-          />
-          {isStreaming ? (
-            <button onClick={stopStreaming} className="p-1.5 bg-destructive text-destructive-foreground rounded">
-              <Square size={14} />
-            </button>
-          ) : (
-            <button onClick={handleSend} className="p-1.5 btn-gradient text-white rounded">
-              <Send size={14} />
-            </button>
-          )}
-        </div>
-      </div>
+      {/* Toggle button */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        title={open ? "Close chat" : "Quick chat"}
+        className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-xl transition-all duration-150 hover:scale-105 active:scale-95"
+        style={open
+          ? { background: "#252525", border: "1px solid rgba(255,255,255,0.09)" }
+          : { background: "linear-gradient(135deg, #45A29E 0%, #45A29E 55%, #F75F57 100%)" }
+        }
+      >
+        {open
+          ? <X className="w-4 h-4 text-zinc-400" />
+          : <MessageSquare className="w-4 h-4 text-[#1F2833]" />
+        }
+      </button>
     </div>
   );
 }

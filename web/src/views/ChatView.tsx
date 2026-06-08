@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, type KeyboardEvent, type DragEvent } from "react";
 import { useChatStore } from "@/stores/chat";
-import { MarkdownContent } from "@/components/MarkdownContent";
+import { IoMark } from "@/components/IoMark";
+import { MarkdownRenderer } from "@/components/ui";
 import {
   fileToMessageAttachment,
   validateAttachmentSizes,
@@ -9,7 +10,7 @@ import {
   toDataUrl,
   type MessageAttachment,
 } from "@/lib/attachments";
-import { Paperclip, Send, X } from "lucide-react";
+import { Paperclip, Send, Square, X } from "lucide-react";
 
 export default function ChatView() {
   const messages = useChatStore((s) => s.messages);
@@ -31,7 +32,7 @@ export default function ChatView() {
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 160)}px`;
     }
   }, [input]);
 
@@ -53,17 +54,17 @@ export default function ChatView() {
   };
 
   const handleFiles = async (files: FileList | File[]) => {
-    const results: MessageAttachment[] = [];
+    const newAttachments: MessageAttachment[] = [];
     for (const file of Array.from(files)) {
-      results.push(await fileToMessageAttachment(file));
+      newAttachments.push(await fileToMessageAttachment(file));
     }
-    const all = [...pendingAttachments, ...results];
-    const validation = validateAttachmentSizes(all);
-    if (!validation.ok) {
-      setComposerError(validation.error);
+    const combined = [...pendingAttachments, ...newAttachments];
+    const validated = validateAttachmentSizes(combined);
+    if (!validated.ok) {
+      setComposerError(validated.error);
       return;
     }
-    setPendingAttachments(all);
+    setPendingAttachments(combined);
   };
 
   const handleDrop = (e: DragEvent) => {
@@ -72,112 +73,124 @@ export default function ChatView() {
     if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
   };
 
-  const removeAttachment = (index: number) => {
-    setPendingAttachments((prev) => prev.filter((_, i) => i !== index));
-  };
-
   return (
     <div
-      className="flex flex-col h-full"
+      className="flex flex-col flex-1 min-h-0"
       onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
     >
-      {isDragging && (
-        <div className="absolute inset-0 bg-primary/10 border-2 border-dashed border-primary rounded-lg z-50 flex items-center justify-center">
-          <p className="text-primary font-medium">Drop files here</p>
-        </div>
-      )}
-
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
         {messages.length === 0 && (
-          <div className="flex items-center justify-center h-full text-muted-foreground">
-            <p>Start a conversation...</p>
+          <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
+            <IoMark height={48} />
+            <p className="text-zinc-600 font-mono text-sm">Start a conversation with IO</p>
           </div>
         )}
-        {messages.map((msg) => (
-          <div key={msg.id} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+        {messages.map(msg => (
+          <div key={msg.id} className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
             <div
-              className={`max-w-[80%] rounded-lg px-4 py-3 ${
-                msg.role === "user" ? "bg-primary text-primary-foreground" : "bg-card border border-border"
-              }`}
+              className={`flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-mono mt-0.5 ${msg.role === "user" ? "border border-[#66FCF1]/30 text-[#66FCF1]" : "bg-[#282828] border border-white/[0.07] text-zinc-500"}`}
+              style={msg.role === "user" ? { background: "rgba(69,162,158,0.12)" } : undefined}
             >
-              {msg.role === "assistant" ? (
-                <MarkdownContent content={msg.content || (msg.streaming ? "..." : "")} />
-              ) : (
-                <p className="whitespace-pre-wrap">{msg.content}</p>
-              )}
-              {msg.attachments.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {msg.attachments.map((att, i) => (
-                    <div key={i} className="text-xs px-2 py-1 bg-muted rounded">
-                      {isImageAttachment(att) ? (
-                        <img src={toDataUrl(att)} alt={att.name} className="max-w-32 max-h-32 rounded" />
-                      ) : (
-                        <span>{att.name} ({formatAttachmentSize(att.size)})</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {msg.streaming && (
-                <span className="inline-flex gap-1 ml-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: "0ms" }} />
-                  <span className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: "150ms" }} />
-                  <span className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: "300ms" }} />
-                </span>
-              )}
+              {msg.role === "user" ? "U" : <IoMark height={12} />}
+            </div>
+            <div className={`flex flex-col gap-1.5 max-w-[72%] ${msg.role === "user" ? "items-end" : "items-start"}`}>
+              <div
+                className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${msg.role === "user" ? "text-[#1F2833] rounded-tr-sm" : "bg-[#222222] border border-white/[0.07] text-zinc-200 rounded-tl-sm"}`}
+                style={msg.role === "user" ? { background: "linear-gradient(135deg, #45A29E 0%, #F75F57 100%)" } : undefined}
+              >
+                {msg.role === "assistant" ? (
+                  <MarkdownRenderer content={msg.content} />
+                ) : (
+                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                )}
+              </div>
+              <span className="text-[11px] text-zinc-700 font-mono px-0.5">
+                {msg.timestamp.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })}
+              </span>
             </div>
           </div>
         ))}
+        {isStreaming && (
+          <div className="flex gap-3">
+            <div className="flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center bg-[#282828] border border-white/[0.07] mt-0.5">
+              <IoMark height={12} />
+            </div>
+            <div className="bg-[#222222] border border-white/[0.07] rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-1.5">
+              {[0, 120, 240].map(d => (
+                <span key={d} className="w-1.5 h-1.5 rounded-full bg-[#66FCF1] animate-bounce" style={{ animationDelay: `${d}ms` }} />
+              ))}
+            </div>
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Composer */}
-      <div className="border-t border-border p-4">
-        {composerError && <p className="text-xs text-destructive mb-2">{composerError}</p>}
+      {/* Input area */}
+      <div className="border-t border-white/[0.06] p-4 flex-shrink-0">
+        {composerError && (
+          <div className="text-[11px] font-mono text-red-400 mb-2">{composerError}</div>
+        )}
+
         {pendingAttachments.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-2">
             {pendingAttachments.map((att, i) => (
-              <div key={i} className="flex items-center gap-1 text-xs px-2 py-1 bg-muted rounded">
-                <span>{att.name}</span>
-                <button onClick={() => removeAttachment(i)} className="text-muted-foreground hover:text-foreground">
-                  <X size={12} />
+              <div key={i} className="flex items-center gap-2 bg-[#252525] border border-white/[0.08] rounded-xl px-3 py-1.5">
+                <span className="text-[10px] font-mono text-zinc-400 truncate max-w-[120px]">{att.name}</span>
+                <span className="text-[9px] font-mono text-zinc-600">{formatAttachmentSize(att.size)}</span>
+                <button onClick={() => setPendingAttachments(p => p.filter((_, idx) => idx !== i))} className="text-zinc-600 hover:text-zinc-300">
+                  <X className="w-3 h-3" />
                 </button>
               </div>
             ))}
           </div>
         )}
-        <div className="flex items-end gap-2">
-          <label className="cursor-pointer text-muted-foreground hover:text-foreground self-end pb-2">
-            <Paperclip size={20} />
-            <input
-              type="file"
-              multiple
-              className="hidden"
-              onChange={(e) => e.target.files && handleFiles(e.target.files)}
-            />
-          </label>
+
+        <div className={`bg-[#1e1e1e] border rounded-2xl overflow-hidden transition-colors focus-within:border-[#66FCF1]/30 ${isDragging ? "border-[#66FCF1]/50" : "border-white/[0.08]"}`}>
           <textarea
             ref={textareaRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Type a message..."
+            placeholder="Message IO…"
             rows={1}
-            className="flex-1 resize-none bg-input border border-border rounded-md px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            className="w-full bg-transparent px-4 pt-3 pb-1 text-sm text-zinc-200 placeholder:text-zinc-700 resize-none focus:outline-none"
+            style={{ minHeight: "42px", maxHeight: "160px", fontFamily: "Inter, sans-serif" }}
           />
-          {isStreaming ? (
-            <button onClick={stopStreaming} className="px-3 py-2 bg-destructive text-destructive-foreground rounded-md text-sm">
-              Stop
+          <div className="flex items-center justify-between px-3 pb-2.5">
+            <button
+              onClick={() => {
+                const input = document.createElement("input");
+                input.type = "file";
+                input.multiple = true;
+                input.onchange = () => { if (input.files) handleFiles(input.files); };
+                input.click();
+              }}
+              className="p-1.5 rounded-lg hover:bg-white/[0.05] text-zinc-700 hover:text-zinc-400 transition-colors"
+            >
+              <Paperclip className="w-4 h-4" />
             </button>
-          ) : (
-            <button onClick={handleSend} className="px-3 py-2 btn-gradient text-white rounded-md">
-              <Send size={18} />
-            </button>
-          )}
+            <div className="flex items-center gap-2">
+              {isStreaming ? (
+                <button onClick={stopStreaming} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-[11px] font-mono text-zinc-300 transition-colors">
+                  <Square className="w-3 h-3" /> Stop
+                </button>
+              ) : (
+                <button
+                  onClick={handleSend}
+                  disabled={!input.trim() && pendingAttachments.length === 0}
+                  className="p-2 rounded-xl text-[#1F2833] disabled:opacity-30 disabled:cursor-not-allowed transition-opacity hover:opacity-90"
+                  style={{ background: "linear-gradient(135deg, #45A29E, #F75F57)" }}
+                >
+                  <Send className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
         </div>
+        <p className="text-center text-[11px] text-zinc-800 font-mono mt-2">IO may make mistakes. Verify important outputs.</p>
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { MessageAttachment } from "@/lib/attachments";
+import { notifyError } from "@/lib/notify";
 import { useAuthStore } from "./auth";
 
 export interface ChatMessage {
@@ -166,6 +167,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
                   }
                   return { messages: msgs };
                 });
+                notifyError(
+                  typeof parsed.error === "string" && parsed.error.trim()
+                    ? parsed.error
+                    : "Streaming request failed"
+                );
               }
             } catch {
               // Ignore malformed JSON
@@ -189,6 +195,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
         return { messages: msgs };
       });
+      if (!(err instanceof Error && err.name === "AbortError")) {
+        notifyError(err instanceof Error ? err.message : "Unknown error");
+      }
     } finally {
       currentAbortController = null;
       set({ isStreaming: false });

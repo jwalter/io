@@ -19,7 +19,7 @@ features:
   - title: 👥 Squad System
     details: Persistent project teams with named specialist agents themed from pop culture universes.
   - title: 🌐 Web Dashboard
-    details: Vue 3 dashboard with real-time chat, squad management, feed, wiki, and more.
+    details: React 19 dashboard with real-time chat, squad management, feed, wiki, usage analytics, and more.
   - title: 💬 Telegram Bot
     details: Chat with IO from anywhere via Telegram with full attachment support.
   - title: 🧩 Skills & MCP

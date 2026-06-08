@@ -10,7 +10,7 @@ IO is a personal AI assistant daemon built on the GitHub Copilot SDK. It runs 24
 
 - **Copilot SDK Integration** — powered by GitHub's Copilot SDK for LLM conversations with tool calling
 - **Multi-Interface** — Web dashboard + Telegram bot + HTTP API
-- **Web Frontend** — Vue 3 dashboard with chat, squad management, skills, and agent activity views
+- **Web Frontend** — React 19 dashboard with chat, squad management, skills, usage analytics, and more
 - **Web Chat Attachments** — Attach images/files in web chat (10MB per file, 25MB per message) with multimodal handoff
 - **Persistent Memory** — wiki-based knowledge base stored at `~/.io/wiki/`
 - **Squad System** — persistent project teams with **named specialist agents** themed from pop culture universes (dynamically selected at squad creation)
@@ -25,7 +25,7 @@ IO is a personal AI assistant daemon built on the GitHub Copilot SDK. It runs 24
 - **Squad Instances** — Parallel worktrees for concurrent work within a single squad
 - **Unified Feed** — Consolidated inbox and notification feed with web UI
 - **Telegram Attachments** — Send images/files via Telegram for vision-capable model processing
-- **Agent Preview** — Live streaming preview of any squad agent's activity in the web UI
+- **Token Usage Analytics** — Track token consumption per squad/agent with charts and cost breakdowns
 - **Squad Wiki** — Per-squad wiki context included in agent prompts and instance snapshots
 - **Instance Watchdog** — Monitors active/merging instances and auto-aborts stale ones
 
@@ -205,12 +205,17 @@ The **Squad System** provides persistent project context, while the **Wiki** ser
 
 ### Web Frontend
 
-IO includes a Vue 3 web dashboard served directly from the daemon on the same port as the API (default: 3170). The frontend provides:
+IO includes a React 19 web dashboard served directly from the daemon on the same port as the API (default: 3170). The frontend provides:
 
-- **Chat** — real-time conversation with SSE streaming
-- **Squads** — view and manage project squads
-- **Skills** — browse installed skills
-- **Agent Activity** — monitor running worker agents
+- **Chat** — real-time conversation with SSE streaming and file attachments
+- **Squads** — view and manage project squads, agents, instances, and history
+- **Feed** — unified inbox for deliverables and notifications
+- **Skills** — browse, install, and remove skills from multiple sources
+- **MCP Servers** — manage external tool servers with per-tool toggles
+- **Schedules** — cron-based recurring tasks for squads and the orchestrator
+- **Wiki** — browse and edit the knowledge base
+- **Usage** — token consumption analytics with charts and cost breakdowns
+- **Settings** — configure all IO parameters from the browser
 
 Access the web UI at `http://your-server:3170/` when running in daemon mode.
 
@@ -276,13 +281,15 @@ src/
     ├── auth.ts           # Supabase JWT auth middleware
     └── server.ts         # Express HTTP + SSE + static frontend
 
-web/                        # Vue 3 frontend (built to web-dist/)
+web/                        # React 19 frontend (built to web-dist/)
 ├── src/
-│   ├── lib/              # supabase.ts, api.ts (auth helpers)
-│   ├── stores/           # Pinia stores (chat, auth)
-│   ├── views/            # ChatView, SquadsView, FeedView, SkillsView, McpView, etc.
-│   ├── router/           # Vue Router config + auth guard
-│   └── main.ts           # App entry
+│   ├── lib/              # supabase.ts, api.ts, attachments.ts, notify.ts
+│   ├── stores/           # Zustand stores (chat, auth)
+│   ├── components/       # AppSidebar, AppHeader, ChatOverlay, IoMark
+│   ├── components/ui/    # Shared UI (StatusChip, Buttons, Toggle, MarkdownRenderer)
+│   ├── views/            # ChatView, SquadsView, FeedView, SkillsView, UsageView, etc.
+│   ├── routes/           # React Router config + auth guard
+│   └── main.tsx          # App entry
 ├── vite.config.ts        # Vite config (builds to ../web-dist/)
 └── package.json
 

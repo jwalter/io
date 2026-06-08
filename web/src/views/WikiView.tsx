@@ -1,169 +1,521 @@
-import { useState, useEffect } from "react";
-import { apiGet, apiPut, apiDelete } from "@/lib/api";
-import { MarkdownContent } from "@/components/MarkdownContent";
-import { WikiTree } from "@/components/WikiTree";
-import { Plus, Edit, Trash2, Save, X, Link2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { DangerBtn, IoMark, MarkdownRenderer, PrimaryBtn, SecondaryBtn } from "@/components/ui";
+import { notifyError, notifySuccess } from "@/lib/notify";
+import { useAuthStore } from "@/stores/auth";
+import { ChevronDown, ChevronRight, FileText, Folder, Pencil, Plus, Save, Search, Trash2, X } from "lucide-react";
 
-interface WikiPage {
+interface WikiReadResponse {
+  path?: string;
+  content?: string;
+}
+
+interface SearchResult {
+  path?: string;
+}
+
+interface TreeNode {
+  name: string;
   path: string;
-  title: string;
+  type: "folder" | "file";
+  children?: TreeNode[];
+}
+
+const inputClass =
+  "bg-[#181818] border border-white/[0.06] rounded-xl px-3 py-2 text-[11px] text-zinc-300 font-mono placeholder:text-zinc-700 focus:outline-none focus:border-[#66FCF1]/30";
+const treeItemClass = "px-3 py-1.5 text-[11px] font-mono hover:bg-white/[0.04] rounded-lg cursor-pointer";
+
+function encodePath(path: string) {
+  return path
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+}
+
+async function authJson<T>(paths: string[], init?: RequestInit): Promise<T> {
+  const token = useAuthStore.getState().token;
+
+  for (let index = 0; index < paths.length; index += 1) {
+    const res = await fetch(paths[index], {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(init?.headers ?? {}),
+      },
+    });
+
+    if (res.ok) {
+      if (res.status === 204) {
+        return undefined as T;
+      }
+      return (await res.json()) as T;
+    }
+
+    if (res.status === 404 && index < paths.length - 1) {
+      continue;
+    }
+
+    const message = await res.text();
+    throw new Error(message || `Request failed: ${res.status}`);
+  }
+
+  throw new Error("Request failed");
+}
+
+function normalizePaths(items: unknown): string[] {
+  if (!Array.isArray(items)) return [];
+
+  return items
+    .map((item) => {
+      if (typeof item === "string") return item;
+      if (item && typeof item === "object" && "path" in item && typeof item.path === "string") return item.path;
+      return null;
+    })
+    .filter((value): value is string => !!value)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function buildTree(paths: string[]): TreeNode[] {
+  const root: TreeNode[] = [];
+
+  for (const fullPath of paths) {
+    const segments = fullPath.split("/").filter(Boolean);
+    let level = root;
+
+    segments.forEach((segment, index) => {
+      const currentPath = segments.slice(0, index + 1).join("/");
+      const isFile = index === segments.length - 1;
+      let node = level.find((entry) => entry.path === currentPath);
+
+      if (!node) {
+        node = {
+          name: segment,
+          path: currentPath,
+          type: isFile ? "file" : "folder",
+          children: isFile ? undefined : [],
+        };
+        level.push(node);
+      }
+
+      if (!isFile) {
+        node.children ??= [];
+        level = node.children;
+      }
+    });
+  }
+
+  const sortNodes = (nodes: TreeNode[]) => {
+    nodes.sort((a, b) => {
+      if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+    nodes.forEach((node) => node.children && sortNodes(node.children));
+  };
+
+  sortNodes(root);
+  return root;
+}
+
+function defaultExpanded(paths: string[]) {
+  return paths.reduce<Record<string, boolean>>((acc, path) => {
+    const segments = path.split("/").slice(0, -1);
+    segments.forEach((_, index) => {
+      acc[segments.slice(0, index + 1).join("/")] = true;
+    });
+    return acc;
+  }, {});
+}
+
+function Breadcrumbs({ path }: { path: string }) {
+  const parts = path.split("/").filter(Boolean);
+
+  return (
+    <div className="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap text-[11px] font-mono text-zinc-500">
+      {parts.map((part, index) => (
+        <div key={`${part}-${index}`} className="flex items-center gap-1.5">
+          {index > 0 && <span className="text-zinc-700">/</span>}
+          <span className={index === parts.length - 1 ? "text-[#66FCF1]" : "text-zinc-400"}>{part}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TreeBranch({
+  nodes,
+  selectedPath,
+  expanded,
+  onToggle,
+  onSelect,
+  depth = 0,
+}: {
+  nodes: TreeNode[];
+  selectedPath: string | null;
+  expanded: Record<string, boolean>;
+  onToggle: (path: string) => void;
+  onSelect: (path: string) => void;
+  depth?: number;
+}) {
+  return (
+    <div className="space-y-0.5">
+      {nodes.map((node) => {
+        const isFolder = node.type === "folder";
+        const isOpen = expanded[node.path] ?? depth < 1;
+        const isActive = node.path === selectedPath;
+
+        return (
+          <div key={node.path}>
+            <button
+              type="button"
+              onClick={() => (isFolder ? onToggle(node.path) : onSelect(node.path))}
+              className={`${treeItemClass} w-full flex items-center gap-2 text-left ${
+                isActive ? "text-[#66FCF1] bg-[#66FCF1]/5" : "text-zinc-400"
+              }`}
+              style={{ paddingLeft: `${12 + depth * 14}px` }}
+            >
+              {isFolder ? (
+                <>
+                  {isOpen ? <ChevronDown className="h-3 w-3 text-zinc-600" /> : <ChevronRight className="h-3 w-3 text-zinc-600" />}
+                  <Folder className={`h-3.5 w-3.5 ${isActive ? "text-[#66FCF1]" : "text-[#45A29E]"}`} />
+                </>
+              ) : (
+                <>
+                  <span className="h-3 w-3" />
+                  <FileText className={`h-3.5 w-3.5 ${isActive ? "text-[#66FCF1]" : "text-zinc-500"}`} />
+                </>
+              )}
+              <span className="truncate">{node.name}</span>
+            </button>
+            {isFolder && isOpen && node.children?.length ? (
+              <TreeBranch
+                nodes={node.children}
+                selectedPath={selectedPath}
+                expanded={expanded}
+                onToggle={onToggle}
+                onSelect={onSelect}
+                depth={depth + 1}
+              />
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function WikiView() {
-  const [pages, setPages] = useState<WikiPage[]>([]);
-  const [templates, setTemplates] = useState<WikiPage[]>([]);
-  const [mode, setMode] = useState<"pages" | "templates">("pages");
-  const [selectedPage, setSelectedPage] = useState<string | null>(null);
+  const [pages, setPages] = useState<string[]>([]);
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [content, setContent] = useState("");
-  const [editMode, setEditMode] = useState(false);
-  const [editContent, setEditContent] = useState("");
-  const [backlinks, setBacklinks] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showNewPage, setShowNewPage] = useState(false);
-  const [newPagePath, setNewPagePath] = useState("");
+  const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<string[] | null>(null);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [editing, setEditing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [newPageOpen, setNewPageOpen] = useState(false);
+  const [newPagePath, setNewPagePath] = useState("");
 
-  const fetchPages = async () => {
-    const data = await apiGet<WikiPage[]>("/wiki/pages");
-    setPages(data);
-    const tmpl = await apiGet<WikiPage[]>("/wiki/templates/squad");
-    setTemplates(tmpl);
-    setLoading(false);
+  const loadPages = async () => {
+    const response = await authJson<unknown>(["/api/wiki/pages"]);
+    const nextPages = normalizePaths(response);
+    setPages(nextPages);
+    setExpanded((current) => ({ ...defaultExpanded(nextPages), ...current }));
   };
 
-  useEffect(() => { fetchPages(); }, []);
-
-  const selectPage = async (path: string) => {
-    setSelectedPage(path);
-    setEditMode(false);
-    const endpoint = mode === "pages" ? `/wiki/page/${encodeURIComponent(path)}` : `/wiki/template/squad/${encodeURIComponent(path)}`;
-    const data = await apiGet<{ content: string }>(endpoint);
-    setContent(data.content);
-    if (mode === "pages") {
-      const bl = await apiGet<string[]>(`/wiki/backlinks/${encodeURIComponent(path)}`);
-      setBacklinks(bl);
-    } else {
-      setBacklinks([]);
+  const loadPage = async (path: string) => {
+    setBusy(true);
+    try {
+      const response = await authJson<WikiReadResponse>([
+        `/api/wiki/pages/${encodePath(path)}`,
+        `/api/wiki/page/${encodePath(path)}`,
+      ]);
+      setSelectedPath(path);
+      setContent(response.content ?? "");
+      setDraft(response.content ?? "");
+      setEditing(false);
+    } catch (error) {
+      notifyError(error instanceof Error ? error.message : "Failed to load page");
+    } finally {
+      setBusy(false);
     }
   };
 
+  useEffect(() => {
+    void (async () => {
+      try {
+        await loadPages();
+      } catch (error) {
+        notifyError(error instanceof Error ? error.message : "Failed to load wiki pages");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!search.trim()) {
+      setSearchResults(null);
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const response = await authJson<SearchResult[] | string[]>([`/api/wiki/search?q=${encodeURIComponent(search.trim())}`]);
+          setSearchResults(normalizePaths(response));
+        } catch {
+          setSearchResults(pages.filter((path) => path.toLowerCase().includes(search.trim().toLowerCase())));
+        }
+      })();
+    }, 200);
+
+    return () => window.clearTimeout(timeout);
+  }, [pages, search]);
+
+  const visiblePaths = searchResults ?? pages;
+  const tree = useMemo(() => buildTree(visiblePaths), [visiblePaths]);
+
   const savePage = async () => {
-    if (!selectedPage) return;
-    const endpoint = mode === "pages" ? `/wiki/page/${encodeURIComponent(selectedPage)}` : `/wiki/template/squad/${encodeURIComponent(selectedPage)}`;
-    await apiPut(endpoint, { content: editContent });
-    setContent(editContent);
-    setEditMode(false);
+    if (!selectedPath) return;
+
+    setBusy(true);
+    try {
+      await authJson([
+        `/api/wiki/pages/${encodePath(selectedPath)}`,
+        `/api/wiki/page/${encodePath(selectedPath)}`,
+      ], {
+        method: "PUT",
+        body: JSON.stringify({ content: draft }),
+      });
+      setContent(draft);
+      setEditing(false);
+      notifySuccess("Wiki page saved");
+      await loadPages();
+    } catch (error) {
+      notifyError(error instanceof Error ? error.message : "Failed to save page");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const deletePage = async () => {
-    if (!selectedPage) return;
-    const endpoint = mode === "pages" ? `/wiki/page/${encodeURIComponent(selectedPage)}` : `/wiki/template/squad/${encodeURIComponent(selectedPage)}`;
-    await apiDelete(endpoint);
-    setSelectedPage(null);
-    setContent("");
-    await fetchPages();
+    if (!selectedPath) return;
+
+    setBusy(true);
+    try {
+      await authJson([
+        `/api/wiki/pages/${encodePath(selectedPath)}`,
+        `/api/wiki/page/${encodePath(selectedPath)}`,
+      ], {
+        method: "DELETE",
+      });
+      const removed = selectedPath;
+      setSelectedPath(null);
+      setContent("");
+      setDraft("");
+      setEditing(false);
+      await loadPages();
+      notifySuccess(`Deleted ${removed}`);
+    } catch (error) {
+      notifyError(error instanceof Error ? error.message : "Failed to delete page");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const createPage = async () => {
-    if (!newPagePath) return;
-    const endpoint = mode === "pages" ? `/wiki/page/${encodeURIComponent(newPagePath)}` : `/wiki/template/squad/${encodeURIComponent(newPagePath)}`;
-    await apiPut(endpoint, { content: `# ${newPagePath}\n\n` });
-    setShowNewPage(false);
-    setNewPagePath("");
-    await fetchPages();
-    selectPage(newPagePath);
+    const trimmedPath = newPagePath.trim();
+    if (!trimmedPath) return;
+
+    setBusy(true);
+    try {
+      const initialContent = `# ${trimmedPath.split("/").pop() ?? trimmedPath}\n\n`;
+      await authJson([
+        `/api/wiki/pages/${encodePath(trimmedPath)}`,
+        `/api/wiki/page/${encodePath(trimmedPath)}`,
+      ], {
+        method: "PUT",
+        body: JSON.stringify({ content: initialContent }),
+      });
+      setNewPageOpen(false);
+      setNewPagePath("");
+      await loadPages();
+      setExpanded((current) => ({ ...current, ...defaultExpanded([trimmedPath]) }));
+      await loadPage(trimmedPath);
+      setEditing(true);
+      setDraft(initialContent);
+      setContent(initialContent);
+      notifySuccess("New page created");
+    } catch (error) {
+      notifyError(error instanceof Error ? error.message : "Failed to create page");
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const currentPages = mode === "pages" ? pages : templates;
-  const filteredPages = search ? currentPages.filter((p) => p.path.toLowerCase().includes(search.toLowerCase()) || p.title.toLowerCase().includes(search.toLowerCase())) : currentPages;
-
-  if (loading) return <div className="p-6 text-muted-foreground">Loading...</div>;
+  if (loading) {
+    return <div className="p-6 text-[11px] font-mono text-zinc-500">Loading wiki…</div>;
+  }
 
   return (
-    <div className="flex h-full">
-      {/* Left panel */}
-      <div className="w-72 border-r border-border flex flex-col">
-        <div className="p-3 border-b border-border space-y-2">
-          <div className="flex gap-2">
-            {(["pages", "templates"] as const).map((m) => (
-              <button key={m} onClick={() => { setMode(m); setSelectedPage(null); }} className={`px-2 py-1 text-xs rounded ${mode === m ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}>
-                {m === "pages" ? "Pages" : "Templates"}
-              </button>
-            ))}
-          </div>
+    <div className="flex h-full min-h-0 bg-[#161616] text-zinc-200">
+      <aside className="w-64 border-r border-white/[0.06] bg-[#141414]/90 p-3 flex flex-col gap-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-700" />
           <input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search..."
-            className="w-full px-2 py-1 text-sm bg-input border border-border rounded text-foreground placeholder:text-muted-foreground focus:outline-none"
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search wiki"
+            className={`${inputClass} w-full pl-9`}
           />
-          <button onClick={() => setShowNewPage(true)} className="flex items-center gap-1 text-xs text-primary hover:underline">
-            <Plus size={12} /> New {mode === "pages" ? "page" : "template"}
-          </button>
         </div>
 
-        {showNewPage && (
-          <div className="p-3 border-b border-border space-y-2">
-            <input value={newPagePath} onChange={(e) => setNewPagePath(e.target.value)} placeholder="path/to/page" className="w-full px-2 py-1 text-sm bg-input border border-border rounded text-foreground placeholder:text-muted-foreground focus:outline-none" />
-            <div className="flex gap-2">
-              <button onClick={createPage} className="px-2 py-1 text-xs bg-primary text-primary-foreground rounded">Create</button>
-              <button onClick={() => setShowNewPage(false)} className="px-2 py-1 text-xs bg-secondary text-secondary-foreground rounded">Cancel</button>
+        <div className="glass-card border border-white/[0.07] rounded-2xl flex-1 min-h-0 overflow-hidden">
+          <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2">
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-[0.24em] text-zinc-600">Pages</p>
+              <p className="text-[11px] font-mono text-zinc-500">{visiblePaths.length} items</p>
             </div>
+            <button
+              type="button"
+              onClick={() => setNewPageOpen((current) => !current)}
+              className="rounded-lg p-1 text-zinc-500 transition-colors hover:bg-white/[0.04] hover:text-[#66FCF1]"
+              title="New Page"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
           </div>
-        )}
 
-        <div className="flex-1 overflow-y-auto">
-          <WikiTree
-            pages={filteredPages}
-            selectedPage={selectedPage}
-            onSelect={selectPage}
-          />
-        </div>
-      </div>
-
-      {/* Right panel */}
-      <div className="flex-1 overflow-y-auto p-6">
-        {selectedPage ? (
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <h2 className="text-lg font-bold flex-1">{selectedPage}</h2>
-              {!editMode && (
-                <>
-                  <button onClick={() => { setEditMode(true); setEditContent(content); }} className="text-muted-foreground hover:text-foreground"><Edit size={16} /></button>
-                  <button onClick={deletePage} className="text-muted-foreground hover:text-destructive"><Trash2 size={16} /></button>
-                </>
-              )}
-            </div>
-            {editMode ? (
-              <div className="space-y-3">
-                <textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} rows={20} className="w-full px-3 py-2 bg-input border border-border rounded-md text-sm text-foreground font-mono focus:outline-none focus:ring-2 focus:ring-ring" />
-                <div className="flex gap-2">
-                  <button onClick={savePage} className="flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded-md text-sm"><Save size={14} /> Save</button>
-                  <button onClick={() => setEditMode(false)} className="flex items-center gap-1 px-3 py-1.5 bg-secondary text-secondary-foreground rounded-md text-sm"><X size={14} /> Cancel</button>
-                </div>
+          {newPageOpen ? (
+            <div className="border-b border-white/[0.06] p-3 space-y-2">
+              <input
+                value={newPagePath}
+                onChange={(event) => setNewPagePath(event.target.value)}
+                placeholder="notes/roadmap.md"
+                className={`${inputClass} w-full`}
+              />
+              <div className="flex items-center gap-2">
+                <PrimaryBtn onClick={createPage} className={`px-3 py-2 ${busy ? "pointer-events-none opacity-60" : ""}`}>
+                  <Plus className="h-3.5 w-3.5" />
+                  Create
+                </PrimaryBtn>
+                <SecondaryBtn onClick={() => setNewPageOpen(false)} className="px-3 py-2">
+                  <X className="h-3.5 w-3.5" />
+                  Close
+                </SecondaryBtn>
               </div>
+            </div>
+          ) : null}
+
+          <div className="min-h-0 overflow-y-auto p-2">
+            {tree.length ? (
+              <TreeBranch
+                nodes={tree}
+                selectedPath={selectedPath}
+                expanded={expanded}
+                onToggle={(path) => setExpanded((current) => ({ ...current, [path]: !(current[path] ?? true) }))}
+                onSelect={(path) => void loadPage(path)}
+              />
             ) : (
-              <>
-                <MarkdownContent content={content} />
-                {backlinks.length > 0 && (
-                  <div className="mt-6 pt-4 border-t border-border">
-                    <h3 className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-1"><Link2 size={14} /> Backlinks</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {backlinks.map((bl) => (
-                        <button key={bl} onClick={() => selectPage(bl)} className="text-xs px-2 py-1 bg-muted rounded hover:bg-accent">{bl}</button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
+              <div className="px-3 py-6 text-center text-[11px] font-mono text-zinc-600">No pages found</div>
             )}
           </div>
-        ) : (
-          <div className="flex items-center justify-center h-full text-muted-foreground">
-            Select a page to view
+        </div>
+      </aside>
+
+      <section className="flex-1 min-w-0 p-6 overflow-hidden flex flex-col gap-4">
+        <div className="glass-card border border-white/[0.07] rounded-2xl px-5 py-4 flex items-center gap-3 justify-between">
+          <div className="min-w-0 flex-1">
+            {selectedPath ? (
+              <Breadcrumbs path={selectedPath} />
+            ) : (
+              <p className="text-[11px] font-mono uppercase tracking-[0.24em] text-zinc-600">Wiki</p>
+            )}
           </div>
-        )}
-      </div>
+          <div className="flex items-center gap-2">
+            {selectedPath ? (
+              <>
+                {editing ? (
+                  <>
+                    <PrimaryBtn onClick={savePage} className={`px-3 py-2 ${busy ? "pointer-events-none opacity-60" : ""}`}>
+                      <Save className="h-3.5 w-3.5" />
+                      Save
+                    </PrimaryBtn>
+                    <SecondaryBtn
+                      onClick={() => {
+                        setDraft(content);
+                        setEditing(false);
+                      }}
+                      className="px-3 py-2"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                      Cancel
+                    </SecondaryBtn>
+                  </>
+                ) : (
+                  <SecondaryBtn
+                    onClick={() => {
+                      setDraft(content);
+                      setEditing(true);
+                    }}
+                    className="px-3 py-2"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit
+                  </SecondaryBtn>
+                )}
+                <SecondaryBtn onClick={() => setNewPageOpen(true)} className="px-3 py-2">
+                  <Plus className="h-3.5 w-3.5" />
+                  New Page
+                </SecondaryBtn>
+                <DangerBtn onClick={deletePage} className={`px-3 py-2 ${busy ? "pointer-events-none opacity-60" : ""}`}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete
+                </DangerBtn>
+              </>
+            ) : (
+              <SecondaryBtn onClick={() => setNewPageOpen(true)} className="px-3 py-2">
+                <Plus className="h-3.5 w-3.5" />
+                New Page
+              </SecondaryBtn>
+            )}
+          </div>
+        </div>
+
+        <div className="glass-card border border-white/[0.07] rounded-2xl flex-1 min-h-0 overflow-hidden">
+          {selectedPath ? (
+            editing ? (
+              <div className="h-full p-4">
+                <textarea
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  className="h-full w-full resize-none rounded-2xl border border-white/[0.06] bg-[#121212] px-4 py-3 text-[12px] leading-6 text-zinc-300 font-mono focus:outline-none focus:border-[#66FCF1]/30"
+                  spellCheck={false}
+                />
+              </div>
+            ) : (
+              <div className="h-full overflow-y-auto px-6 py-5">
+                {busy ? <div className="text-[11px] font-mono text-zinc-500">Loading page…</div> : <MarkdownRenderer content={content} />}
+              </div>
+            )
+          ) : (
+            <div className="h-full flex flex-col items-center justify-center px-6 text-center">
+              <div className="mb-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+                <IoMark height={40} />
+              </div>
+              <h2 className="text-lg text-white" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
+                Select a page
+              </h2>
+              <p className="mt-2 max-w-md text-[11px] font-mono text-zinc-600">
+                Browse the file tree on the left, search for a page, or create a new markdown document.
+              </p>
+            </div>
+          )}
+        </div>
+      </section>
     </div>
   );
 }
