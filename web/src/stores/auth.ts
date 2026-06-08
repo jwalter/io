@@ -23,6 +23,8 @@ function isTokenNearExpiry(jwt: string, bufferMs = 300_000): boolean {
 
 let healthCheckInterval: ReturnType<typeof setInterval> | null = null;
 
+let refreshPromise: Promise<void> | null = null;
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   token: localStorage.getItem("io_token"),
   email: localStorage.getItem("io_email"),
@@ -94,24 +96,31 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   async refreshToken() {
-    const supabase = getSupabase();
-    if (!supabase) return;
+    // Deduplicate concurrent refresh calls
+    if (refreshPromise) return refreshPromise;
 
-    const { data, error } = await supabase.auth.refreshSession();
-    if (!error && data.session) {
-      set({ token: data.session.access_token });
-      localStorage.setItem("io_token", data.session.access_token);
-      return;
+    refreshPromise = (async () => {
+      const supabase = getSupabase();
+      if (!supabase) return;
+
+      const { data, error } = await supabase.auth.refreshSession();
+      if (!error && data.session) {
+        set({ token: data.session.access_token });
+        localStorage.setItem("io_token", data.session.access_token);
+        return;
+      }
+
+      // Refresh failed — clear auth state
+      if (error) {
+        set({ token: null });
+        localStorage.removeItem("io_token");
+      }
+    })();
+
+    try {
+      await refreshPromise;
+    } finally {
+      refreshPromise = null;
     }
-
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (sessionData.session) {
-      set({ token: sessionData.session.access_token });
-      localStorage.setItem("io_token", sessionData.session.access_token);
-      return;
-    }
-
-    set({ token: null });
-    localStorage.removeItem("io_token");
   },
 }));
