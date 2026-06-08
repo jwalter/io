@@ -30,10 +30,10 @@ Configuration is saved to `~/.io/config.json`.
 
 ```bash
 # Start the daemon (Telegram + HTTP API + Web Dashboard)
-io --daemon
+io daemon
 
 # Start with self-edit permission (allows IO to modify its own source)
-io --daemon --self-edit
+io daemon --self-edit
 ```
 
 ## Access the Web Dashboard
@@ -55,7 +55,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/env io --daemon
+ExecStart=/usr/bin/env io daemon
 Restart=always
 RestartSec=10
 Environment=NODE_ENV=production

@@ -1,11 +1,11 @@
 # CLI Commands
 
-## `io --daemon`
+## `io daemon`
 
-Start IO as a background daemon. This is the default command.
+Start IO as a background daemon. This is the default command (running `io` with no arguments is equivalent).
 
 ```bash
-io --daemon
+io daemon
 ```
 
 **Options:**

@@ -24,7 +24,7 @@ This guide covers common setup and runtime issues, plus the environment variable
 
 ### Web dashboard does not load
 
-- Confirm the daemon is running: `io --daemon`
+- Confirm the daemon is running: `io daemon`
 - Check that the configured `port` is reachable
 - Validate Supabase auth settings in `~/.io/config.json` and restart the daemon after changes
 

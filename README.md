@@ -57,10 +57,10 @@ This creates a config file at `~/.io/config.json`.
 
 ```bash
 # Background daemon (Telegram + HTTP API + Web)
-io --daemon
+io daemon
 
 # Allow IO to modify its own source code
-io --self-edit
+io daemon --self-edit
 ```
 
 ### Headless Server (systemd)
@@ -79,7 +79,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/env io --daemon
+ExecStart=/usr/bin/env io daemon
 Restart=always
 RestartSec=10
 Environment=NODE_ENV=production
@@ -94,8 +94,8 @@ WantedBy=multi-user.target
 
 | Command | Description |
 | --- | --- |
-| `io --daemon` | Run as background daemon (Telegram + API + Web) |
-| `io --self-edit` | Allow IO to modify its own source |
+| `io daemon` | Run as background daemon (Telegram + API + Web) |
+| `io daemon --self-edit` | Allow IO to modify its own source |
 | `io setup` | Configure Telegram bot token and user ID |
 
 Skills are managed via the web dashboard.

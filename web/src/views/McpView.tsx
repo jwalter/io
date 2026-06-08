@@ -2,6 +2,7 @@ import { ChevronDown, ChevronRight, Plus, Server, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Chip, DangerBtn, PrimaryBtn, SecondaryBtn, StatusDot, Toggle } from "@/components/ui";
 import { notifyError, notifySuccess } from "@/lib/notify";
+import { uuid } from "@/lib/uuid";
 import { useAuthStore } from "@/stores/auth";
 
 interface McpTool {
@@ -108,7 +109,7 @@ function normalizeServer(server: Record<string, unknown>): McpServer {
       : undefined;
 
   return {
-    id: String(server.id ?? server.name ?? crypto.randomUUID()),
+    id: String(server.id ?? server.name ?? uuid()),
     name: String(server.name ?? "Unnamed server"),
     type: server.type === "http" ? "http" : "stdio",
     enabled: server.enabled !== false && server.enabled !== 0,

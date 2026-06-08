@@ -4,6 +4,7 @@ import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Too
 import { toast } from "sonner";
 import { SquadChip } from "@/components/ui";
 import { useAuthStore } from "@/stores/auth";
+import { uuid } from "@/lib/uuid";
 
 interface UsageSummary {
   totalTokens: number;
@@ -92,7 +93,7 @@ function normalizeSummary(data: Record<string, unknown>): UsageSummary {
 
 function normalizeGroup(data: Record<string, unknown>): UsageGroup {
   return {
-    id: String(data.id ?? data.name ?? crypto.randomUUID()),
+    id: String(data.id ?? data.name ?? uuid()),
     name: String(data.name ?? "Unknown"),
     inputTokens: toNumber(data.total_input_tokens ?? data.input_tokens ?? data.inputTokens),
     outputTokens: toNumber(data.total_output_tokens ?? data.output_tokens ?? data.outputTokens),

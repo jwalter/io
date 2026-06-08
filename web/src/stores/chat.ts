@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { MessageAttachment } from "@/lib/attachments";
 import { notifyError } from "@/lib/notify";
+import { uuid } from "@/lib/uuid";
 import { useAuthStore } from "./auth";
 
 export interface ChatMessage {
@@ -37,11 +38,11 @@ let currentAbortController: AbortController | null = null;
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   isStreaming: false,
-  conversationId: crypto.randomUUID(),
+  conversationId: uuid(),
 
   async sendMessage(content: string, attachments: MessageAttachment[] = []) {
     const userMsg: ChatMessage = {
-      id: crypto.randomUUID(),
+      id: uuid(),
       role: "user",
       content,
       attachments,
@@ -49,7 +50,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     };
 
     const assistantMsg: ChatMessage = {
-      id: crypto.randomUUID(),
+      id: uuid(),
       role: "assistant",
       content: "",
       attachments: [],
@@ -125,7 +126,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
                     now - lastDeltaTime > NEW_BUBBLE_THRESHOLD
                   ) {
                     msgs.push({
-                      id: crypto.randomUUID(),
+                      id: uuid(),
                       role: "assistant",
                       content: parsed.content,
                       attachments: [],
@@ -207,6 +208,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   clearMessages() {
-    set({ messages: [], conversationId: crypto.randomUUID() });
+    set({ messages: [], conversationId: uuid() });
   },
 }));
