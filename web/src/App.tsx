@@ -1,11 +1,11 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router";
-import { useAuthStore } from "@/stores/auth";
-import { AppSidebar } from "@/components/AppSidebar";
+import { Toaster } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
+import { AppSidebar } from "@/components/AppSidebar";
 import { ChatOverlay } from "@/components/ChatOverlay";
 import { AppRoutes } from "@/routes";
-import { Toaster } from "sonner";
+import { useAuthStore } from "@/stores/auth";
 
 export function App() {
   const token = useAuthStore((s) => s.token);
@@ -20,7 +20,7 @@ export function App() {
     if (token) {
       refreshToken();
     }
-  }, []);
+  }, [token, refreshToken, initAuthListener]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#1a1a1a]">

@@ -28,7 +28,7 @@ jobs:
           npm version "$VERSION" --no-git-tag-version --allow-same-version
 
       - name: Install
-        run: npm ci && npm ci --prefix web
+        run: npm ci && cd web && npm ci
 
       - name: Build
         run: npm run build:all

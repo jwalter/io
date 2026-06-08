@@ -73,7 +73,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       const currentToken = useAuthStore.getState().token;
       if (currentToken) {
-        headers["Authorization"] = `Bearer ${currentToken}`;
+        headers.Authorization = `Bearer ${currentToken}`;
       }
 
       currentAbortController = new AbortController();
@@ -168,9 +168,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
                   return { messages: msgs };
                 });
                 notifyError(
-                  typeof parsed.error === "string" && parsed.error.trim()
-                    ? parsed.error
-                    : "Streaming request failed"
+                  typeof parsed.error === "string" && parsed.error.trim() ? parsed.error : "Streaming request failed",
                 );
               }
             } catch {

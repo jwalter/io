@@ -49,12 +49,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     // Start periodic token health check (every 5 minutes)
     if (!healthCheckInterval) {
-      healthCheckInterval = setInterval(async () => {
-        const { token, refreshToken } = get();
-        if (token && isTokenNearExpiry(token)) {
-          await refreshToken();
-        }
-      }, 5 * 60 * 1000);
+      healthCheckInterval = setInterval(
+        async () => {
+          const { token, refreshToken } = get();
+          if (token && isTokenNearExpiry(token)) {
+            await refreshToken();
+          }
+        },
+        5 * 60 * 1000,
+      );
     }
   },
 

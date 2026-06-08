@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
 import { CheckCheck, Clock3, Inbox, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { Chip, DangerBtn, IoMark, MarkdownRenderer, SecondaryBtn, SquadChip } from "@/components/ui";
 import { notifyError, notifySuccess } from "@/lib/notify";
 import { useAuthStore } from "@/stores/auth";
@@ -60,7 +60,7 @@ async function fetchJson<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 function previewText(content: string): string {
   return content
-    .replace(/[`#>*_~\-]/g, " ")
+    .replace(/[`#>*_~-]/g, " ")
     .replace(/\[(.*?)\]\((.*?)\)/g, "$1")
     .replace(/\s+/g, " ")
     .trim();
@@ -102,11 +102,11 @@ export default function FeedView() {
 
   useEffect(() => {
     void loadFeed();
-  }, [filter]);
+  }, [loadFeed]);
 
   const selectedItem = useMemo(
-    () => (checkedIds.length === 0 ? items.find((item) => item.id === selectedId) ?? null : null),
-    [checkedIds.length, items, selectedId]
+    () => (checkedIds.length === 0 ? (items.find((item) => item.id === selectedId) ?? null) : null),
+    [checkedIds.length, items, selectedId],
   );
   const allSelected = items.length > 0 && checkedIds.length === items.length;
 
@@ -165,7 +165,9 @@ export default function FeedView() {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-[11px] font-mono uppercase tracking-[0.28em] text-zinc-500">Feed</p>
-                <h1 className="text-3xl text-zinc-100 leading-none" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>Inbox</h1>
+                <h1 className="text-3xl text-zinc-100 leading-none" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
+                  Inbox
+                </h1>
               </div>
               <Chip variant={unreadCount > 0 ? "default" : "muted"}>{unreadCount} unread</Chip>
             </div>
@@ -197,11 +199,17 @@ export default function FeedView() {
 
             {checkedIds.length > 0 && (
               <div className="flex items-center gap-2 rounded-xl border border-[#66FCF1]/15 bg-[#66FCF1]/5 p-2">
-                <SecondaryBtn onClick={() => void handleMarkCheckedRead()} className={busyAction ? "pointer-events-none opacity-50" : ""}>
+                <SecondaryBtn
+                  onClick={() => void handleMarkCheckedRead()}
+                  className={busyAction ? "pointer-events-none opacity-50" : ""}
+                >
                   <CheckCheck className="h-3.5 w-3.5" />
                   Mark read
                 </SecondaryBtn>
-                <DangerBtn onClick={() => void handleDelete(checkedIds)} className={busyAction ? "pointer-events-none opacity-50" : ""}>
+                <DangerBtn
+                  onClick={() => void handleDelete(checkedIds)}
+                  className={busyAction ? "pointer-events-none opacity-50" : ""}
+                >
                   <Trash2 className="h-3.5 w-3.5" />
                   Delete
                 </DangerBtn>
@@ -211,13 +219,19 @@ export default function FeedView() {
 
           <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-2">
             {loading ? (
-              <div className="h-full flex items-center justify-center text-[11px] font-mono text-zinc-500">Loading inbox…</div>
+              <div className="h-full flex items-center justify-center text-[11px] font-mono text-zinc-500">
+                Loading inbox…
+              </div>
             ) : items.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center gap-3 text-center px-6">
                 <IoMark height={26} />
                 <div>
                   <p className="text-zinc-200">No feed items</p>
-                  <p className="text-[11px] font-mono text-zinc-500">{filter === "unread" ? "Everything has been reviewed." : "The daemon has not posted any updates yet."}</p>
+                  <p className="text-[11px] font-mono text-zinc-500">
+                    {filter === "unread"
+                      ? "Everything has been reviewed."
+                      : "The daemon has not posted any updates yet."}
+                  </p>
                 </div>
               </div>
             ) : (
@@ -239,7 +253,11 @@ export default function FeedView() {
                       <button onClick={() => void handleSelectItem(item)} className="flex-1 text-left min-w-0">
                         <div className="flex items-center justify-between gap-3 mb-2">
                           <div className="flex items-center gap-2 min-w-0">
-                            {item.read === 0 ? <span className="h-2 w-2 rounded-full bg-[#F75F57] flex-shrink-0" /> : <span className="h-2 w-2 rounded-full bg-transparent border border-white/10 flex-shrink-0" />}
+                            {item.read === 0 ? (
+                              <span className="h-2 w-2 rounded-full bg-[#F75F57] flex-shrink-0" />
+                            ) : (
+                              <span className="h-2 w-2 rounded-full bg-transparent border border-white/10 flex-shrink-0" />
+                            )}
                             <SquadChip name={item.source} />
                           </div>
                           <span className="text-[11px] font-mono text-zinc-500 flex items-center gap-1 flex-shrink-0">
@@ -247,8 +265,14 @@ export default function FeedView() {
                             {formatTimestamp(item.created_at)}
                           </span>
                         </div>
-                        <p className={`text-sm leading-5 truncate ${item.read === 0 ? "text-zinc-100" : "text-zinc-300"}`}>{item.title}</p>
-                        <p className="mt-1 text-[11px] font-mono text-zinc-500 line-clamp-2">{previewText(item.content)}</p>
+                        <p
+                          className={`text-sm leading-5 truncate ${item.read === 0 ? "text-zinc-100" : "text-zinc-300"}`}
+                        >
+                          {item.title}
+                        </p>
+                        <p className="mt-1 text-[11px] font-mono text-zinc-500 line-clamp-2">
+                          {previewText(item.content)}
+                        </p>
                       </button>
                     </div>
                   </div>
@@ -267,7 +291,10 @@ export default function FeedView() {
                 </div>
                 <div>
                   <p className="text-zinc-100 text-lg">Bulk mode enabled</p>
-                  <p className="text-[11px] font-mono text-zinc-500 mt-2">{checkedIds.length} feed item{checkedIds.length === 1 ? "" : "s"} selected. Use the bulk controls to mark everything read or delete in one pass.</p>
+                  <p className="text-[11px] font-mono text-zinc-500 mt-2">
+                    {checkedIds.length} feed item{checkedIds.length === 1 ? "" : "s"} selected. Use the bulk controls to
+                    mark everything read or delete in one pass.
+                  </p>
                 </div>
               </div>
             </div>
@@ -277,11 +304,16 @@ export default function FeedView() {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 mb-3">
                     <SquadChip name={selectedItem.source} />
-                    <span className="text-[11px] font-mono text-zinc-500">{formatTimestamp(selectedItem.created_at)}</span>
+                    <span className="text-[11px] font-mono text-zinc-500">
+                      {formatTimestamp(selectedItem.created_at)}
+                    </span>
                   </div>
                   <h2 className="text-2xl text-zinc-100 leading-tight">{selectedItem.title}</h2>
                 </div>
-                <DangerBtn onClick={() => void handleDelete([selectedItem.id])} className={busyAction ? "pointer-events-none opacity-50" : ""}>
+                <DangerBtn
+                  onClick={() => void handleDelete([selectedItem.id])}
+                  className={busyAction ? "pointer-events-none opacity-50" : ""}
+                >
                   <Trash2 className="h-3.5 w-3.5" />
                   Delete
                 </DangerBtn>
@@ -298,7 +330,9 @@ export default function FeedView() {
                 </div>
                 <div>
                   <p className="text-zinc-100 text-lg">Select a message to read</p>
-                  <p className="text-[11px] font-mono text-zinc-500 mt-2">Choose any feed item from the left panel to open the full markdown update here.</p>
+                  <p className="text-[11px] font-mono text-zinc-500 mt-2">
+                    Choose any feed item from the left panel to open the full markdown update here.
+                  </p>
                 </div>
               </div>
             </div>

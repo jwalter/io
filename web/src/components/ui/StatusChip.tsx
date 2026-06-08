@@ -30,7 +30,11 @@ export function Chip({ children, variant = "muted" }: { children: ReactNode; var
     info: "bg-blue-500/15 text-blue-400 border-blue-500/20",
     muted: "bg-white/5 text-zinc-400 border-white/10",
   }[variant];
-  return <span className={`inline-flex items-center px-2 py-px rounded-full text-[10px] font-mono border ${cls}`}>{children}</span>;
+  return (
+    <span className={`inline-flex items-center px-2 py-px rounded-full text-[10px] font-mono border ${cls}`}>
+      {children}
+    </span>
+  );
 }
 
 export function statusToVariant(s: string): BadgeVariant {

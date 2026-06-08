@@ -1,13 +1,6 @@
-import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, Plus, Server, Trash2 } from "lucide-react";
-import {
-  Chip,
-  DangerBtn,
-  PrimaryBtn,
-  SecondaryBtn,
-  StatusDot,
-  Toggle,
-} from "@/components/ui";
+import { useEffect, useState } from "react";
+import { Chip, DangerBtn, PrimaryBtn, SecondaryBtn, StatusDot, Toggle } from "@/components/ui";
 import { notifyError, notifySuccess } from "@/lib/notify";
 import { useAuthStore } from "@/stores/auth";
 
@@ -99,9 +92,7 @@ function normalizeServer(server: Record<string, unknown>): McpServer {
         return {
           name: String((tool as { name?: unknown }).name ?? "unknown"),
           description: String((tool as { description?: unknown }).description ?? ""),
-          enabled:
-            (tool as { enabled?: unknown }).enabled !== false &&
-            (tool as { enabled?: unknown }).enabled !== 0,
+          enabled: (tool as { enabled?: unknown }).enabled !== false && (tool as { enabled?: unknown }).enabled !== 0,
         };
       }
       return null;
@@ -112,7 +103,7 @@ function normalizeServer(server: Record<string, unknown>): McpServer {
   const headers =
     rawHeaders && typeof rawHeaders === "object" && !Array.isArray(rawHeaders)
       ? Object.fromEntries(
-          Object.entries(rawHeaders as Record<string, unknown>).map(([key, value]) => [key, String(value)])
+          Object.entries(rawHeaders as Record<string, unknown>).map(([key, value]) => [key, String(value)]),
         )
       : undefined;
 
@@ -172,7 +163,7 @@ export default function McpView() {
 
   useEffect(() => {
     void loadServers();
-  }, []);
+  }, [loadServers]);
 
   const closeModal = () => {
     setDraft(EMPTY_DRAFT);
@@ -238,9 +229,7 @@ export default function McpView() {
           body: JSON.stringify({ enabled }),
         });
       }
-      setServers((current) =>
-        current.map((item) => (item.id === server.id ? { ...item, enabled } : item))
-      );
+      setServers((current) => current.map((item) => (item.id === server.id ? { ...item, enabled } : item)));
       setError("");
       notifySuccess(enabled ? "Server enabled" : "Server disabled");
     } catch (toggleError) {
@@ -266,19 +255,14 @@ export default function McpView() {
             ? item
             : {
                 ...item,
-                tools: item.tools.map((entry) =>
-                  entry.name === tool.name ? { ...entry, enabled } : entry
-                ),
-              }
-        )
+                tools: item.tools.map((entry) => (entry.name === tool.name ? { ...entry, enabled } : entry)),
+              },
+        ),
       );
       setError("");
       notifySuccess(enabled ? "Tool enabled" : "Tool disabled");
     } catch (toggleError) {
-      const message =
-        toggleError instanceof Error
-          ? toggleError.message
-          : "Failed to update the selected MCP tool";
+      const message = toggleError instanceof Error ? toggleError.message : "Failed to update the selected MCP tool";
       setError(message);
       notifyError(message);
     } finally {
@@ -334,7 +318,9 @@ export default function McpView() {
         {loading ? (
           <div className={`${GLASS_CARD} px-4 py-5 text-[11px] font-mono text-zinc-600`}>Loading MCP servers…</div>
         ) : servers.length === 0 ? (
-          <div className={`${GLASS_CARD} px-4 py-5 text-[11px] font-mono text-zinc-700`}>No MCP servers configured.</div>
+          <div className={`${GLASS_CARD} px-4 py-5 text-[11px] font-mono text-zinc-700`}>
+            No MCP servers configured.
+          </div>
         ) : (
           servers.map((server) => {
             const expanded = expandedId === server.id;
@@ -363,7 +349,8 @@ export default function McpView() {
                       </div>
                       <div className="mt-1 truncate text-[11px] font-mono text-zinc-600">
                         {server.type === "stdio"
-                          ? [server.command, ...(server.args ?? [])].filter(Boolean).join(" ") || "No command configured"
+                          ? [server.command, ...(server.args ?? [])].filter(Boolean).join(" ") ||
+                            "No command configured"
                           : server.url || "No URL configured"}
                       </div>
                     </div>
@@ -399,7 +386,9 @@ export default function McpView() {
                           >
                             <div className="min-w-0 flex-1">
                               <div className="truncate text-[11px] font-mono text-zinc-200">{tool.name}</div>
-                              <div className="mt-1 text-[10px] text-zinc-600">{tool.description || "No description provided."}</div>
+                              <div className="mt-1 text-[10px] text-zinc-600">
+                                {tool.description || "No description provided."}
+                              </div>
                             </div>
                             <div className="flex items-center gap-2">
                               <Chip variant={tool.enabled ? "success" : "muted"}>
@@ -429,7 +418,9 @@ export default function McpView() {
                 </h2>
                 <p className="mt-2 text-[11px] font-mono text-zinc-600">Connect a new MCP stdio or HTTP endpoint.</p>
               </div>
-              <SecondaryBtn onClick={closeModal} className="px-3 py-1.5">Close</SecondaryBtn>
+              <SecondaryBtn onClick={closeModal} className="px-3 py-1.5">
+                Close
+              </SecondaryBtn>
             </div>
 
             <div className="mt-6 space-y-4">
@@ -512,7 +503,9 @@ export default function McpView() {
             </div>
 
             <div className="mt-6 flex flex-wrap justify-end gap-2">
-              <SecondaryBtn onClick={closeModal} className="px-3 py-1.5">Cancel</SecondaryBtn>
+              <SecondaryBtn onClick={closeModal} className="px-3 py-1.5">
+                Cancel
+              </SecondaryBtn>
               <PrimaryBtn onClick={() => void saveServer()} className="px-3 py-1.5">
                 {busyKey === "save" ? "Saving…" : "Save"}
               </PrimaryBtn>

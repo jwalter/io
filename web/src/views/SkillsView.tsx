@@ -1,15 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
 import { Pencil, Search, Trash2, Zap } from "lucide-react";
-import {
-  Chip,
-  DangerBtn,
-  MarkdownRenderer,
-  PrimaryBtn,
-  SecondaryBtn,
-} from "@/components/ui";
+import { useEffect, useMemo, useState } from "react";
+import { Chip, DangerBtn, MarkdownRenderer, PrimaryBtn, SecondaryBtn } from "@/components/ui";
 import { notifyError, notifySuccess } from "@/lib/notify";
+import { type ParsedSkill, parseSkillContent } from "@/lib/skill-frontmatter";
 import { useAuthStore } from "@/stores/auth";
-import { parseSkillContent, type ParsedSkill } from "@/lib/skill-frontmatter";
 
 type SkillSource = "installed" | "awesome-copilot" | "skillssh";
 
@@ -83,9 +77,7 @@ async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> 
 }
 
 function frontmatterLabel(key: string): string {
-  return key
-    .replace(/[_-]+/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+  return key.replace(/[_-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 function frontmatterValue(value: unknown): string {
@@ -124,7 +116,7 @@ export default function SkillsView() {
 
   useEffect(() => {
     void loadInstalledSkills();
-  }, []);
+  }, [loadInstalledSkills]);
 
   useEffect(() => {
     if (source === "installed") return;
@@ -163,7 +155,7 @@ export default function SkillsView() {
       const query = search.trim().toLowerCase();
       if (!query) return installedSkills;
       return installedSkills.filter((skill) =>
-        [skill.name, skill.slug, skill.description].some((value) => value?.toLowerCase().includes(query))
+        [skill.name, skill.slug, skill.description].some((value) => value?.toLowerCase().includes(query)),
       );
     }
     return remoteSkills;
@@ -178,9 +170,7 @@ export default function SkillsView() {
     }
 
     const currentVisible =
-      selected &&
-      selected.source === source &&
-      visibleSkills.some((skill) => skill.slug === selected.slug);
+      selected && selected.source === source && visibleSkills.some((skill) => skill.slug === selected.slug);
 
     if (!currentVisible) {
       setSelected({ source, slug: visibleSkills[0].slug });
@@ -212,9 +202,8 @@ export default function SkillsView() {
       try {
         const content =
           selected.source === "installed"
-            ? (await requestJson<{ content: string }>(
-                `/api/skills/${encodeURIComponent(selected.slug)}/content`
-              )).content
+            ? (await requestJson<{ content: string }>(`/api/skills/${encodeURIComponent(selected.slug)}/content`))
+                .content
             : (
                 await requestJson<{ content: string }>(
                   `/api/skills/preview?${new URLSearchParams({
@@ -223,7 +212,7 @@ export default function SkillsView() {
                     ...("sourceRepo" in selectedSkill && selectedSkill.sourceRepo
                       ? { sourceRepo: selectedSkill.sourceRepo }
                       : {}),
-                  }).toString()}`
+                  }).toString()}`,
                 )
               ).content;
 
@@ -281,7 +270,7 @@ export default function SkillsView() {
   };
 
   const saveEditedContent = async () => {
-    if (!selected || selected.source !== "installed") return;
+    if (selected?.source !== "installed") return;
 
     const key = skillKey(selected.source, selected.slug);
     setActionKey(`save:${key}`);
@@ -370,20 +359,20 @@ export default function SkillsView() {
             </div>
 
             <div className="space-y-1">
-              {([
-                ["installed", "Installed"],
-                ["awesome-copilot", "Awesome Copilot"],
-                ["skillssh", "skills.sh"],
-              ] as const).map(([tabKey, label]) => {
+              {(
+                [
+                  ["installed", "Installed"],
+                  ["awesome-copilot", "Awesome Copilot"],
+                  ["skillssh", "skills.sh"],
+                ] as const
+              ).map(([tabKey, label]) => {
                 const active = source === tabKey;
                 return (
                   <button
                     key={tabKey}
                     onClick={() => setSource(tabKey)}
                     className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] font-mono transition-colors ${
-                      active
-                        ? "text-[#66FCF1]"
-                        : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
+                      active ? "text-[#66FCF1]" : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
                     }`}
                     style={active ? { background: "rgba(102,252,241,0.10)" } : undefined}
                   >
@@ -442,7 +431,9 @@ export default function SkillsView() {
                 >
                   <Zap className="h-6 w-6 text-[#66FCF1]" />
                 </div>
-                <p className="mt-4 text-sm text-zinc-400">Select a skill to inspect its front matter and prompt body.</p>
+                <p className="mt-4 text-sm text-zinc-400">
+                  Select a skill to inspect its front matter and prompt body.
+                </p>
               </div>
             </div>
           ) : (
@@ -458,7 +449,10 @@ export default function SkillsView() {
                     </div>
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <h1 className="text-3xl leading-none text-white" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
+                        <h1
+                          className="text-3xl leading-none text-white"
+                          style={{ fontFamily: "'Bebas Neue', sans-serif" }}
+                        >
                           {selectedDetail?.parsed?.frontmatter.name || selectedSkill.name || selectedSkill.slug}
                         </h1>
                         {typeof selectedFrontmatter.version === "string" ? (
@@ -466,9 +460,7 @@ export default function SkillsView() {
                         ) : (
                           <Chip variant="muted">unversioned</Chip>
                         )}
-                        <Chip variant={isInstalled ? "success" : "muted"}>
-                          {isInstalled ? "installed" : "remote"}
-                        </Chip>
+                        <Chip variant={isInstalled ? "success" : "muted"}>{isInstalled ? "installed" : "remote"}</Chip>
                       </div>
                       <p className="mt-2 max-w-3xl text-sm text-zinc-400">
                         {typeof selectedFrontmatter.description === "string"

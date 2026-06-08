@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
-import { useAuthStore } from "@/stores/auth";
-import { SquadChip } from "@/components/ui";
-import { toast } from "sonner";
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { CalendarDays, ChevronDown, ChevronRight } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { toast } from "sonner";
+import { SquadChip } from "@/components/ui";
+import { useAuthStore } from "@/stores/auth";
 
 interface UsageSummary {
   totalTokens: number;
@@ -134,8 +134,14 @@ export default function UsageView() {
     const to = range.to;
     const days = daysBetween(from, to);
     return {
-      summary: [`/api/token-usage/summary?from=${from}&to=${to}`, `/api/token-usage/summary?since=${from}T00:00:00.000Z`],
-      squads: [`/api/token-usage/by-squad?from=${from}&to=${to}`, `/api/token-usage/by-squad?since=${from}T00:00:00.000Z`],
+      summary: [
+        `/api/token-usage/summary?from=${from}&to=${to}`,
+        `/api/token-usage/summary?since=${from}T00:00:00.000Z`,
+      ],
+      squads: [
+        `/api/token-usage/by-squad?from=${from}&to=${to}`,
+        `/api/token-usage/by-squad?since=${from}T00:00:00.000Z`,
+      ],
       daily: [`/api/token-usage/daily?from=${from}&to=${to}`, `/api/token-usage/daily?days=${days}`],
       agentPaths: (squadId: string) => [
         `/api/token-usage/by-agent?squad=${encodeURIComponent(squadId)}&from=${from}&to=${to}`,
@@ -185,7 +191,10 @@ export default function UsageView() {
   };
 
   const totals = useMemo(() => {
-    const totalCost = summary?.totalCost || daily.reduce((sum, entry) => sum + entry.cost, 0) || squads.reduce((sum, squad) => sum + squad.cost, 0);
+    const totalCost =
+      summary?.totalCost ||
+      daily.reduce((sum, entry) => sum + entry.cost, 0) ||
+      squads.reduce((sum, squad) => sum + squad.cost, 0);
     return {
       totalTokens: summary?.totalTokens ?? 0,
       totalCalls: summary?.totalCalls ?? 0,
@@ -279,7 +288,11 @@ export default function UsageView() {
               <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis dataKey="date" stroke="#71717a" fontSize={10} tickLine={false} axisLine={false} />
               <YAxis stroke="#71717a" fontSize={10} tickLine={false} axisLine={false} tickFormatter={formatCost} />
-              <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "#e4e4e7" }} formatter={(value: number) => formatCost(value)} />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                labelStyle={{ color: "#e4e4e7" }}
+                formatter={(value: number) => formatCost(value)}
+              />
               <Line type="monotone" dataKey="cost" name="Cost" stroke="#F75F57" strokeWidth={2.5} dot={false} />
             </LineChart>
           </ResponsiveContainer>
@@ -304,40 +317,44 @@ export default function UsageView() {
               </tr>
             </thead>
             {squads.map((squad) => {
-                const open = !!expandedSquads[squad.id];
-                const agents = agentsBySquad[squad.id] ?? [];
+              const open = !!expandedSquads[squad.id];
+              const agents = agentsBySquad[squad.id] ?? [];
 
-                return (
-                  <tbody key={squad.id}>
-                    <tr
-                      onClick={() => void toggleSquad(squad)}
-                      className="cursor-pointer border-t border-white/[0.05] transition-colors hover:bg-white/[0.03]"
-                    >
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-2">
-                          {open ? <ChevronDown className="h-3.5 w-3.5 text-zinc-600" /> : <ChevronRight className="h-3.5 w-3.5 text-zinc-600" />}
-                          <SquadChip name={squad.name} />
-                        </div>
-                      </td>
-                      <td className="px-5 py-3 text-right text-zinc-300">{formatNumber(squad.inputTokens)}</td>
-                      <td className="px-5 py-3 text-right text-zinc-300">{formatNumber(squad.outputTokens)}</td>
-                      <td className="px-5 py-3 text-right text-zinc-300">{formatNumber(squad.calls)}</td>
-                      <td className="px-5 py-3 text-right text-zinc-300">{formatCost(squad.cost)}</td>
-                    </tr>
-                    {open
-                      ? agents.map((agent) => (
-                          <tr key={`${squad.id}-${agent.id}`} className="border-t border-white/[0.04] bg-white/[0.01]">
-                            <td className="px-5 py-3 pl-11 text-zinc-400">↳ {agent.name}</td>
-                            <td className="px-5 py-3 text-right text-zinc-400">{formatNumber(agent.inputTokens)}</td>
-                            <td className="px-5 py-3 text-right text-zinc-400">{formatNumber(agent.outputTokens)}</td>
-                            <td className="px-5 py-3 text-right text-zinc-400">{formatNumber(agent.calls)}</td>
-                            <td className="px-5 py-3 text-right text-zinc-400">{formatCost(agent.cost)}</td>
-                          </tr>
-                        ))
-                      : null}
-                  </tbody>
-                );
-              })}
+              return (
+                <tbody key={squad.id}>
+                  <tr
+                    onClick={() => void toggleSquad(squad)}
+                    className="cursor-pointer border-t border-white/[0.05] transition-colors hover:bg-white/[0.03]"
+                  >
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-2">
+                        {open ? (
+                          <ChevronDown className="h-3.5 w-3.5 text-zinc-600" />
+                        ) : (
+                          <ChevronRight className="h-3.5 w-3.5 text-zinc-600" />
+                        )}
+                        <SquadChip name={squad.name} />
+                      </div>
+                    </td>
+                    <td className="px-5 py-3 text-right text-zinc-300">{formatNumber(squad.inputTokens)}</td>
+                    <td className="px-5 py-3 text-right text-zinc-300">{formatNumber(squad.outputTokens)}</td>
+                    <td className="px-5 py-3 text-right text-zinc-300">{formatNumber(squad.calls)}</td>
+                    <td className="px-5 py-3 text-right text-zinc-300">{formatCost(squad.cost)}</td>
+                  </tr>
+                  {open
+                    ? agents.map((agent) => (
+                        <tr key={`${squad.id}-${agent.id}`} className="border-t border-white/[0.04] bg-white/[0.01]">
+                          <td className="px-5 py-3 pl-11 text-zinc-400">↳ {agent.name}</td>
+                          <td className="px-5 py-3 text-right text-zinc-400">{formatNumber(agent.inputTokens)}</td>
+                          <td className="px-5 py-3 text-right text-zinc-400">{formatNumber(agent.outputTokens)}</td>
+                          <td className="px-5 py-3 text-right text-zinc-400">{formatNumber(agent.calls)}</td>
+                          <td className="px-5 py-3 text-right text-zinc-400">{formatCost(agent.cost)}</td>
+                        </tr>
+                      ))
+                    : null}
+                </tbody>
+              );
+            })}
           </table>
         </div>
       </div>

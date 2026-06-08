@@ -1,8 +1,8 @@
+import { ChevronDown, ChevronRight, FileText, Folder, Pencil, Plus, Save, Search, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { DangerBtn, IoMark, MarkdownRenderer, PrimaryBtn, SecondaryBtn } from "@/components/ui";
 import { notifyError, notifySuccess } from "@/lib/notify";
 import { useAuthStore } from "@/stores/auth";
-import { ChevronDown, ChevronRight, FileText, Folder, Pencil, Plus, Save, Search, Trash2, X } from "lucide-react";
 
 interface WikiReadResponse {
   path?: string;
@@ -110,7 +110,9 @@ function buildTree(paths: string[]): TreeNode[] {
       if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
       return a.name.localeCompare(b.name);
     });
-    nodes.forEach((node) => node.children && sortNodes(node.children));
+    nodes.forEach((node) => {
+      if (node.children) sortNodes(node.children);
+    });
   };
 
   sortNodes(root);
@@ -176,7 +178,11 @@ function TreeBranch({
             >
               {isFolder ? (
                 <>
-                  {isOpen ? <ChevronDown className="h-3 w-3 text-zinc-600" /> : <ChevronRight className="h-3 w-3 text-zinc-600" />}
+                  {isOpen ? (
+                    <ChevronDown className="h-3 w-3 text-zinc-600" />
+                  ) : (
+                    <ChevronRight className="h-3 w-3 text-zinc-600" />
+                  )}
                   <Folder className={`h-3.5 w-3.5 ${isActive ? "text-[#66FCF1]" : "text-[#45A29E]"}`} />
                 </>
               ) : (
@@ -253,7 +259,7 @@ export default function WikiView() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [loadPages]);
 
   useEffect(() => {
     if (!search.trim()) {
@@ -264,7 +270,9 @@ export default function WikiView() {
     const timeout = window.setTimeout(() => {
       void (async () => {
         try {
-          const response = await authJson<SearchResult[] | string[]>([`/api/wiki/search?q=${encodeURIComponent(search.trim())}`]);
+          const response = await authJson<SearchResult[] | string[]>([
+            `/api/wiki/search?q=${encodeURIComponent(search.trim())}`,
+          ]);
           setSearchResults(normalizePaths(response));
         } catch {
           setSearchResults(pages.filter((path) => path.toLowerCase().includes(search.trim().toLowerCase())));
@@ -283,10 +291,7 @@ export default function WikiView() {
 
     setBusy(true);
     try {
-      await authJson([
-        `/api/wiki/pages/${encodePath(selectedPath)}`,
-        `/api/wiki/page/${encodePath(selectedPath)}`,
-      ], {
+      await authJson([`/api/wiki/pages/${encodePath(selectedPath)}`, `/api/wiki/page/${encodePath(selectedPath)}`], {
         method: "PUT",
         body: JSON.stringify({ content: draft }),
       });
@@ -306,10 +311,7 @@ export default function WikiView() {
 
     setBusy(true);
     try {
-      await authJson([
-        `/api/wiki/pages/${encodePath(selectedPath)}`,
-        `/api/wiki/page/${encodePath(selectedPath)}`,
-      ], {
+      await authJson([`/api/wiki/pages/${encodePath(selectedPath)}`, `/api/wiki/page/${encodePath(selectedPath)}`], {
         method: "DELETE",
       });
       const removed = selectedPath;
@@ -333,10 +335,7 @@ export default function WikiView() {
     setBusy(true);
     try {
       const initialContent = `# ${trimmedPath.split("/").pop() ?? trimmedPath}\n\n`;
-      await authJson([
-        `/api/wiki/pages/${encodePath(trimmedPath)}`,
-        `/api/wiki/page/${encodePath(trimmedPath)}`,
-      ], {
+      await authJson([`/api/wiki/pages/${encodePath(trimmedPath)}`, `/api/wiki/page/${encodePath(trimmedPath)}`], {
         method: "PUT",
         body: JSON.stringify({ content: initialContent }),
       });
@@ -398,7 +397,10 @@ export default function WikiView() {
                 className={`${inputClass} w-full`}
               />
               <div className="flex items-center gap-2">
-                <PrimaryBtn onClick={createPage} className={`px-3 py-2 ${busy ? "pointer-events-none opacity-60" : ""}`}>
+                <PrimaryBtn
+                  onClick={createPage}
+                  className={`px-3 py-2 ${busy ? "pointer-events-none opacity-60" : ""}`}
+                >
                   <Plus className="h-3.5 w-3.5" />
                   Create
                 </PrimaryBtn>
@@ -440,7 +442,10 @@ export default function WikiView() {
               <>
                 {editing ? (
                   <>
-                    <PrimaryBtn onClick={savePage} className={`px-3 py-2 ${busy ? "pointer-events-none opacity-60" : ""}`}>
+                    <PrimaryBtn
+                      onClick={savePage}
+                      className={`px-3 py-2 ${busy ? "pointer-events-none opacity-60" : ""}`}
+                    >
                       <Save className="h-3.5 w-3.5" />
                       Save
                     </PrimaryBtn>
@@ -498,7 +503,11 @@ export default function WikiView() {
               </div>
             ) : (
               <div className="h-full overflow-y-auto px-6 py-5">
-                {busy ? <div className="text-[11px] font-mono text-zinc-500">Loading page…</div> : <MarkdownRenderer content={content} />}
+                {busy ? (
+                  <div className="text-[11px] font-mono text-zinc-500">Loading page…</div>
+                ) : (
+                  <MarkdownRenderer content={content} />
+                )}
               </div>
             )
           ) : (

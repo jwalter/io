@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Routes, Route, Navigate } from "react-router";
+import { Navigate, Route, Routes } from "react-router";
 import { useAuthStore } from "@/stores/auth";
 
 const LoginView = lazy(() => import("@/views/LoginView"));
@@ -33,17 +33,94 @@ export function AppRoutes() {
     <Suspense fallback={<Loading />}>
       <Routes>
         <Route path="/login" element={<LoginView />} />
-        <Route path="/" element={<ProtectedRoute><ChatView /></ProtectedRoute>} />
-        <Route path="/chat" element={<ProtectedRoute><ChatView /></ProtectedRoute>} />
-        <Route path="/feed" element={<ProtectedRoute><FeedView /></ProtectedRoute>} />
-        <Route path="/squads" element={<ProtectedRoute><SquadsView /></ProtectedRoute>} />
-        <Route path="/squads/:id" element={<ProtectedRoute><SquadDetailView /></ProtectedRoute>} />
-        <Route path="/skills" element={<ProtectedRoute><SkillsView /></ProtectedRoute>} />
-        <Route path="/mcp" element={<ProtectedRoute><McpView /></ProtectedRoute>} />
-        <Route path="/schedules" element={<ProtectedRoute><SchedulesView /></ProtectedRoute>} />
-        <Route path="/wiki" element={<ProtectedRoute><WikiView /></ProtectedRoute>} />
-        <Route path="/usage" element={<ProtectedRoute><UsageView /></ProtectedRoute>} />
-        <Route path="/settings" element={<ProtectedRoute><SettingsView /></ProtectedRoute>} />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <ChatView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/chat"
+          element={
+            <ProtectedRoute>
+              <ChatView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/feed"
+          element={
+            <ProtectedRoute>
+              <FeedView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/squads"
+          element={
+            <ProtectedRoute>
+              <SquadsView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/squads/:id"
+          element={
+            <ProtectedRoute>
+              <SquadDetailView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/skills"
+          element={
+            <ProtectedRoute>
+              <SkillsView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/mcp"
+          element={
+            <ProtectedRoute>
+              <McpView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/schedules"
+          element={
+            <ProtectedRoute>
+              <SchedulesView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/wiki"
+          element={
+            <ProtectedRoute>
+              <WikiView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/usage"
+          element={
+            <ProtectedRoute>
+              <UsageView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <SettingsView />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </Suspense>
   );

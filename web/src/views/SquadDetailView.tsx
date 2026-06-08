@@ -1,5 +1,3 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -16,15 +14,17 @@ import {
   Trash2,
   XCircle,
 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router";
 import {
   Chip,
   DangerBtn,
   IoMark,
   SecondaryBtn,
   StatusDot,
-  Toggle,
-  statusToVariant,
   type StatusKind,
+  statusToVariant,
+  Toggle,
 } from "@/components/ui";
 import { useAuthStore } from "@/stores/auth";
 
@@ -307,7 +307,11 @@ export default function SquadDetailView() {
     setStoppingTaskId(taskId);
     try {
       await fetchJson<{ ok: true }>(`/api/tasks/${taskId}/stop`, { method: "POST" });
-      setTasks((prev) => prev.map((task) => (task.id === taskId ? { ...task, status: "stopped", updated_at: new Date().toISOString() } : task)));
+      setTasks((prev) =>
+        prev.map((task) =>
+          task.id === taskId ? { ...task, status: "stopped", updated_at: new Date().toISOString() } : task,
+        ),
+      );
       if (agentId) {
         setAgents((prev) => prev.map((agent) => (agent.id === agentId ? { ...agent, status: "idle" } : agent)));
       }
@@ -329,7 +333,7 @@ export default function SquadDetailView() {
   const toggleSchedule = async (schedule: Schedule) => {
     const updated = await fetchJson<Schedule>(`/api/schedules/${schedule.id}`, {
       method: "PUT",
-      body: JSON.stringify({ enabled: !Boolean(schedule.enabled) }),
+      body: JSON.stringify({ enabled: !schedule.enabled }),
     });
     setSchedules((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
   };
@@ -354,7 +358,9 @@ export default function SquadDetailView() {
                 <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">Task Activity</p>
                 <h2 className="text-xl text-zinc-100">{activityTaskId}</h2>
               </div>
-              <SecondaryBtn onClick={() => setActivityTaskId(null)} className="px-3 py-2">Close</SecondaryBtn>
+              <SecondaryBtn onClick={() => setActivityTaskId(null)} className="px-3 py-2">
+                Close
+              </SecondaryBtn>
             </div>
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
               {activityLoading ? (
@@ -387,12 +393,22 @@ export default function SquadDetailView() {
           <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
             <div>
               <p className="text-[11px] font-mono uppercase tracking-[0.28em] text-zinc-500">Squad Overview</p>
-              <h1 className="text-5xl leading-none mt-2" style={{ fontFamily: "'Bebas Neue', sans-serif", color: squad.color || "#66FCF1" }}>{squad.name}</h1>
+              <h1
+                className="text-5xl leading-none mt-2"
+                style={{ fontFamily: "'Bebas Neue', sans-serif", color: squad.color || "#66FCF1" }}
+              >
+                {squad.name}
+              </h1>
               <div className="mt-4 flex flex-wrap items-center gap-2 text-[11px] font-mono">
                 <Chip variant="muted">{squad.universe}</Chip>
                 <Chip variant={statusToVariant(overallStatus)}>{overallStatus}</Chip>
                 {squad.repo_url && (
-                  <a href={squad.repo_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] px-3 py-1 text-[#66FCF1] hover:text-white transition-colors">
+                  <a
+                    href={squad.repo_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] px-3 py-1 text-[#66FCF1] hover:text-white transition-colors"
+                  >
                     {squad.repo_url}
                     <ExternalLink className="h-3 w-3" />
                   </a>
@@ -434,13 +450,26 @@ export default function SquadDetailView() {
             {agents.map((agent) => {
               const currentTask = currentTaskByAgent[agent.id];
               const status = normalizeStatus(agent.status);
-              const Icon = agent.is_lead ? Crown : agent.is_qa || agent.is_test ? Bug : /scribe|writer|doc/i.test(`${agent.role_title} ${agent.persona}`) ? ScrollText : Bot;
+              const Icon = agent.is_lead
+                ? Crown
+                : agent.is_qa || agent.is_test
+                  ? Bug
+                  : /scribe|writer|doc/i.test(`${agent.role_title} ${agent.persona}`)
+                    ? ScrollText
+                    : Bot;
 
               return (
                 <div key={agent.id} className="glass-card border border-white/[0.07] rounded-2xl p-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-3 min-w-0">
-                      <div className="h-11 w-11 rounded-2xl border flex items-center justify-center flex-shrink-0" style={{ borderColor: `${squad.color}40`, background: `${squad.color}15`, color: squad.color || "#66FCF1" }}>
+                      <div
+                        className="h-11 w-11 rounded-2xl border flex items-center justify-center flex-shrink-0"
+                        style={{
+                          borderColor: `${squad.color}40`,
+                          background: `${squad.color}15`,
+                          color: squad.color || "#66FCF1",
+                        }}
+                      >
                         <Icon className="h-5 w-5" />
                       </div>
                       <div className="min-w-0">
@@ -448,8 +477,12 @@ export default function SquadDetailView() {
                           <h3 className="text-lg text-zinc-100 truncate">{agent.character_name}</h3>
                           <Chip variant={statusToVariant(status)}>{agent.status || "idle"}</Chip>
                         </div>
-                        <p className="text-[11px] font-mono uppercase tracking-[0.18em] text-zinc-500 mt-1">{agent.role_title || "Agent"}</p>
-                        <p className="mt-3 text-sm text-zinc-200">{currentTask?.description ?? "No active task assigned."}</p>
+                        <p className="text-[11px] font-mono uppercase tracking-[0.18em] text-zinc-500 mt-1">
+                          {agent.role_title || "Agent"}
+                        </p>
+                        <p className="mt-3 text-sm text-zinc-200">
+                          {currentTask?.description ?? "No active task assigned."}
+                        </p>
                       </div>
                     </div>
                     <div className="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-500 flex-shrink-0">
@@ -465,7 +498,10 @@ export default function SquadDetailView() {
                         View Activity
                       </SecondaryBtn>
                       {(status === "working" || status === "reviewing") && (
-                        <DangerBtn onClick={() => void stopTask(currentTask.id, agent.id)} className={`px-3 py-2 ${stoppingTaskId === currentTask.id ? "pointer-events-none opacity-50" : ""}`}>
+                        <DangerBtn
+                          onClick={() => void stopTask(currentTask.id, agent.id)}
+                          className={`px-3 py-2 ${stoppingTaskId === currentTask.id ? "pointer-events-none opacity-50" : ""}`}
+                        >
                           <Square className="h-3.5 w-3.5" />
                           Stop
                         </DangerBtn>
@@ -484,7 +520,9 @@ export default function SquadDetailView() {
               <div className="glass-card border border-white/[0.07] rounded-2xl p-10 text-center col-span-full">
                 <IoMark height={24} />
                 <p className="text-zinc-100 mt-4">No active instances</p>
-                <p className="text-[11px] font-mono text-zinc-500 mt-2">Spin up an instance from the daemon to see it here.</p>
+                <p className="text-[11px] font-mono text-zinc-500 mt-2">
+                  Spin up an instance from the daemon to see it here.
+                </p>
               </div>
             ) : (
               instances.map((instance) => {
@@ -498,7 +536,10 @@ export default function SquadDetailView() {
                       </div>
                       <div>
                         <p className="text-zinc-500 uppercase tracking-wide">Branch</p>
-                        <p className="mt-1 inline-flex items-center gap-1.5 text-zinc-200"><GitBranch className="h-3.5 w-3.5 text-[#66FCF1]" />{instance.branch}</p>
+                        <p className="mt-1 inline-flex items-center gap-1.5 text-zinc-200">
+                          <GitBranch className="h-3.5 w-3.5 text-[#66FCF1]" />
+                          {instance.branch}
+                        </p>
                       </div>
                       <div>
                         <p className="text-zinc-500 uppercase tracking-wide">Created</p>
@@ -517,7 +558,10 @@ export default function SquadDetailView() {
                           View Activity
                         </SecondaryBtn>
                       )}
-                      <DangerBtn onClick={() => void destroyInstance(instance.id)} className={`px-3 py-2 ${destroyingId === instance.id ? "pointer-events-none opacity-50" : ""}`}>
+                      <DangerBtn
+                        onClick={() => void destroyInstance(instance.id)}
+                        className={`px-3 py-2 ${destroyingId === instance.id ? "pointer-events-none opacity-50" : ""}`}
+                      >
                         <Trash2 className="h-3.5 w-3.5" />
                         Destroy
                       </DangerBtn>
@@ -534,14 +578,21 @@ export default function SquadDetailView() {
             {schedules.length === 0 ? (
               <div className="glass-card border border-white/[0.07] rounded-2xl p-10 text-center">
                 <p className="text-zinc-100">No schedules configured</p>
-                <p className="text-[11px] font-mono text-zinc-500 mt-2">Scheduled automations for this squad will appear here.</p>
+                <p className="text-[11px] font-mono text-zinc-500 mt-2">
+                  Scheduled automations for this squad will appear here.
+                </p>
               </div>
             ) : (
               schedules.map((schedule) => (
-                <div key={schedule.id} className="glass-card border border-white/[0.07] rounded-2xl p-4 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div
+                  key={schedule.id}
+                  className="glass-card border border-white/[0.07] rounded-2xl p-4 flex flex-col gap-4 md:flex-row md:items-start md:justify-between"
+                >
                   <div className="space-y-3 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <Chip variant={schedule.enabled ? "success" : "muted"}>{schedule.enabled ? "enabled" : "paused"}</Chip>
+                      <Chip variant={schedule.enabled ? "success" : "muted"}>
+                        {schedule.enabled ? "enabled" : "paused"}
+                      </Chip>
                       <span className="text-[11px] font-mono text-zinc-500">{schedule.cron}</span>
                     </div>
                     <div>
@@ -550,7 +601,9 @@ export default function SquadDetailView() {
                     </div>
                     <div>
                       <p className="text-[11px] font-mono uppercase tracking-wide text-zinc-500">Prompt</p>
-                      <p className="text-zinc-400 mt-1 whitespace-pre-wrap">{schedule.prompt || "No prompt configured."}</p>
+                      <p className="text-zinc-400 mt-1 whitespace-pre-wrap">
+                        {schedule.prompt || "No prompt configured."}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3 text-[11px] font-mono text-zinc-500">
@@ -568,11 +621,16 @@ export default function SquadDetailView() {
             {historyItems.length === 0 ? (
               <div className="glass-card border border-white/[0.07] rounded-2xl p-10 text-center">
                 <p className="text-zinc-100">No history yet</p>
-                <p className="text-[11px] font-mono text-zinc-500 mt-2">Task updates and audit events will be listed here.</p>
+                <p className="text-[11px] font-mono text-zinc-500 mt-2">
+                  Task updates and audit events will be listed here.
+                </p>
               </div>
             ) : (
               historyItems.map((item) => (
-                <div key={item.id} className="glass-card border border-white/[0.07] rounded-2xl px-4 py-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div
+                  key={item.id}
+                  className="glass-card border border-white/[0.07] rounded-2xl px-4 py-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between"
+                >
                   <div className="flex items-start gap-3 min-w-0">
                     <div className="mt-0.5">{activityStatus(item.status)}</div>
                     <div className="min-w-0">
@@ -580,7 +638,9 @@ export default function SquadDetailView() {
                       <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-mono text-zinc-500">
                         <span>{formatTimestamp(item.timestamp)}</span>
                         <span>Duration {item.duration}</span>
-                        <span>{item.agentCount} agent{item.agentCount === 1 ? "" : "s"}</span>
+                        <span>
+                          {item.agentCount} agent{item.agentCount === 1 ? "" : "s"}
+                        </span>
                       </div>
                     </div>
                   </div>

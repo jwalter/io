@@ -21,7 +21,7 @@ async function getHeaders(): Promise<HeadersInit> {
 
   const currentToken = useAuthStore.getState().token;
   if (currentToken) {
-    headers["Authorization"] = `Bearer ${currentToken}`;
+    headers.Authorization = `Bearer ${currentToken}`;
   }
   return headers;
 }
@@ -51,9 +51,8 @@ async function handleResponse(res: Response, retryFn: () => Promise<Response>): 
 }
 
 export async function apiGet<T = unknown>(path: string): Promise<T> {
-  const res = await handleResponse(
-    await fetch(`${BASE_URL}${path}`, { headers: await getHeaders() }),
-    async () => fetch(`${BASE_URL}${path}`, { headers: await getHeaders() })
+  const res = await handleResponse(await fetch(`${BASE_URL}${path}`, { headers: await getHeaders() }), async () =>
+    fetch(`${BASE_URL}${path}`, { headers: await getHeaders() }),
   );
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
@@ -66,7 +65,7 @@ export async function apiPost<T = unknown>(path: string, body?: unknown): Promis
     body: body ? JSON.stringify(body) : undefined,
   };
   const res = await handleResponse(await fetch(`${BASE_URL}${path}`, opts), async () =>
-    fetch(`${BASE_URL}${path}`, { ...opts, headers: await getHeaders() })
+    fetch(`${BASE_URL}${path}`, { ...opts, headers: await getHeaders() }),
   );
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
@@ -79,7 +78,7 @@ export async function apiPut<T = unknown>(path: string, body?: unknown): Promise
     body: body ? JSON.stringify(body) : undefined,
   };
   const res = await handleResponse(await fetch(`${BASE_URL}${path}`, opts), async () =>
-    fetch(`${BASE_URL}${path}`, { ...opts, headers: await getHeaders() })
+    fetch(`${BASE_URL}${path}`, { ...opts, headers: await getHeaders() }),
   );
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
@@ -88,7 +87,7 @@ export async function apiPut<T = unknown>(path: string, body?: unknown): Promise
 export async function apiDelete<T = unknown>(path: string): Promise<T> {
   const opts: RequestInit = { method: "DELETE", headers: await getHeaders() };
   const res = await handleResponse(await fetch(`${BASE_URL}${path}`, opts), async () =>
-    fetch(`${BASE_URL}${path}`, { ...opts, headers: await getHeaders() })
+    fetch(`${BASE_URL}${path}`, { ...opts, headers: await getHeaders() }),
   );
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();

@@ -1,15 +1,13 @@
-import { useState, useRef, useEffect } from "react";
-import { MessageSquare, Send, Paperclip, X, FileText } from "lucide-react";
-import { IoMark } from "./IoMark";
-import { useChatStore } from "@/stores/chat";
+import { FileText, MessageSquare, Paperclip, Send, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import {
   fileToMessageAttachment,
-  validateAttachmentSizes,
   formatAttachmentSize,
-  isImageAttachment,
-  toDataUrl,
   type MessageAttachment,
+  validateAttachmentSizes,
 } from "@/lib/attachments";
+import { useChatStore } from "@/stores/chat";
+import { IoMark } from "./IoMark";
 
 export function ChatOverlay() {
   const [open, setOpen] = useState(false);
@@ -24,7 +22,7 @@ export function ChatOverlay() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isStreaming]);
+  }, []);
 
   const handleSend = async () => {
     if ((!input.trim() && pendingAttachments.length === 0) || isStreaming) return;
@@ -52,7 +50,10 @@ export function ChatOverlay() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
   };
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -77,17 +78,25 @@ export function ChatOverlay() {
           >
             <div className="flex items-center gap-2.5">
               <IoMark height={20} />
-              <span className="text-xl text-white tracking-wider leading-none" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>IO</span>
+              <span
+                className="text-xl text-white tracking-wider leading-none"
+                style={{ fontFamily: "'Bebas Neue', sans-serif" }}
+              >
+                IO
+              </span>
               <span className="text-[10px] font-mono text-zinc-600 mt-0.5">quick chat</span>
             </div>
-            <button onClick={() => setOpen(false)} className="p-1 rounded-lg hover:bg-white/[0.07] text-zinc-600 hover:text-zinc-300 transition-colors">
+            <button
+              onClick={() => setOpen(false)}
+              className="p-1 rounded-lg hover:bg-white/[0.07] text-zinc-600 hover:text-zinc-300 transition-colors"
+            >
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
-            {messages.map(msg => (
+            {messages.map((msg) => (
               <div key={msg.id} className={`flex gap-2 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
                 <div
                   className={`flex-shrink-0 w-5 h-5 rounded-lg flex items-center justify-center text-[9px] font-mono mt-0.5 ${msg.role === "user" ? "border border-[#66FCF1]/30" : "bg-[#282828] border border-white/[0.07]"}`}
@@ -97,7 +106,11 @@ export function ChatOverlay() {
                 </div>
                 <div
                   className={`max-w-[82%] rounded-xl px-3 py-2 text-xs leading-relaxed ${msg.role === "user" ? "text-[#1F2833] rounded-tr-sm" : "bg-[#282828] border border-white/[0.06] text-zinc-200 rounded-tl-sm"}`}
-                  style={msg.role === "user" ? { background: "linear-gradient(135deg, #45A29E 0%, #F75F57 100%)" } : undefined}
+                  style={
+                    msg.role === "user"
+                      ? { background: "linear-gradient(135deg, #45A29E 0%, #F75F57 100%)" }
+                      : undefined
+                  }
                 >
                   <p className="whitespace-pre-wrap">{msg.content}</p>
                 </div>
@@ -109,7 +122,13 @@ export function ChatOverlay() {
                   <IoMark height={9} />
                 </div>
                 <div className="bg-[#282828] border border-white/[0.06] rounded-xl rounded-tl-sm px-3 py-2.5 flex items-center gap-1">
-                  {[0, 110, 220].map(d => <span key={d} className="w-1 h-1 rounded-full bg-[#66FCF1] animate-bounce" style={{ animationDelay: `${d}ms` }} />)}
+                  {[0, 110, 220].map((d) => (
+                    <span
+                      key={d}
+                      className="w-1 h-1 rounded-full bg-[#66FCF1] animate-bounce"
+                      style={{ animationDelay: `${d}ms` }}
+                    />
+                  ))}
                 </div>
               </div>
             )}
@@ -124,10 +143,17 @@ export function ChatOverlay() {
                   <FileText className="w-3 h-3 text-zinc-500" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[10px] font-mono text-zinc-300 truncate leading-tight">{pendingAttachments[0].name}</p>
-                  <p className="text-[9px] font-mono text-zinc-600 leading-tight">{formatAttachmentSize(pendingAttachments[0].size)}</p>
+                  <p className="text-[10px] font-mono text-zinc-300 truncate leading-tight">
+                    {pendingAttachments[0].name}
+                  </p>
+                  <p className="text-[9px] font-mono text-zinc-600 leading-tight">
+                    {formatAttachmentSize(pendingAttachments[0].size)}
+                  </p>
                 </div>
-                <button onClick={() => setPendingAttachments([])} className="p-0.5 rounded text-zinc-600 hover:text-zinc-300 transition-colors flex-shrink-0">
+                <button
+                  onClick={() => setPendingAttachments([])}
+                  className="p-0.5 rounded text-zinc-600 hover:text-zinc-300 transition-colors flex-shrink-0"
+                >
                   <X className="w-3 h-3" />
                 </button>
               </div>
@@ -166,18 +192,16 @@ export function ChatOverlay() {
 
       {/* Toggle button */}
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => setOpen((o) => !o)}
         title={open ? "Close chat" : "Quick chat"}
         className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-xl transition-all duration-150 hover:scale-105 active:scale-95"
-        style={open
-          ? { background: "#252525", border: "1px solid rgba(255,255,255,0.09)" }
-          : { background: "linear-gradient(135deg, #45A29E 0%, #45A29E 55%, #F75F57 100%)" }
+        style={
+          open
+            ? { background: "#252525", border: "1px solid rgba(255,255,255,0.09)" }
+            : { background: "linear-gradient(135deg, #45A29E 0%, #45A29E 55%, #F75F57 100%)" }
         }
       >
-        {open
-          ? <X className="w-4 h-4 text-zinc-400" />
-          : <MessageSquare className="w-4 h-4 text-[#1F2833]" />
-        }
+        {open ? <X className="w-4 h-4 text-zinc-400" /> : <MessageSquare className="w-4 h-4 text-[#1F2833]" />}
       </button>
     </div>
   );

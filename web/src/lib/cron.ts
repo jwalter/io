@@ -22,7 +22,15 @@ export function describeCron(expression: string): string {
   }
 
   // Specific time every day
-  if (minute !== "*" && hour !== "*" && !hour?.includes("/") && !hour?.includes(",") && dayOfMonth === "*" && month === "*" && dayOfWeek === "*") {
+  if (
+    minute !== "*" &&
+    hour !== "*" &&
+    !hour?.includes("/") &&
+    !hour?.includes(",") &&
+    dayOfMonth === "*" &&
+    month === "*" &&
+    dayOfWeek === "*"
+  ) {
     return `Runs daily at ${pad(hour)}:${pad(minute)}`;
   }
 
@@ -38,7 +46,14 @@ export function describeCron(expression: string): string {
   }
 
   // Hourly at specific minute
-  if (minute !== "*" && !minute?.includes("/") && hour === "*" && dayOfMonth === "*" && month === "*" && dayOfWeek === "*") {
+  if (
+    minute !== "*" &&
+    !minute?.includes("/") &&
+    hour === "*" &&
+    dayOfMonth === "*" &&
+    month === "*" &&
+    dayOfWeek === "*"
+  ) {
     return `Runs hourly at minute ${minute}`;
   }
 

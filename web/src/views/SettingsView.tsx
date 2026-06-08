@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Eye, EyeOff, Plus, Save, X } from "lucide-react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Chip, PrimaryBtn, SecondaryBtn, Toggle } from "@/components/ui";
 import { notifyError, notifySuccess } from "@/lib/notify";
 import { useAuthStore } from "@/stores/auth";
-import { Eye, EyeOff, Plus, Save, X } from "lucide-react";
 
 type SettingsTab = "General" | "Telegram" | "Auth" | "Models" | "Advanced";
 
@@ -79,10 +79,16 @@ async function authJson<T>(paths: string[], init?: RequestInit): Promise<T> {
 
 function parseTier(value: unknown): string[] {
   if (Array.isArray(value)) {
-    return value.map(String).map((item) => item.trim()).filter(Boolean);
+    return value
+      .map(String)
+      .map((item) => item.trim())
+      .filter(Boolean);
   }
   if (typeof value === "string") {
-    return value.split(",").map((item) => item.trim()).filter(Boolean);
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
   }
   return [];
 }
@@ -99,9 +105,21 @@ function normalizeSettings(data: Record<string, unknown>): SettingsForm {
     supabaseAnonKey: String(data.supabaseAnonKey ?? ""),
     authorizedEmail: String(data.authorizedEmail ?? ""),
     modelTiers: {
-      high: parseTier(data.modelTiers && typeof data.modelTiers === "object" ? (data.modelTiers as Record<string, unknown>).high : data.highModels),
-      medium: parseTier(data.modelTiers && typeof data.modelTiers === "object" ? (data.modelTiers as Record<string, unknown>).medium : data.mediumModels),
-      low: parseTier(data.modelTiers && typeof data.modelTiers === "object" ? (data.modelTiers as Record<string, unknown>).low : data.lowModels),
+      high: parseTier(
+        data.modelTiers && typeof data.modelTiers === "object"
+          ? (data.modelTiers as Record<string, unknown>).high
+          : data.highModels,
+      ),
+      medium: parseTier(
+        data.modelTiers && typeof data.modelTiers === "object"
+          ? (data.modelTiers as Record<string, unknown>).medium
+          : data.mediumModels,
+      ),
+      low: parseTier(
+        data.modelTiers && typeof data.modelTiers === "object"
+          ? (data.modelTiers as Record<string, unknown>).low
+          : data.lowModels,
+      ),
     },
     selfEdit: Boolean(data.selfEdit ?? data.selfEditEnabled),
     watchdog: Boolean(data.watchdog ?? data.watchdogEnabled ?? true),
@@ -257,9 +275,12 @@ export default function SettingsView() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [loadSettings]);
 
-  const dirty = useMemo(() => JSON.stringify(settings) !== JSON.stringify(initialSettings), [initialSettings, settings]);
+  const dirty = useMemo(
+    () => JSON.stringify(settings) !== JSON.stringify(initialSettings),
+    [initialSettings, settings],
+  );
 
   const updateField = <K extends keyof SettingsForm>(key: K, value: SettingsForm[K]) => {
     setSettings((current) => ({ ...current, [key]: value }));
@@ -318,7 +339,9 @@ export default function SettingsView() {
           <h1 className="text-4xl leading-none text-white" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
             Settings
           </h1>
-          <p className="mt-2 text-[11px] font-mono text-zinc-600">Control auth, notifications, models, and runtime behavior.</p>
+          <p className="mt-2 text-[11px] font-mono text-zinc-600">
+            Control auth, notifications, models, and runtime behavior.
+          </p>
         </div>
       </div>
 
@@ -331,7 +354,9 @@ export default function SettingsView() {
                 type="button"
                 onClick={() => setActiveTab(tab)}
                 className={`${tabClass} ${
-                  activeTab === tab ? "text-[#66FCF1] border-[#66FCF1]" : "text-zinc-600 hover:text-zinc-300 border-transparent"
+                  activeTab === tab
+                    ? "text-[#66FCF1] border-[#66FCF1]"
+                    : "text-zinc-600 hover:text-zinc-300 border-transparent"
                 }`}
               >
                 {tab}
@@ -377,8 +402,13 @@ export default function SettingsView() {
             <div className="space-y-1">
               <FormRow label="Enable">
                 <div className="flex items-center gap-3">
-                  <Toggle checked={settings.telegramEnabled} onChange={() => updateField("telegramEnabled", !settings.telegramEnabled)} />
-                  <span className="text-[11px] font-mono text-zinc-500">Allow Telegram notifications and bot access</span>
+                  <Toggle
+                    checked={settings.telegramEnabled}
+                    onChange={() => updateField("telegramEnabled", !settings.telegramEnabled)}
+                  />
+                  <span className="text-[11px] font-mono text-zinc-500">
+                    Allow Telegram notifications and bot access
+                  </span>
                 </div>
               </FormRow>
               <FormRow label="Bot token">
@@ -466,7 +496,9 @@ export default function SettingsView() {
               <FormRow label="Self-edit">
                 <div className="flex items-center gap-3">
                   <Toggle checked={settings.selfEdit} onChange={() => updateField("selfEdit", !settings.selfEdit)} />
-                  <span className="text-[11px] font-mono text-zinc-500">Allow modifying the IO installation when explicitly requested</span>
+                  <span className="text-[11px] font-mono text-zinc-500">
+                    Allow modifying the IO installation when explicitly requested
+                  </span>
                 </div>
               </FormRow>
               <FormRow label="Watchdog">
@@ -480,7 +512,9 @@ export default function SettingsView() {
         </div>
 
         <div className="border-t border-white/[0.06] px-5 py-4 flex items-center justify-between gap-3">
-          <p className="text-[11px] font-mono text-zinc-600">{dirty ? "Unsaved changes" : `Secrets remain masked as ${MASK}`}</p>
+          <p className="text-[11px] font-mono text-zinc-600">
+            {dirty ? "Unsaved changes" : `Secrets remain masked as ${MASK}`}
+          </p>
           <div className="flex items-center gap-2">
             <SecondaryBtn
               onClick={() => setSettings(initialSettings)}

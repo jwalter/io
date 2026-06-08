@@ -14,7 +14,7 @@ async function bootstrap() {
       <BrowserRouter>
         <App />
       </BrowserRouter>
-    </StrictMode>
+    </StrictMode>,
   );
 }
 

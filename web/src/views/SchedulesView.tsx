@@ -1,13 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
 import { Clock, Pencil, Play, Plus, Trash2 } from "lucide-react";
-import {
-  Chip,
-  DangerBtn,
-  PrimaryBtn,
-  SecondaryBtn,
-  SquadChip,
-  WarnBtn,
-} from "@/components/ui";
+import { useEffect, useMemo, useState } from "react";
+import { Chip, DangerBtn, PrimaryBtn, SecondaryBtn, SquadChip, WarnBtn } from "@/components/ui";
 import { describeCron } from "@/lib/cron";
 import { notifyError, notifySuccess } from "@/lib/notify";
 import { useAuthStore } from "@/stores/auth";
@@ -159,7 +152,13 @@ function getNextRunLabel(expression: string): string {
     return formatDateTime(next);
   }
 
-  if (minutePart.startsWith("*/") && hourPart === "*" && dayOfMonthPart === "*" && monthPart === "*" && dayOfWeekPart === "*") {
+  if (
+    minutePart.startsWith("*/") &&
+    hourPart === "*" &&
+    dayOfMonthPart === "*" &&
+    monthPart === "*" &&
+    dayOfWeekPart === "*"
+  ) {
     const interval = Number.parseInt(minutePart.slice(2), 10);
     if (Number.isFinite(interval) && interval > 0) {
       const next = new Date(now);
@@ -251,12 +250,9 @@ export default function SchedulesView() {
 
   useEffect(() => {
     void loadData();
-  }, []);
+  }, [loadData]);
 
-  const visibleSchedules = useMemo(
-    () => schedules.filter((schedule) => schedule.type === tab),
-    [schedules, tab]
-  );
+  const visibleSchedules = useMemo(() => schedules.filter((schedule) => schedule.type === tab), [schedules, tab]);
 
   const squadLookup = useMemo(() => {
     const map = new Map<string, Squad>();
@@ -361,9 +357,12 @@ export default function SchedulesView() {
   const triggerNow = async (schedule: Schedule) => {
     setBusyKey(`trigger:${schedule.id}`);
     try {
-      const response = await requestJson<{ ok: boolean; schedule?: Schedule }>(`/api/schedules/${schedule.id}/trigger`, {
-        method: "POST",
-      });
+      const response = await requestJson<{ ok: boolean; schedule?: Schedule }>(
+        `/api/schedules/${schedule.id}/trigger`,
+        {
+          method: "POST",
+        },
+      );
       if (response.schedule) {
         setSchedules((current) => current.map((item) => (item.id === schedule.id ? response.schedule! : item)));
       }
@@ -407,19 +406,19 @@ export default function SchedulesView() {
       </div>
 
       <div className="border-b border-white/[0.06] flex gap-1">
-        {([
-          ["squad", "Squad Schedules"],
-          ["io", "IO Schedules"],
-        ] as const).map(([value, label]) => {
+        {(
+          [
+            ["squad", "Squad Schedules"],
+            ["io", "IO Schedules"],
+          ] as const
+        ).map(([value, label]) => {
           const active = tab === value;
           return (
             <button
               key={value}
               onClick={() => setTab(value)}
               className={`px-4 py-2 text-[11px] font-mono capitalize border-b-2 -mb-px transition-colors ${
-                active
-                  ? "text-[#66FCF1] border-b-[#66FCF1]"
-                  : "text-zinc-600 hover:text-zinc-300 border-transparent"
+                active ? "text-[#66FCF1] border-b-[#66FCF1]" : "text-zinc-600 hover:text-zinc-300 border-transparent"
               }`}
             >
               {label}
@@ -447,11 +446,15 @@ export default function SchedulesView() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={4} className="px-4 py-10 text-center text-zinc-600">Loading schedules…</td>
+                <td colSpan={4} className="px-4 py-10 text-center text-zinc-600">
+                  Loading schedules…
+                </td>
               </tr>
             ) : visibleSchedules.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-10 text-center text-zinc-700">No schedules configured for this tab.</td>
+                <td colSpan={4} className="px-4 py-10 text-center text-zinc-700">
+                  No schedules configured for this tab.
+                </td>
               </tr>
             ) : (
               visibleSchedules.map((schedule) => {
@@ -460,7 +463,9 @@ export default function SchedulesView() {
                 return (
                   <tr key={schedule.id} className="border-b border-white/[0.05] last:border-b-0">
                     <td className="px-4 py-3 align-top">
-                      <div className="text-zinc-100">{schedule.agenda || schedule.name || describeCron(schedule.cron)}</div>
+                      <div className="text-zinc-100">
+                        {schedule.agenda || schedule.name || describeCron(schedule.cron)}
+                      </div>
                       <div className="mt-1 text-zinc-600">{schedule.cron}</div>
                       <div className="mt-2 flex items-center gap-2">
                         {schedule.type === "squad" && squad ? (
@@ -475,9 +480,7 @@ export default function SchedulesView() {
                         <Clock className="h-3.5 w-3.5 text-[#66FCF1]" />
                         <span>{getNextRunLabel(schedule.cron)}</span>
                       </div>
-                      {schedule.last_run && (
-                        <div className="mt-1 text-zinc-700">Last run {schedule.last_run}</div>
-                      )}
+                      {schedule.last_run && <div className="mt-1 text-zinc-700">Last run {schedule.last_run}</div>}
                     </td>
                     <td className="px-4 py-3 align-top">
                       <Chip variant={enabled ? "success" : "muted"}>{enabled ? "active" : "paused"}</Chip>
@@ -517,9 +520,13 @@ export default function SchedulesView() {
                 <h2 className="text-3xl leading-none text-white" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
                   {editingId ? "Edit Schedule" : "New Schedule"}
                 </h2>
-                <p className="mt-2 text-[11px] font-mono text-zinc-600">Configure cadence, label, and prompt payload.</p>
+                <p className="mt-2 text-[11px] font-mono text-zinc-600">
+                  Configure cadence, label, and prompt payload.
+                </p>
               </div>
-              <SecondaryBtn onClick={closeModal} className="px-3 py-1.5">Close</SecondaryBtn>
+              <SecondaryBtn onClick={closeModal} className="px-3 py-1.5">
+                Close
+              </SecondaryBtn>
             </div>
 
             <div className="mt-6 space-y-4">
@@ -565,7 +572,9 @@ export default function SchedulesView() {
                   >
                     <option value="">Select squad</option>
                     {squads.map((squad) => (
-                      <option key={squad.id} value={squad.id}>{squad.name}</option>
+                      <option key={squad.id} value={squad.id}>
+                        {squad.name}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -574,7 +583,9 @@ export default function SchedulesView() {
               {draft.type === "squad" && editingId && draft.squadId && squadLookup.get(draft.squadId) && (
                 <div>
                   <div className={SECTION_HEADER}>Squad</div>
-                  <div className="mt-2"><SquadChip name={squadLookup.get(draft.squadId)!.name} /></div>
+                  <div className="mt-2">
+                    <SquadChip name={squadLookup.get(draft.squadId)!.name} />
+                  </div>
                 </div>
               )}
 
@@ -610,7 +621,9 @@ export default function SchedulesView() {
             </div>
 
             <div className="mt-6 flex flex-wrap justify-end gap-2">
-              <SecondaryBtn onClick={closeModal} className="px-3 py-1.5">Cancel</SecondaryBtn>
+              <SecondaryBtn onClick={closeModal} className="px-3 py-1.5">
+                Cancel
+              </SecondaryBtn>
               <PrimaryBtn onClick={() => void saveSchedule()} className="px-3 py-1.5">
                 {busyKey === "save" ? "Saving…" : "Save"}
               </PrimaryBtn>

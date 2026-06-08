@@ -1,8 +1,8 @@
+import { ArrowRight, Bell, LogOut } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { Bell, LogOut, ArrowRight } from "lucide-react";
-import { StatusDot } from "./ui";
 import { useAuthStore } from "@/stores/auth";
+import { StatusDot } from "./ui";
 
 export function AppHeader() {
   const [flyout, setFlyout] = useState(false);
@@ -21,10 +21,16 @@ export function AppHeader() {
       </div>
       <div className="flex items-center gap-1.5">
         <div className="relative">
-          <button onClick={() => setFlyout(!flyout)} className="relative p-2 rounded-xl hover:bg-white/[0.05] text-zinc-600 hover:text-zinc-300 transition-colors">
+          <button
+            onClick={() => setFlyout(!flyout)}
+            className="relative p-2 rounded-xl hover:bg-white/[0.05] text-zinc-600 hover:text-zinc-300 transition-colors"
+          >
             <Bell className="w-3.5 h-3.5" />
             {feedCount > 0 && (
-              <span className="absolute top-1 right-1 w-3.5 h-3.5 rounded-full text-[8px] font-mono text-white flex items-center justify-center leading-none" style={{ background: "linear-gradient(135deg, #45A29E, #F75F57)" }}>
+              <span
+                className="absolute top-1 right-1 w-3.5 h-3.5 rounded-full text-[8px] font-mono text-white flex items-center justify-center leading-none"
+                style={{ background: "linear-gradient(135deg, #45A29E, #F75F57)" }}
+              >
                 {feedCount}
               </span>
             )}
@@ -38,7 +44,13 @@ export function AppHeader() {
                 </div>
                 <div className="px-4 py-6 text-center text-[11px] font-mono text-zinc-700">No new activity</div>
                 <div className="px-4 py-2 text-center border-t border-white/[0.04]">
-                  <button onClick={() => { setFlyout(false); navigate("/feed"); }} className="text-[11px] font-mono text-[#66FCF1] hover:text-[#D789F3] transition-colors flex items-center gap-1 mx-auto">
+                  <button
+                    onClick={() => {
+                      setFlyout(false);
+                      navigate("/feed");
+                    }}
+                    className="text-[11px] font-mono text-[#66FCF1] hover:text-[#D789F3] transition-colors flex items-center gap-1 mx-auto"
+                  >
                     View all <ArrowRight className="w-3 h-3" />
                   </button>
                 </div>
@@ -47,10 +59,17 @@ export function AppHeader() {
           )}
         </div>
         <div className="w-px h-4 bg-white/[0.08]" />
-        <div className="w-6 h-6 rounded-lg flex items-center justify-center border border-[#66FCF1]/20" style={{ background: "rgba(102,252,241,0.12)" }}>
+        <div
+          className="w-6 h-6 rounded-lg flex items-center justify-center border border-[#66FCF1]/20"
+          style={{ background: "rgba(102,252,241,0.12)" }}
+        >
           <span className="text-[10px] font-mono text-[#66FCF1]">{email?.[0]?.toUpperCase() ?? "A"}</span>
         </div>
-        <button onClick={logout} title="Sign out" className="p-1.5 rounded-xl hover:bg-white/[0.05] text-zinc-700 hover:text-zinc-400 transition-colors">
+        <button
+          onClick={logout}
+          title="Sign out"
+          className="p-1.5 rounded-xl hover:bg-white/[0.05] text-zinc-700 hover:text-zinc-400 transition-colors"
+        >
           <LogOut className="w-3.5 h-3.5" />
         </button>
       </div>

@@ -1,7 +1,7 @@
+import { AlertTriangle, Bot, CheckCircle, ExternalLink, Loader, Users, XCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { AlertTriangle, Bot, CheckCircle, ExternalLink, Loader, Users, XCircle } from "lucide-react";
-import { Chip, IoMark, PrimaryBtn, StatusDot, statusToVariant, squadColor, type StatusKind } from "@/components/ui";
+import { Chip, IoMark, PrimaryBtn, StatusDot, type StatusKind, squadColor, statusToVariant } from "@/components/ui";
 import { useAuthStore } from "@/stores/auth";
 
 interface Squad {
@@ -92,7 +92,8 @@ function overallStatus(agents: Agent[], instanceCount: number): StatusKind {
 
 function ActivityIcon({ status }: { status: StatusKind }) {
   if (status === "error") return <XCircle className="h-3.5 w-3.5 text-red-400" />;
-  if (status === "working" || status === "reviewing") return <Loader className="h-3.5 w-3.5 text-[#66FCF1] animate-spin" />;
+  if (status === "working" || status === "reviewing")
+    return <Loader className="h-3.5 w-3.5 text-[#66FCF1] animate-spin" />;
   if (status === "disconnected") return <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />;
   return <CheckCircle className="h-3.5 w-3.5 text-green-400" />;
 }
@@ -130,8 +131,12 @@ export default function SquadsView() {
         <header className="glass-card border border-white/[0.07] rounded-2xl p-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-[11px] font-mono uppercase tracking-[0.28em] text-zinc-500">Command Grid</p>
-            <h1 className="text-5xl text-zinc-100 leading-none" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>Squads</h1>
-            <p className="mt-2 text-[11px] font-mono text-zinc-500">{data.squads.length} squad{data.squads.length === 1 ? "" : "s"} synced from the daemon.</p>
+            <h1 className="text-5xl text-zinc-100 leading-none" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
+              Squads
+            </h1>
+            <p className="mt-2 text-[11px] font-mono text-zinc-500">
+              {data.squads.length} squad{data.squads.length === 1 ? "" : "s"} synced from the daemon.
+            </p>
           </div>
           <PrimaryBtn onClick={() => undefined} className="px-3 py-2.5 self-start md:self-auto">
             <Bot className="h-3.5 w-3.5" />
@@ -140,14 +145,18 @@ export default function SquadsView() {
         </header>
 
         {loading ? (
-          <div className="glass-card border border-white/[0.07] rounded-2xl p-10 text-center text-[11px] font-mono text-zinc-500">Loading squads…</div>
+          <div className="glass-card border border-white/[0.07] rounded-2xl p-10 text-center text-[11px] font-mono text-zinc-500">
+            Loading squads…
+          </div>
         ) : data.squads.length === 0 ? (
           <div className="glass-card border border-white/[0.07] rounded-2xl p-12 text-center">
             <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.06] bg-black/10 text-[#66FCF1] mb-4">
               <IoMark height={28} />
             </div>
             <p className="text-zinc-100 text-lg">No squads configured</p>
-            <p className="text-[11px] font-mono text-zinc-500 mt-2">Create a squad in the daemon to populate this command grid.</p>
+            <p className="text-[11px] font-mono text-zinc-500 mt-2">
+              Create a squad in the daemon to populate this command grid.
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -182,8 +191,15 @@ export default function SquadsView() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="h-1 w-12 rounded-full mb-4" style={{ background: color }} />
-                      <h2 className="text-3xl text-zinc-100 leading-none" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>{squad.name}</h2>
-                      <p className="mt-2 text-[11px] font-mono uppercase tracking-[0.18em] text-zinc-500">{squad.universe}</p>
+                      <h2
+                        className="text-3xl text-zinc-100 leading-none"
+                        style={{ fontFamily: "'Bebas Neue', sans-serif" }}
+                      >
+                        {squad.name}
+                      </h2>
+                      <p className="mt-2 text-[11px] font-mono uppercase tracking-[0.18em] text-zinc-500">
+                        {squad.universe}
+                      </p>
                     </div>
                     <Chip variant={statusToVariant(status)}>{status}</Chip>
                   </div>
@@ -191,11 +207,15 @@ export default function SquadsView() {
                   <div className="mt-5 grid grid-cols-2 gap-3 text-[11px] font-mono text-zinc-400">
                     <div className="rounded-xl border border-white/[0.06] bg-black/10 px-3 py-2.5">
                       <p className="text-zinc-500 uppercase tracking-wide">Roster</p>
-                      <p className="mt-2 flex items-center gap-2 text-zinc-200"><Users className="h-3.5 w-3.5 text-[#66FCF1]" /> {squadAgents.length} agents</p>
+                      <p className="mt-2 flex items-center gap-2 text-zinc-200">
+                        <Users className="h-3.5 w-3.5 text-[#66FCF1]" /> {squadAgents.length} agents
+                      </p>
                     </div>
                     <div className="rounded-xl border border-white/[0.06] bg-black/10 px-3 py-2.5">
                       <p className="text-zinc-500 uppercase tracking-wide">Instances</p>
-                      <p className="mt-2 flex items-center gap-2 text-zinc-200"><Bot className="h-3.5 w-3.5 text-[#66FCF1]" /> {instanceCount}/{squadAgents.length || 0} active</p>
+                      <p className="mt-2 flex items-center gap-2 text-zinc-200">
+                        <Bot className="h-3.5 w-3.5 text-[#66FCF1]" /> {instanceCount}/{squadAgents.length || 0} active
+                      </p>
                     </div>
                   </div>
 
@@ -218,7 +238,9 @@ export default function SquadsView() {
                   </div>
 
                   <div className="mt-4 pt-4 border-t border-white/[0.06]">
-                    <p className="text-[11px] font-mono uppercase tracking-[0.18em] text-zinc-500 mb-3">Recent Activity</p>
+                    <p className="text-[11px] font-mono uppercase tracking-[0.18em] text-zinc-500 mb-3">
+                      Recent Activity
+                    </p>
                     <div className="space-y-2">
                       {recentActivity.length > 0 ? (
                         recentActivity.map((agent) => {

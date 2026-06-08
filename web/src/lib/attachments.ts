@@ -43,9 +43,7 @@ export async function fileToMessageAttachment(file: File): Promise<MessageAttach
   };
 }
 
-export function validateAttachmentSizes(
-  attachments: MessageAttachment[]
-): { ok: true } | { ok: false; error: string } {
+export function validateAttachmentSizes(attachments: MessageAttachment[]): { ok: true } | { ok: false; error: string } {
   for (const attachment of attachments) {
     if (attachment.size > MAX_ATTACHMENT_BYTES) {
       return {
