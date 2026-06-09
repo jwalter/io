@@ -9,10 +9,10 @@ export function IoMark({ height = 32 }: { height?: number }) {
     <svg width={width} height={height} viewBox="0 0 480 369.23" fill="none" aria-hidden>
       <path d={IO_MARK_PATH} fill={`url(#${GRAD_ID})`} />
       <defs>
-        <linearGradient id={GRAD_ID} x1="0" x2="450.529" y1="347" y2="14.3087" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#45A29E" />
-          <stop offset="0.515" stopColor="#6EBCB8" />
-          <stop offset="1" stopColor="#F75F57" />
+        <linearGradient id={GRAD_ID} x1="0" x2="450.529" y1="2" y2="214.3087" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#66FCF1" />
+          <stop offset="0.3"stopColor="#66FCF1" />
+          <stop offset="1" stopColor="#66FCF1" />
         </linearGradient>
       </defs>
     </svg>

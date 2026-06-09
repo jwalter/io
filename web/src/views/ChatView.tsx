@@ -9,6 +9,8 @@ import {
   validateAttachmentSizes,
 } from "@/lib/attachments";
 import { useChatStore } from "@/stores/chat";
+import { UserIndicator } from "@/components/ui/UserIndicator";
+import { MessageBubble } from "@/components/ui/MessageBubble";
 
 export default function ChatView() {
   const messages = useChatStore((s) => s.messages);
@@ -91,47 +93,9 @@ export default function ChatView() {
         )}
         {messages.map((msg) => (
           <div key={msg.id} className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
-            <div
-              className={`flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-mono mt-0.5 ${msg.role === "user" ? "border border-[#66FCF1]/30 text-[#66FCF1]" : "bg-[#282828] border border-white/[0.07] text-zinc-500"}`}
-              style={msg.role === "user" ? { background: "rgba(69,162,158,0.12)" } : undefined}
-            >
-              {msg.role === "user" ? "U" : <IoMark height={12} />}
-            </div>
-            <div className={`flex flex-col gap-1.5 max-w-[72%] ${msg.role === "user" ? "items-end" : "items-start"}`}>
-              <div
-                className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${msg.role === "user" ? "text-[#1F2833] rounded-tr-sm" : "bg-[#222222] border border-white/[0.07] text-zinc-200 rounded-tl-sm"}`}
-                style={
-                  msg.role === "user" ? { background: "linear-gradient(135deg, #45A29E 0%, #F75F57 100%)" } : undefined
-                }
-              >
-                {msg.role === "assistant" ? (
-                  <MarkdownRenderer content={msg.content} />
-                ) : (
-                  <p className="whitespace-pre-wrap">{msg.content}</p>
-                )}
-              </div>
-              <span className="text-[11px] text-zinc-700 font-mono px-0.5">
-                {msg.timestamp.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })}
-              </span>
-            </div>
+            <MessageBubble msg={msg} isFull={true} />
           </div>
         ))}
-        {isStreaming && (
-          <div className="flex gap-3">
-            <div className="flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center bg-[#282828] border border-white/[0.07] mt-0.5">
-              <IoMark height={12} />
-            </div>
-            <div className="bg-[#222222] border border-white/[0.07] rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-1.5">
-              {[0, 120, 240].map((d) => (
-                <span
-                  key={d}
-                  className="w-1.5 h-1.5 rounded-full bg-[#66FCF1] animate-bounce"
-                  style={{ animationDelay: `${d}ms` }}
-                />
-              ))}
-            </div>
-          </div>
-        )}
         <div ref={messagesEndRef} />
       </div>
 
@@ -200,7 +164,7 @@ export default function ChatView() {
                   onClick={handleSend}
                   disabled={!input.trim() && pendingAttachments.length === 0}
                   className="p-2 rounded-xl text-[#1F2833] disabled:opacity-30 disabled:cursor-not-allowed transition-opacity hover:opacity-90"
-                  style={{ background: "linear-gradient(135deg, #45A29E, #F75F57)" }}
+                  style={{ background: "var(--base-teal)" }}
                 >
                   <Send className="w-3.5 h-3.5" />
                 </button>

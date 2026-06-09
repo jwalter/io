@@ -16,7 +16,7 @@
     "build:all": "npm run build && npm run build:web",
     "postinstall": "npm rebuild better-sqlite3",
     "daemon": "tsx src/daemon.ts",
-    "dev": "tsx --watch src/daemon.ts",
+    "dev": "tsx --watch src/index.ts",
     "prepublishOnly": "npm run build:all",
     "test": "node --import tsx --test 'src/**/*.test.ts' 'web/src/**/*.test.ts'",
     "test:coverage": "c8 node --import tsx --test 'src/**/*.test.ts' 'web/src/**/*.test.ts'",

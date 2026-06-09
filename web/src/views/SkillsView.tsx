@@ -244,14 +244,10 @@ export default function SkillsView() {
   const getListMeta = (skill: InstalledSkill | RemoteSkill): string => {
     const key = skillKey(source, skill.slug);
     const detail = detailState[key];
-    const version =
-      typeof detail?.parsed?.frontmatter.version === "string"
-        ? detail.parsed.frontmatter.version
-        : source === "skillssh" && "installs" in skill && skill.installs
-          ? `${skill.installs} installs`
-          : source === "installed"
-            ? "installed"
-            : source;
+    const installs =
+      source === "skillssh" && "installs" in skill && skill.installs
+          ? `${skill.installs.toLocaleString()} installs`
+          : undefined;
     const author =
       typeof detail?.parsed?.frontmatter.author === "string"
         ? detail.parsed.frontmatter.author
@@ -260,7 +256,7 @@ export default function SkillsView() {
           : source === "awesome-copilot"
             ? "awesome-copilot"
             : "community";
-    return `${version} • ${author}`;
+    return `${author}${installs ? `${installs}` : ""}`;
   };
 
   const startEditing = () => {
@@ -371,7 +367,7 @@ export default function SkillsView() {
                   <button
                     key={tabKey}
                     onClick={() => setSource(tabKey)}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] font-mono transition-colors ${
+                    className={`w-full text-left cursor-pointer px-2.5 py-1.5 rounded-lg text-[11px] font-mono transition-colors ${
                       active ? "text-[#66FCF1]" : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
                     }`}
                     style={active ? { background: "rgba(102,252,241,0.10)" } : undefined}
@@ -404,16 +400,20 @@ export default function SkillsView() {
                       setSelected({ source, slug: skill.slug });
                       setEditMode(false);
                     }}
-                    className={`w-full border-l-2 px-3 py-3 text-left transition-colors ${
+                    className={`w-full cursor-pointer border-l-2 px-3 py-3 text-left transition-colors ${
                       active ? "border-[#66FCF1]" : "border-transparent hover:bg-white/[0.03]"
                     }`}
-                    style={active ? { background: "rgba(102,252,241,0.08)" } : undefined}
+                    style={active ? { background: "var(--base-dark-teal)"} : undefined}
                   >
                     <div className="truncate text-[11px] font-mono text-zinc-200">{skill.name || skill.slug}</div>
-                    <div className="mt-1 text-[10px] leading-relaxed text-zinc-600">
+                    <div className="mt-1 text-[10px] leading-relaxed text-zinc-600"
+                      style={active ? { color: "var(--base-gray)" } : undefined}>
                       {skill.description || "No description"}
                     </div>
-                    <div className="mt-2 truncate text-[9px] font-mono text-zinc-700">{getListMeta(skill)}</div>
+                    <div className="mt-2 truncate text-[9px] font-mono text-zinc-700"
+                      style={active ? { color: "var(--base-gray)" } : undefined}>
+                      {getListMeta(skill)}
+                    </div>
                   </button>
                 );
               })

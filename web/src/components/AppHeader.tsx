@@ -14,16 +14,16 @@ export function AppHeader() {
   const feedCount = 0;
 
   return (
-    <div className="h-[52px] flex-shrink-0 flex items-center justify-between px-4 border-b border-white/[0.06] bg-[#181818]">
-      <div className="flex items-center gap-2">
+    <div className="h-[52px] flex-shrink-0 flex items-center justify-end px-4 border-b border-white/[0.06] bg-[#181818]">
+      {/* <div className="flex items-center gap-2">
         <StatusDot status="connected" />
         <span className="text-[11px] font-mono text-green-400">connected</span>
-      </div>
+      </div> */}
       <div className="flex items-center gap-1.5">
         <div className="relative">
           <button
             onClick={() => setFlyout(!flyout)}
-            className="relative p-2 rounded-xl hover:bg-white/[0.05] text-zinc-600 hover:text-zinc-300 transition-colors"
+            className="relative p-2 cursor-pointer rounded-xl hover:bg-white/[0.05] text-zinc-600 hover:text-zinc-300 transition-colors"
           >
             <Bell className="w-3.5 h-3.5" />
             {feedCount > 0 && (
@@ -49,7 +49,7 @@ export function AppHeader() {
                       setFlyout(false);
                       navigate("/feed");
                     }}
-                    className="text-[11px] font-mono text-[#66FCF1] hover:text-[#D789F3] transition-colors flex items-center gap-1 mx-auto"
+                    className="text-[11px] cursor-pointer font-mono text-[#66FCF1] hover:text-[#D789F3] transition-colors flex items-center gap-1 mx-auto"
                   >
                     View all <ArrowRight className="w-3 h-3" />
                   </button>
@@ -68,7 +68,7 @@ export function AppHeader() {
         <button
           onClick={logout}
           title="Sign out"
-          className="p-1.5 rounded-xl hover:bg-white/[0.05] text-zinc-700 hover:text-zinc-400 transition-colors"
+          className="p-1.5 cursor-pointer rounded-xl hover:bg-white/[0.05] text-zinc-700 hover:text-zinc-400 transition-colors"
         >
           <LogOut className="w-3.5 h-3.5" />
         </button>

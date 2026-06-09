@@ -28,7 +28,7 @@ export default function LoginView() {
       <div
         className="absolute inset-0 opacity-[0.04]"
         style={{
-          backgroundImage: "radial-gradient(circle, #45A29E 1px, transparent 1px)",
+          backgroundImage: "radial-gradient(circle, var(--base-teal) 1px, transparent 1px)",
           backgroundSize: "32px 32px",
         }}
       />
@@ -80,7 +80,7 @@ export default function LoginView() {
             type="submit"
             disabled={loading}
             className="w-full text-[#1F2833] font-mono text-sm rounded-xl py-3 mt-1 transition-opacity hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
-            style={{ background: "linear-gradient(135deg, #45A29E 0%, #45A29E 55%, #F75F57 100%)" }}
+            style={{ background: "var(--base-gradient)" }}
           >
             {loading ? (
               <>
@@ -92,7 +92,6 @@ export default function LoginView() {
             )}
           </button>
         </form>
-        <p className="text-center text-[11px] text-zinc-700 font-mono mt-4">Secured by Supabase Auth</p>
       </div>
     </div>
   );

@@ -128,20 +128,15 @@ export default function SquadsView() {
   return (
     <div className="flex-1 min-h-0 overflow-y-auto p-5">
       <div className="max-w-7xl mx-auto space-y-5">
-        <header className="glass-card border border-white/[0.07] rounded-2xl p-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <header className="p-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-[11px] font-mono uppercase tracking-[0.28em] text-zinc-500">Command Grid</p>
-            <h1 className="text-5xl text-zinc-100 leading-none" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
+            <h1 className="text-3xl text-zinc-100 leading-none" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
               Squads
             </h1>
             <p className="mt-2 text-[11px] font-mono text-zinc-500">
-              {data.squads.length} squad{data.squads.length === 1 ? "" : "s"} synced from the daemon.
+              {data.squads.length} squad{data.squads.length === 1 ? "" : "s"} loaded.
             </p>
           </div>
-          <PrimaryBtn onClick={() => undefined} className="px-3 py-2.5 self-start md:self-auto">
-            <Bot className="h-3.5 w-3.5" />
-            New Squad
-          </PrimaryBtn>
         </header>
 
         {loading ? (
@@ -149,13 +144,13 @@ export default function SquadsView() {
             Loading squads…
           </div>
         ) : data.squads.length === 0 ? (
-          <div className="glass-card border border-white/[0.07] rounded-2xl p-12 text-center">
+          <div className="border border-white/[0.07] rounded-2xl p-12 text-center">
             <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.06] bg-black/10 text-[#66FCF1] mb-4">
               <IoMark height={28} />
             </div>
-            <p className="text-zinc-100 text-lg">No squads configured</p>
+            <p className="text-zinc-100 text-lg">No existing squads</p>
             <p className="text-[11px] font-mono text-zinc-500 mt-2">
-              Create a squad in the daemon to populate this command grid.
+              Ask IO to create a squad to see them listed here.
             </p>
           </div>
         ) : (
@@ -182,7 +177,7 @@ export default function SquadsView() {
                   }}
                   onMouseEnter={() => setHoveredId(squad.id)}
                   onMouseLeave={() => setHoveredId((current) => (current === squad.id ? null : current))}
-                  className="glass-card rounded-2xl p-5 transition-colors cursor-pointer outline-none focus:ring-1 focus:ring-[#66FCF1]/30"
+                  className="glass-card rounded-2xl p-5 gap-1 flex flex-col transition-colors cursor-pointer outline-none focus:ring-1 focus:ring-[#66FCF1]/30"
                   style={{
                     border: `1px solid ${hovering ? `${color}70` : `${color}30`}`,
                     background: hovering ? `${color}12` : `${color}08`,
@@ -197,40 +192,33 @@ export default function SquadsView() {
                       >
                         {squad.name}
                       </h2>
-                      <p className="mt-2 text-[11px] font-mono uppercase tracking-[0.18em] text-zinc-500">
+                      <p className="text-[11px] font-mono uppercase tracking-[0.18em] text-zinc-500">
                         {squad.universe}
                       </p>
                     </div>
                     <Chip variant={statusToVariant(status)}>{status}</Chip>
                   </div>
 
-                  <div className="mt-5 grid grid-cols-2 gap-3 text-[11px] font-mono text-zinc-400">
-                    <div className="rounded-xl border border-white/[0.06] bg-black/10 px-3 py-2.5">
-                      <p className="text-zinc-500 uppercase tracking-wide">Roster</p>
-                      <p className="mt-2 flex items-center gap-2 text-zinc-200">
-                        <Users className="h-3.5 w-3.5 text-[#66FCF1]" /> {squadAgents.length} agents
-                      </p>
+                  <div className="mt-1 flex justify-between text-[11px] font-mono text-zinc-400">
+                    <div className="flex items-center gap-2 text-zinc-200">
+                      <Users className="h-3.5 w-3.5" style={{ color }} /> {squadAgents.length} agents
                     </div>
-                    <div className="rounded-xl border border-white/[0.06] bg-black/10 px-3 py-2.5">
-                      <p className="text-zinc-500 uppercase tracking-wide">Instances</p>
-                      <p className="mt-2 flex items-center gap-2 text-zinc-200">
-                        <Bot className="h-3.5 w-3.5 text-[#66FCF1]" /> {instanceCount}/{squadAgents.length || 0} active
-                      </p>
+                    <div className="flex items-center gap-2 text-zinc-200">
+                      <Bot className="h-3.5 w-3.5" style={{ color }} /> {instanceCount}/{squadAgents.length || 0} active
                     </div>
                   </div>
 
-                  <div className="mt-4 rounded-xl border border-white/[0.06] bg-black/10 px-3 py-3 text-[11px] font-mono">
-                    <p className="text-zinc-500 uppercase tracking-wide">Repo</p>
+                  <div className="text-[11px] font-mono">
                     {squad.repo_url ? (
                       <a
                         href={squad.repo_url}
                         target="_blank"
                         rel="noreferrer"
                         onClick={(event) => event.stopPropagation()}
-                        className="mt-2 inline-flex items-center gap-1.5 text-[#66FCF1] hover:text-white transition-colors break-all"
-                      >
+                        className={`mt-2 inline-flex items-center hover:underline gap-1.5 break-all`}
+                        style={{ color }}
+                      ><ExternalLink className="h-3 w-3 flex-shrink-0" />
                         {squad.repo_url}
-                        <ExternalLink className="h-3 w-3 flex-shrink-0" />
                       </a>
                     ) : (
                       <p className="mt-2 text-zinc-600">No repository linked</p>

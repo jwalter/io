@@ -27,6 +27,7 @@ import {
   Toggle,
 } from "@/components/ui";
 import { useAuthStore } from "@/stores/auth";
+import { GlassCard } from "@/components/ui/GlassCard";
 
 interface SquadDetail {
   id: string;
@@ -389,56 +390,59 @@ export default function SquadDetailView() {
           All Squads
         </SecondaryBtn>
 
-        <section className="glass-card border border-white/[0.07] rounded-2xl p-5">
+        <section >
           <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
             <div>
-              <p className="text-[11px] font-mono uppercase tracking-[0.28em] text-zinc-500">Squad Overview</p>
               <h1
-                className="text-5xl leading-none mt-2"
+                className="text-5xl leading-none mt-2 flex items-start gap-4 flex-wrap"
                 style={{ fontFamily: "'Bebas Neue', sans-serif", color: squad.color || "#66FCF1" }}
               >
-                {squad.name}
+                {squad.name} <Chip variant={statusToVariant(overallStatus)}>{overallStatus}</Chip>
               </h1>
-              <div className="mt-4 flex flex-wrap items-center gap-2 text-[11px] font-mono">
-                <Chip variant="muted">{squad.universe}</Chip>
-                <Chip variant={statusToVariant(overallStatus)}>{overallStatus}</Chip>
-                {squad.repo_url && (
+              <div className="flex flex-col flex-wrap items-start gap-2 text-[11px] font-mono">
+                <p className="muted">{squad.universe}</p>
+                <p>{squad.repo_url && (
                   <a
                     href={squad.repo_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] px-3 py-1 text-[#66FCF1] hover:text-white transition-colors"
+                    className="inline-flex items-center gap-1.5 hover:text-white transition-colors"
+                    style={{ color: squad.color || "#66FCF1" }}
                   >
-                    {squad.repo_url}
                     <ExternalLink className="h-3 w-3" />
+                    {squad.repo_url}
                   </a>
-                )}
+                )}</p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 min-w-0 xl:min-w-[360px]">
               <div className="rounded-2xl border border-white/[0.06] bg-black/10 px-4 py-3">
-                <p className="text-[11px] font-mono uppercase tracking-wide text-zinc-500">Agents</p>
+                <p className="text-[11px] font-mono uppercase tracking-wide text-zinc-500" style={{ color: squad.color || "#66FCF1" }}>Agents</p>
                 <p className="mt-2 text-2xl text-zinc-100">{agents.length}</p>
               </div>
               <div className="rounded-2xl border border-white/[0.06] bg-black/10 px-4 py-3">
-                <p className="text-[11px] font-mono uppercase tracking-wide text-zinc-500">Instances</p>
+                <p className="text-[11px] font-mono uppercase tracking-wide text-zinc-500" style={{ color: squad.color || "#66FCF1" }}>Instances</p>
                 <p className="mt-2 text-2xl text-zinc-100">{instances.length}</p>
               </div>
               <div className="rounded-2xl border border-white/[0.06] bg-black/10 px-4 py-3">
-                <p className="text-[11px] font-mono uppercase tracking-wide text-zinc-500">Tasks</p>
+                <p className="text-[11px] font-mono uppercase tracking-wide text-zinc-500" style={{ color: squad.color || "#66FCF1" }}>Tasks</p>
                 <p className="mt-2 text-2xl text-zinc-100">{tasks.length}</p>
               </div>
             </div>
           </div>
         </section>
 
-        <div className="glass-card border border-white/[0.07] rounded-2xl p-2 flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-4 px-4 border-b border-gray-700">
           {tabs.map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`rounded-xl px-4 py-2 text-[11px] font-mono uppercase tracking-[0.18em] transition-colors ${activeTab === tab ? "bg-[#66FCF1]/10 text-[#66FCF1]" : "text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.03]"}`}
+              className={`cursor-pointer px-2 pb-2 text-[11px] border-b font-mono uppercase tracking-[0.18em] transition-color ${activeTab !== tab ? "hover:text-zinc-300" : ""}`}
+              style={{
+                borderColor: activeTab === tab ? squad.color : "transparent",
+                color: activeTab === tab ? squad.color : "var(--base-gray)"
+              }}
             >
               {tab}
             </button>
@@ -459,35 +463,40 @@ export default function SquadDetailView() {
                     : Bot;
 
               return (
-                <div key={agent.id} className="glass-card border border-white/[0.07] rounded-2xl p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3 min-w-0">
-                      <div
-                        className="h-11 w-11 rounded-2xl border flex items-center justify-center flex-shrink-0"
-                        style={{
-                          borderColor: `${squad.color}40`,
-                          background: `${squad.color}15`,
-                          color: squad.color || "#66FCF1",
-                        }}
-                      >
-                        <Icon className="h-5 w-5" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="text-lg text-zinc-100 truncate">{agent.character_name}</h3>
+                <GlassCard key={agent.id} color={squad.color}>
+                  <div className="flex">
+                    <div className="flex flex-col w-full gap-2 justify-between">
+                      <div className="flex justify-between items-start">
+                        <div className="flex items-center gap-4">
+                          <div
+                            className="h-11 w-11 rounded-2xl border flex items-center justify-center "
+                            style={{
+                              borderColor: `${squad.color}40`,
+                              background: `${squad.color}15`,
+                              color: squad.color || "#66FCF1",
+                            }}
+                          >
+                            <Icon className="h-5 w-5" />
+                          </div>
+                          <div className="flex flex-col">
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <h3 className="text-md truncate">{agent.character_name}</h3>
+                            </div>
+                            <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-zinc-500 mt-1">
+                              {agent.role_title?.trim() || "Agent"}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 text-[11px] font-mono text-zinc-500 flex-shrink-0">
                           <Chip variant={statusToVariant(status)}>{agent.status || "idle"}</Chip>
                         </div>
-                        <p className="text-[11px] font-mono uppercase tracking-[0.18em] text-zinc-500 mt-1">
-                          {agent.role_title || "Agent"}
-                        </p>
-                        <p className="mt-3 text-sm text-zinc-200">
+                      </div>
+                      <div className="min-w-0 flex">
+                        <p className="mt-3 text-xs text-zinc-300">
                           {currentTask?.description ?? "No active task assigned."}
                         </p>
                       </div>
-                    </div>
-                    <div className="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-500 flex-shrink-0">
-                      <StatusDot status={status} />
-                      {status}
                     </div>
                   </div>
 
@@ -508,7 +517,7 @@ export default function SquadDetailView() {
                       )}
                     </div>
                   )}
-                </div>
+                </GlassCard>
               );
             })}
           </div>
@@ -518,10 +527,9 @@ export default function SquadDetailView() {
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             {instances.length === 0 ? (
               <div className="glass-card border border-white/[0.07] rounded-2xl p-10 text-center col-span-full">
-                <IoMark height={24} />
                 <p className="text-zinc-100 mt-4">No active instances</p>
                 <p className="text-[11px] font-mono text-zinc-500 mt-2">
-                  Spin up an instance from the daemon to see it here.
+                  Ask IO to spin up an instance to see it here.
                 </p>
               </div>
             ) : (
@@ -576,8 +584,8 @@ export default function SquadDetailView() {
         {activeTab === "schedules" && (
           <div className="space-y-4">
             {schedules.length === 0 ? (
-              <div className="glass-card border border-white/[0.07] rounded-2xl p-10 text-center">
-                <p className="text-zinc-100">No schedules configured</p>
+              <div className="glass-card border border-white/[0.07] rounded-2xl p-10 text-center col-span-full">
+                <p className="text-zinc-100 mt-4">No schedules configured</p>
                 <p className="text-[11px] font-mono text-zinc-500 mt-2">
                   Scheduled automations for this squad will appear here.
                 </p>
@@ -619,8 +627,8 @@ export default function SquadDetailView() {
         {activeTab === "history" && (
           <div className="space-y-3">
             {historyItems.length === 0 ? (
-              <div className="glass-card border border-white/[0.07] rounded-2xl p-10 text-center">
-                <p className="text-zinc-100">No history yet</p>
+              <div className="glass-card border border-white/[0.07] rounded-2xl p-10 text-center col-span-full">
+                <p className="text-zinc-100 mt-4">No history yet</p>
                 <p className="text-[11px] font-mono text-zinc-500 mt-2">
                   Task updates and audit events will be listed here.
                 </p>
