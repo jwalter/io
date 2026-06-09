@@ -1,7 +1,7 @@
 import { Paperclip, Send, Square, X } from "lucide-react";
 import { type DragEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { IoMark } from "@/components/IoMark";
-import { MarkdownRenderer } from "@/components/ui";
+import { MessageBubble } from "@/components/ui/MessageBubble";
 import {
   fileToMessageAttachment,
   formatAttachmentSize,
@@ -9,8 +9,6 @@ import {
   validateAttachmentSizes,
 } from "@/lib/attachments";
 import { useChatStore } from "@/stores/chat";
-import { UserIndicator } from "@/components/ui/UserIndicator";
-import { MessageBubble } from "@/components/ui/MessageBubble";
 
 export default function ChatView() {
   const messages = useChatStore((s) => s.messages);
@@ -93,7 +91,7 @@ export default function ChatView() {
         )}
         {messages.map((msg) => (
           <div key={msg.id} className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
-            <MessageBubble msg={msg} isFull={true} />
+            <MessageBubble msg={msg} />
           </div>
         ))}
         <div ref={messagesEndRef} />
@@ -107,7 +105,7 @@ export default function ChatView() {
           <div className="flex flex-wrap gap-2 mb-2">
             {pendingAttachments.map((att, i) => (
               <div
-                key={i}
+                key={`${att.name}:${att.size}:${att.type}`}
                 className="flex items-center gap-2 bg-[#252525] border border-white/[0.08] rounded-xl px-3 py-1.5"
               >
                 <span className="text-[10px] font-mono text-zinc-400 truncate max-w-[120px]">{att.name}</span>

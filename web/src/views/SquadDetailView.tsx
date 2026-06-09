@@ -16,18 +16,9 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import {
-  Chip,
-  DangerBtn,
-  IoMark,
-  SecondaryBtn,
-  StatusDot,
-  type StatusKind,
-  statusToVariant,
-  Toggle,
-} from "@/components/ui";
-import { useAuthStore } from "@/stores/auth";
+import { Chip, DangerBtn, SecondaryBtn, type StatusKind, statusToVariant, Toggle } from "@/components/ui";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { useAuthStore } from "@/stores/auth";
 
 interface SquadDetail {
   id: string;
@@ -390,7 +381,7 @@ export default function SquadDetailView() {
           All Squads
         </SecondaryBtn>
 
-        <section >
+        <section>
           <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
             <div>
               <h1
@@ -401,32 +392,49 @@ export default function SquadDetailView() {
               </h1>
               <div className="flex flex-col flex-wrap items-start gap-2 text-[11px] font-mono">
                 <p className="muted">{squad.universe}</p>
-                <p>{squad.repo_url && (
-                  <a
-                    href={squad.repo_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 hover:text-white transition-colors"
-                    style={{ color: squad.color || "#66FCF1" }}
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                    {squad.repo_url}
-                  </a>
-                )}</p>
+                <p>
+                  {squad.repo_url && (
+                    <a
+                      href={squad.repo_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 hover:text-white transition-colors"
+                      style={{ color: squad.color || "#66FCF1" }}
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      {squad.repo_url}
+                    </a>
+                  )}
+                </p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 min-w-0 xl:min-w-[360px]">
               <div className="rounded-2xl border border-white/[0.06] bg-black/10 px-4 py-3">
-                <p className="text-[11px] font-mono uppercase tracking-wide text-zinc-500" style={{ color: squad.color || "#66FCF1" }}>Agents</p>
+                <p
+                  className="text-[11px] font-mono uppercase tracking-wide text-zinc-500"
+                  style={{ color: squad.color || "#66FCF1" }}
+                >
+                  Agents
+                </p>
                 <p className="mt-2 text-2xl text-zinc-100">{agents.length}</p>
               </div>
               <div className="rounded-2xl border border-white/[0.06] bg-black/10 px-4 py-3">
-                <p className="text-[11px] font-mono uppercase tracking-wide text-zinc-500" style={{ color: squad.color || "#66FCF1" }}>Instances</p>
+                <p
+                  className="text-[11px] font-mono uppercase tracking-wide text-zinc-500"
+                  style={{ color: squad.color || "#66FCF1" }}
+                >
+                  Instances
+                </p>
                 <p className="mt-2 text-2xl text-zinc-100">{instances.length}</p>
               </div>
               <div className="rounded-2xl border border-white/[0.06] bg-black/10 px-4 py-3">
-                <p className="text-[11px] font-mono uppercase tracking-wide text-zinc-500" style={{ color: squad.color || "#66FCF1" }}>Tasks</p>
+                <p
+                  className="text-[11px] font-mono uppercase tracking-wide text-zinc-500"
+                  style={{ color: squad.color || "#66FCF1" }}
+                >
+                  Tasks
+                </p>
                 <p className="mt-2 text-2xl text-zinc-100">{tasks.length}</p>
               </div>
             </div>
@@ -441,7 +449,7 @@ export default function SquadDetailView() {
               className={`cursor-pointer px-2 pb-2 text-[11px] border-b font-mono uppercase tracking-[0.18em] transition-color ${activeTab !== tab ? "hover:text-zinc-300" : ""}`}
               style={{
                 borderColor: activeTab === tab ? squad.color : "transparent",
-                color: activeTab === tab ? squad.color : "var(--base-gray)"
+                color: activeTab === tab ? squad.color : "var(--base-gray)",
               }}
             >
               {tab}

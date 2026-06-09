@@ -1,5 +1,5 @@
 import { CheckCheck, Clock3, Inbox, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Chip, DangerBtn, IoMark, MarkdownRenderer, SecondaryBtn, SquadChip } from "@/components/ui";
 import { notifyError, notifySuccess } from "@/lib/notify";
 import { useAuthStore } from "@/stores/auth";
@@ -84,21 +84,24 @@ export default function FeedView() {
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<"read" | "delete" | null>(null);
 
-  const loadFeed = async (nextSelectedId?: string | null) => {
-    setLoading(true);
-    try {
-      const data = await fetchJson<FeedResponse>(`/api/feed?unread=${filter === "unread"}`);
-      setItems(data.items);
-      setUnreadCount(data.unreadCount);
-      setCheckedIds((prev) => prev.filter((id) => data.items.some((item) => item.id === id)));
-      setSelectedId((prev) => {
-        const candidate = nextSelectedId === undefined ? prev : nextSelectedId;
-        return candidate && data.items.some((item) => item.id === candidate) ? candidate : null;
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  const loadFeed = useCallback(
+    async (nextSelectedId?: string | null) => {
+      setLoading(true);
+      try {
+        const data = await fetchJson<FeedResponse>(`/api/feed?unread=${filter === "unread"}`);
+        setItems(data.items);
+        setUnreadCount(data.unreadCount);
+        setCheckedIds((prev) => prev.filter((id) => data.items.some((item) => item.id === id)));
+        setSelectedId((prev) => {
+          const candidate = nextSelectedId === undefined ? prev : nextSelectedId;
+          return candidate && data.items.some((item) => item.id === candidate) ? candidate : null;
+        });
+      } finally {
+        setLoading(false);
+      }
+    },
+    [filter],
+  );
 
   useEffect(() => {
     void loadFeed();

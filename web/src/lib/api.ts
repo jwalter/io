@@ -28,7 +28,7 @@ async function getHeaders(): Promise<HeadersInit> {
 
 async function handleResponse(res: Response, retryFn: () => Promise<Response>): Promise<Response> {
   if (res.status === 401) {
-    const { refreshToken, token, logout } = useAuthStore.getState();
+    const { refreshToken, logout } = useAuthStore.getState();
     try {
       await refreshToken();
       if (useAuthStore.getState().token) {

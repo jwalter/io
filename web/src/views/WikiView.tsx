@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight, FileText, Folder, Pencil, Plus, Save, Search, Trash2, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { DangerBtn, IoMark, MarkdownRenderer, PrimaryBtn, SecondaryBtn } from "@/components/ui";
 import { notifyError, notifySuccess } from "@/lib/notify";
 import { useAuthStore } from "@/stores/auth";
@@ -135,7 +135,7 @@ function Breadcrumbs({ path }: { path: string }) {
   return (
     <div className="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap text-[11px] font-mono text-zinc-500">
       {parts.map((part, index) => (
-        <div key={`${part}-${index}`} className="flex items-center gap-1.5">
+        <div key={parts.slice(0, index + 1).join("/")} className="flex items-center gap-1.5">
           {index > 0 && <span className="text-zinc-700">/</span>}
           <span className={index === parts.length - 1 ? "text-[#66FCF1]" : "text-zinc-400"}>{part}</span>
         </div>
@@ -224,12 +224,12 @@ export default function WikiView() {
   const [newPageOpen, setNewPageOpen] = useState(false);
   const [newPagePath, setNewPagePath] = useState("");
 
-  const loadPages = async () => {
+  const loadPages = useCallback(async () => {
     const response = await authJson<unknown>(["/api/wiki/pages"]);
     const nextPages = normalizePaths(response);
     setPages(nextPages);
     setExpanded((current) => ({ ...defaultExpanded(nextPages), ...current }));
-  };
+  }, []);
 
   const loadPage = async (path: string) => {
     setBusy(true);

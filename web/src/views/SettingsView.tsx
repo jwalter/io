@@ -1,5 +1,5 @@
 import { Eye, EyeOff, Plus, Save, X } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { Chip, PrimaryBtn, SecondaryBtn, Toggle } from "@/components/ui";
 import { notifyError, notifySuccess } from "@/lib/notify";
 import { useAuthStore } from "@/stores/auth";
@@ -258,12 +258,12 @@ export default function SettingsView() {
   const [showSupabaseKey, setShowSupabaseKey] = useState(false);
   const [tierDrafts, setTierDrafts] = useState({ high: "", medium: "", low: "" });
 
-  const loadSettings = async () => {
+  const loadSettings = useCallback(async () => {
     const response = await authJson<Record<string, unknown>>(["/api/config", "/api/settings"]);
     const normalized = normalizeSettings(response);
     setSettings(normalized);
     setInitialSettings(normalized);
-  };
+  }, []);
 
   useEffect(() => {
     void (async () => {

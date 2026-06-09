@@ -1,5 +1,5 @@
 import { Pencil, Search, Trash2, Zap } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Chip, DangerBtn, MarkdownRenderer, PrimaryBtn, SecondaryBtn } from "@/components/ui";
 import { notifyError, notifySuccess } from "@/lib/notify";
 import { type ParsedSkill, parseSkillContent } from "@/lib/skill-frontmatter";
@@ -101,7 +101,7 @@ export default function SkillsView() {
   const [editMode, setEditMode] = useState(false);
   const [editContent, setEditContent] = useState("");
 
-  const loadInstalledSkills = async () => {
+  const loadInstalledSkills = useCallback(async () => {
     setLoadingInstalled(true);
     try {
       const data = await requestJson<InstalledSkill[]>("/api/skills");
@@ -112,7 +112,7 @@ export default function SkillsView() {
     } finally {
       setLoadingInstalled(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     void loadInstalledSkills();
@@ -246,8 +246,8 @@ export default function SkillsView() {
     const detail = detailState[key];
     const installs =
       source === "skillssh" && "installs" in skill && skill.installs
-          ? `${skill.installs.toLocaleString()} installs`
-          : undefined;
+        ? `${skill.installs.toLocaleString()} installs`
+        : undefined;
     const author =
       typeof detail?.parsed?.frontmatter.author === "string"
         ? detail.parsed.frontmatter.author
@@ -403,15 +403,19 @@ export default function SkillsView() {
                     className={`w-full cursor-pointer border-l-2 px-3 py-3 text-left transition-colors ${
                       active ? "border-[#66FCF1]" : "border-transparent hover:bg-white/[0.03]"
                     }`}
-                    style={active ? { background: "var(--base-dark-teal)"} : undefined}
+                    style={active ? { background: "var(--base-dark-teal)" } : undefined}
                   >
                     <div className="truncate text-[11px] font-mono text-zinc-200">{skill.name || skill.slug}</div>
-                    <div className="mt-1 text-[10px] leading-relaxed text-zinc-600"
-                      style={active ? { color: "var(--base-gray)" } : undefined}>
+                    <div
+                      className="mt-1 text-[10px] leading-relaxed text-zinc-600"
+                      style={active ? { color: "var(--base-gray)" } : undefined}
+                    >
                       {skill.description || "No description"}
                     </div>
-                    <div className="mt-2 truncate text-[9px] font-mono text-zinc-700"
-                      style={active ? { color: "var(--base-gray)" } : undefined}>
+                    <div
+                      className="mt-2 truncate text-[9px] font-mono text-zinc-700"
+                      style={active ? { color: "var(--base-gray)" } : undefined}
+                    >
                       {getListMeta(skill)}
                     </div>
                   </button>

@@ -1,7 +1,7 @@
 import { AlertTriangle, Bot, CheckCircle, ExternalLink, Loader, Users, XCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { Chip, IoMark, PrimaryBtn, StatusDot, type StatusKind, squadColor, statusToVariant } from "@/components/ui";
+import { Chip, IoMark, StatusDot, type StatusKind, squadColor, statusToVariant } from "@/components/ui";
 import { useAuthStore } from "@/stores/auth";
 
 interface Squad {
@@ -217,7 +217,8 @@ export default function SquadsView() {
                         onClick={(event) => event.stopPropagation()}
                         className={`mt-2 inline-flex items-center hover:underline gap-1.5 break-all`}
                         style={{ color }}
-                      ><ExternalLink className="h-3 w-3 flex-shrink-0" />
+                      >
+                        <ExternalLink className="h-3 w-3 flex-shrink-0" />
                         {squad.repo_url}
                       </a>
                     ) : (

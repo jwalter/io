@@ -22,7 +22,7 @@ export function App() {
     }
     // Only run on mount — token refresh is handled by the auth listener and health check
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [token, refreshToken, initAuthListener]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#1a1a1a]">

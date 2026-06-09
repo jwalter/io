@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight, Plus, Server, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Chip, DangerBtn, PrimaryBtn, SecondaryBtn, StatusDot, Toggle } from "@/components/ui";
 import { notifyError, notifySuccess } from "@/lib/notify";
 import { uuid } from "@/lib/uuid";
@@ -147,7 +147,7 @@ export default function McpView() {
   const [error, setError] = useState("");
   const [busyKey, setBusyKey] = useState("");
 
-  const loadServers = async () => {
+  const loadServers = useCallback(async () => {
     setLoading(true);
     try {
       const data = await requestJson<Record<string, unknown>[]>("/api/mcp");
@@ -160,7 +160,7 @@ export default function McpView() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     void loadServers();

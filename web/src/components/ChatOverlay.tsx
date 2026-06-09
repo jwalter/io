@@ -8,7 +8,6 @@ import {
 } from "@/lib/attachments";
 import { useChatStore } from "@/stores/chat";
 import { IoMark } from "./IoMark";
-import { UserIndicator } from "./ui/UserIndicator";
 import { MessageBubble } from "./ui/MessageBubble";
 
 export function ChatOverlay() {
@@ -97,12 +96,12 @@ export function ChatOverlay() {
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
-            {messages.map((msg) => 
+            {messages.map((msg) => (
               <div key={msg.id} className={`flex gap-2 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
                 <MessageBubble msg={msg} />
               </div>
-            )}
-            
+            ))}
+
             <div ref={bottomRef} />
           </div>
 
@@ -167,9 +166,7 @@ export function ChatOverlay() {
         title={open ? "Close chat" : "Quick chat"}
         className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-xl transition-all duration-150 hover:scale-105 active:scale-95"
         style={
-          open
-            ? { background: "#252525", border: "1px solid var(--base-black)" }
-            : { background: "var(--base-teal)" }
+          open ? { background: "#252525", border: "1px solid var(--base-black)" } : { background: "var(--base-teal)" }
         }
       >
         {open ? <X className="w-4 h-4 text-zinc-400" /> : <MessageSquare className="w-4 h-4 text-[#1F2833]" />}

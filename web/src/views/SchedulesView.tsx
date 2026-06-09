@@ -1,5 +1,5 @@
 import { Clock, Pencil, Play, Plus, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Chip, DangerBtn, PrimaryBtn, SecondaryBtn, SquadChip, WarnBtn } from "@/components/ui";
 import { describeCron } from "@/lib/cron";
 import { notifyError, notifySuccess } from "@/lib/notify";
@@ -231,7 +231,7 @@ export default function SchedulesView() {
   const [error, setError] = useState("");
   const [busyKey, setBusyKey] = useState("");
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [scheduleData, squadData] = await Promise.all([
@@ -246,7 +246,7 @@ export default function SchedulesView() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     void loadData();

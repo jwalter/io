@@ -11,7 +11,7 @@ export function IoMark({ height = 32 }: { height?: number }) {
       <defs>
         <linearGradient id={GRAD_ID} x1="0" x2="450.529" y1="2" y2="214.3087" gradientUnits="userSpaceOnUse">
           <stop stopColor="#66FCF1" />
-          <stop offset="0.3"stopColor="#66FCF1" />
+          <stop offset="0.3" stopColor="#66FCF1" />
           <stop offset="1" stopColor="#66FCF1" />
         </linearGradient>
       </defs>
