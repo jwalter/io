@@ -105,7 +105,7 @@ export default function ChatView() {
           <div className="flex flex-wrap gap-2 mb-2">
             {pendingAttachments.map((att, i) => (
               <div
-                key={`${att.name}:${att.size}:${att.type}`}
+                key={`${att.name}:${att.size}:${att.mimeType}`}
                 className="flex items-center gap-2 bg-[#252525] border border-white/[0.08] rounded-xl px-3 py-1.5"
               >
                 <span className="text-[10px] font-mono text-zinc-400 truncate max-w-[120px]">{att.name}</span>
