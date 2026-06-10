@@ -1,10 +1,10 @@
-import { Eye, EyeOff, Plus, Save, X } from "lucide-react";
+import { Eye, EyeOff, Save, X } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { Chip, PrimaryBtn, SecondaryBtn, Toggle } from "@/components/ui";
+import { PrimaryBtn, SecondaryBtn, Toggle } from "@/components/ui";
 import { notifyError, notifySuccess } from "@/lib/notify";
 import { useAuthStore } from "@/stores/auth";
 
-type SettingsTab = "General" | "Telegram" | "Auth" | "Models" | "Advanced";
+type SettingsTab = "General" | "Telegram" | "Auth" | "Advanced";
 
 interface SettingsForm {
   defaultModel: string;
@@ -25,7 +25,7 @@ interface SettingsForm {
   watchdog: boolean;
 }
 
-const tabs: SettingsTab[] = ["General", "Telegram", "Auth", "Models", "Advanced"];
+const tabs: SettingsTab[] = ["General", "Telegram", "Auth", "Advanced"];
 const MASK = "••••••••";
 const inputClass =
   "bg-[#181818] border border-white/[0.06] rounded-xl px-3 py-2 text-[11px] text-zinc-300 font-mono placeholder:text-zinc-700 focus:outline-none focus:border-[#66FCF1]/30";
@@ -153,9 +153,9 @@ function buildPayload(settings: SettingsForm) {
 
 function FormRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-2 border-b border-white/[0.04] py-4 first:pt-0 last:border-b-0 last:pb-0 md:flex-row md:items-start">
-      <div className="w-40 pt-2 text-[11px] font-mono text-zinc-500">{label}</div>
-      <div className="flex-1">{children}</div>
+    <div className="flex flex-col gap-2 border-b border-white/[0.04] py-4 first:pt-0 last:border-b-0 last:pb-0 md:flex-row md:items-center">
+      <div className="w-40 text-[11px] font-mono text-zinc-500">{label}</div>
+      <div className="flex-1 flex justify-end">{children}</div>
     </div>
   );
 }
@@ -193,61 +193,6 @@ function SensitiveField({
   );
 }
 
-function TierEditor({
-  label,
-  items,
-  pending,
-  onPendingChange,
-  onAdd,
-  onRemove,
-}: {
-  label: string;
-  items: string[];
-  pending: string;
-  onPendingChange: (value: string) => void;
-  onAdd: () => void;
-  onRemove: (value: string) => void;
-}) {
-  return (
-    <FormRow label={label}>
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          {items.map((item) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() => onRemove(item)}
-              className="rounded-full transition-transform hover:scale-[1.02]"
-            >
-              <Chip variant="muted">{item} ×</Chip>
-            </button>
-          ))}
-          {!items.length ? <span className="text-[11px] font-mono text-zinc-700">No models</span> : null}
-        </div>
-        <div className="flex items-center gap-2">
-          <input
-            value={pending}
-            onChange={(event) => onPendingChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === ",") {
-                event.preventDefault();
-                onAdd();
-              }
-            }}
-            onBlur={onAdd}
-            placeholder="Add model id"
-            className={`${inputClass} flex-1`}
-          />
-          <SecondaryBtn onClick={onAdd} className="px-3 py-2">
-            <Plus className="h-3.5 w-3.5" />
-            Add
-          </SecondaryBtn>
-        </div>
-      </div>
-    </FormRow>
-  );
-}
-
 export default function SettingsView() {
   const [settings, setSettings] = useState<SettingsForm>(emptySettings);
   const [initialSettings, setInitialSettings] = useState<SettingsForm>(emptySettings);
@@ -256,7 +201,6 @@ export default function SettingsView() {
   const [activeTab, setActiveTab] = useState<SettingsTab>("General");
   const [showTelegramToken, setShowTelegramToken] = useState(false);
   const [showSupabaseKey, setShowSupabaseKey] = useState(false);
-  const [tierDrafts, setTierDrafts] = useState({ high: "", medium: "", low: "" });
 
   const loadSettings = useCallback(async () => {
     const response = await authJson<Record<string, unknown>>(["/api/config", "/api/settings"]);
@@ -284,32 +228,6 @@ export default function SettingsView() {
 
   const updateField = <K extends keyof SettingsForm>(key: K, value: SettingsForm[K]) => {
     setSettings((current) => ({ ...current, [key]: value }));
-  };
-
-  const updateTier = (tier: keyof SettingsForm["modelTiers"], items: string[]) => {
-    setSettings((current) => ({
-      ...current,
-      modelTiers: {
-        ...current.modelTiers,
-        [tier]: items,
-      },
-    }));
-  };
-
-  const addTierItem = (tier: keyof SettingsForm["modelTiers"]) => {
-    const nextValue = tierDrafts[tier].trim().replace(/,$/, "");
-    if (!nextValue) return;
-    if (!settings.modelTiers[tier].includes(nextValue)) {
-      updateTier(tier, [...settings.modelTiers[tier], nextValue]);
-    }
-    setTierDrafts((current) => ({ ...current, [tier]: "" }));
-  };
-
-  const removeTierItem = (tier: keyof SettingsForm["modelTiers"], value: string) => {
-    updateTier(
-      tier,
-      settings.modelTiers[tier].filter((item) => item !== value),
-    );
   };
 
   const save = async () => {
@@ -373,7 +291,7 @@ export default function SettingsView() {
                   value={settings.defaultModel}
                   onChange={(event) => updateField("defaultModel", event.target.value)}
                   placeholder="gpt-5"
-                  className={`${inputClass} w-full`}
+                  className={`${inputClass} w-56`}
                 />
               </FormRow>
               <FormRow label="Port">
@@ -381,14 +299,14 @@ export default function SettingsView() {
                   type="number"
                   value={settings.port}
                   onChange={(event) => updateField("port", event.target.value)}
-                  className={`${inputClass} w-full md:max-w-[180px]`}
+                  className={`${inputClass} w-24`}
                 />
               </FormRow>
               <FormRow label="Notification mode">
                 <select
                   value={settings.notificationMode}
                   onChange={(event) => updateField("notificationMode", event.target.value)}
-                  className={`${inputClass} w-full md:max-w-[220px]`}
+                  className={`${inputClass} w-40`}
                 >
                   <option value="all">all</option>
                   <option value="meaningful">meaningful</option>
@@ -401,31 +319,28 @@ export default function SettingsView() {
           {activeTab === "Telegram" ? (
             <div className="space-y-1">
               <FormRow label="Enable">
-                <div className="flex items-center gap-3">
-                  <Toggle
-                    checked={settings.telegramEnabled}
-                    onChange={() => updateField("telegramEnabled", !settings.telegramEnabled)}
-                  />
-                  <span className="text-[11px] font-mono text-zinc-500">
-                    Allow Telegram notifications and bot access
-                  </span>
-                </div>
+                <Toggle
+                  checked={settings.telegramEnabled}
+                  onChange={() => updateField("telegramEnabled", !settings.telegramEnabled)}
+                />
               </FormRow>
               <FormRow label="Bot token">
-                <SensitiveField
-                  value={settings.telegramToken}
-                  visible={showTelegramToken}
-                  onToggle={() => setShowTelegramToken((current) => !current)}
-                  onChange={(value) => updateField("telegramToken", value)}
-                  placeholder="Telegram bot token"
-                />
+                <div className="w-48">
+                  <SensitiveField
+                    value={settings.telegramToken}
+                    visible={showTelegramToken}
+                    onToggle={() => setShowTelegramToken((current) => !current)}
+                    onChange={(value) => updateField("telegramToken", value)}
+                    placeholder="Telegram bot token"
+                  />
+                </div>
               </FormRow>
               <FormRow label="Authorized user ID">
                 <input
                   value={settings.telegramUserId}
                   onChange={(event) => updateField("telegramUserId", event.target.value)}
                   placeholder="123456789"
-                  className={`${inputClass} w-full md:max-w-[220px]`}
+                  className={`${inputClass} w-40`}
                 />
               </FormRow>
             </div>
@@ -438,17 +353,19 @@ export default function SettingsView() {
                   value={settings.supabaseUrl}
                   onChange={(event) => updateField("supabaseUrl", event.target.value)}
                   placeholder="https://project.supabase.co"
-                  className={`${inputClass} w-full`}
+                  className={`${inputClass} w-72`}
                 />
               </FormRow>
               <FormRow label="Anon key">
-                <SensitiveField
-                  value={settings.supabaseAnonKey}
-                  visible={showSupabaseKey}
-                  onToggle={() => setShowSupabaseKey((current) => !current)}
-                  onChange={(value) => updateField("supabaseAnonKey", value)}
-                  placeholder="Supabase anon key"
-                />
+                <div className="w-72">
+                  <SensitiveField
+                    value={settings.supabaseAnonKey}
+                    visible={showSupabaseKey}
+                    onToggle={() => setShowSupabaseKey((current) => !current)}
+                    onChange={(value) => updateField("supabaseAnonKey", value)}
+                    placeholder="Supabase anon key"
+                  />
+                </div>
               </FormRow>
               <FormRow label="Authorized email">
                 <input
@@ -456,56 +373,19 @@ export default function SettingsView() {
                   value={settings.authorizedEmail}
                   onChange={(event) => updateField("authorizedEmail", event.target.value)}
                   placeholder="you@example.com"
-                  className={`${inputClass} w-full`}
+                  className={`${inputClass} w-64`}
                 />
               </FormRow>
-            </div>
-          ) : null}
-
-          {activeTab === "Models" ? (
-            <div className="space-y-1">
-              <TierEditor
-                label="High tier"
-                items={settings.modelTiers.high}
-                pending={tierDrafts.high}
-                onPendingChange={(value) => setTierDrafts((current) => ({ ...current, high: value }))}
-                onAdd={() => addTierItem("high")}
-                onRemove={(value) => removeTierItem("high", value)}
-              />
-              <TierEditor
-                label="Medium tier"
-                items={settings.modelTiers.medium}
-                pending={tierDrafts.medium}
-                onPendingChange={(value) => setTierDrafts((current) => ({ ...current, medium: value }))}
-                onAdd={() => addTierItem("medium")}
-                onRemove={(value) => removeTierItem("medium", value)}
-              />
-              <TierEditor
-                label="Low tier"
-                items={settings.modelTiers.low}
-                pending={tierDrafts.low}
-                onPendingChange={(value) => setTierDrafts((current) => ({ ...current, low: value }))}
-                onAdd={() => addTierItem("low")}
-                onRemove={(value) => removeTierItem("low", value)}
-              />
             </div>
           ) : null}
 
           {activeTab === "Advanced" ? (
             <div className="space-y-1">
               <FormRow label="Self-edit">
-                <div className="flex items-center gap-3">
-                  <Toggle checked={settings.selfEdit} onChange={() => updateField("selfEdit", !settings.selfEdit)} />
-                  <span className="text-[11px] font-mono text-zinc-500">
-                    Allow modifying the IO installation when explicitly requested
-                  </span>
-                </div>
+                <Toggle checked={settings.selfEdit} onChange={() => updateField("selfEdit", !settings.selfEdit)} />
               </FormRow>
               <FormRow label="Watchdog">
-                <div className="flex items-center gap-3">
-                  <Toggle checked={settings.watchdog} onChange={() => updateField("watchdog", !settings.watchdog)} />
-                  <span className="text-[11px] font-mono text-zinc-500">Keep the background watchdog enabled</span>
-                </div>
+                <Toggle checked={settings.watchdog} onChange={() => updateField("watchdog", !settings.watchdog)} />
               </FormRow>
             </div>
           ) : null}

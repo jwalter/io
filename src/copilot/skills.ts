@@ -29,12 +29,27 @@ export async function listSkills(): Promise<SkillInfo[]> {
     if (!existsSync(skillMd)) continue;
 
     const content = readFileSync(skillMd, "utf-8");
-    const firstLine = content.split("\n").find((l) => l.startsWith("# "));
+
+    // Strip YAML frontmatter before extracting name/description
+    let body = content;
+    let fmDescription = "";
+    const trimmed = content.trimStart();
+    if (trimmed.startsWith("---")) {
+      const endIndex = trimmed.indexOf("---", 3);
+      if (endIndex !== -1) {
+        const fmBlock = trimmed.slice(3, endIndex);
+        body = trimmed.slice(endIndex + 3);
+        // Extract description from frontmatter
+        const descMatch = fmBlock.match(/^description:\s*(.+)$/m);
+        if (descMatch) fmDescription = descMatch[1].trim();
+      }
+    }
+
+    const lines = body.split("\n");
+    const firstLine = lines.find((l) => l.startsWith("# "));
     const name = firstLine?.replace(/^#\s+/, "") ?? entry.name;
-    const descLine = content
-      .split("\n")
-      .find((l) => l.trim() && !l.startsWith("#"));
-    const description = descLine?.trim() ?? "";
+    const descLine = lines.find((l) => l.trim() && !l.startsWith("#"));
+    const description = fmDescription || descLine?.trim() || "";
 
     skills.push({
       name,
