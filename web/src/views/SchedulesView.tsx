@@ -394,11 +394,13 @@ export default function SchedulesView() {
   };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-4">
+    <div className="p-6 mx-auto space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <h1 className="text-4xl leading-none text-white" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
-          Schedules
-        </h1>
+        <div>
+          <h1 className="text-3xl leading-none text-zinc-100" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
+            Schedules
+          </h1>
+        </div>
         <PrimaryBtn onClick={openCreate} className="px-3 py-1.5">
           <Plus className="h-3.5 w-3.5" />
           New Schedule
@@ -526,9 +528,6 @@ export default function SchedulesView() {
                   Configure cadence, label, and prompt payload.
                 </p>
               </div>
-              <SecondaryBtn onClick={closeModal} className="px-3 py-1.5">
-                Close
-              </SecondaryBtn>
             </div>
 
             <div className="mt-6 space-y-4">
@@ -542,7 +541,7 @@ export default function SchedulesView() {
                         <button
                           key={value}
                           onClick={() => setDraft((current) => ({ ...current, type: value }))}
-                          className={`rounded-xl border px-3 py-2 text-left text-[11px] font-mono transition-colors ${
+                          className={`rounded-xl border px-3 py-2 text-left text-[11px] font-mono transition-colors cursor-pointer ${
                             active
                               ? "border-[#66FCF1]/30 text-[#66FCF1]"
                               : "border-white/[0.06] text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.03]"

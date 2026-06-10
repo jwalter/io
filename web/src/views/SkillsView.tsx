@@ -256,7 +256,7 @@ export default function SkillsView() {
           : source === "awesome-copilot"
             ? "awesome-copilot"
             : "community";
-    return `${author}${installs ? `${installs}` : ""}`;
+    return `${author}${installs ? ` · ${installs}` : ""}`;
   };
 
   const startEditing = () => {
@@ -407,10 +407,14 @@ export default function SkillsView() {
                   >
                     <div className="truncate text-[11px] font-mono text-zinc-200">{skill.name || skill.slug}</div>
                     <div
-                      className="mt-1 text-[10px] leading-relaxed text-zinc-600"
+                      className="mt-1 text-[10px] leading-relaxed text-zinc-600 line-clamp-2"
                       style={active ? { color: "var(--base-gray)" } : undefined}
                     >
-                      {skill.description || "No description"}
+                      {skill.description
+                        ? skill.description.length > 100
+                          ? `${skill.description.slice(0, 100)}…`
+                          : skill.description
+                        : "No description"}
                     </div>
                     <div
                       className="mt-2 truncate text-[9px] font-mono text-zinc-700"
@@ -540,10 +544,14 @@ export default function SkillsView() {
                             .map(([key, value]) => (
                               <div
                                 key={key}
-                                className="flex items-center justify-between border-b border-white/[0.04] py-3 first:pt-0 last:border-b-0 last:pb-0"
+                                className="flex items-start justify-between gap-4 border-b border-white/[0.04] py-3 first:pt-0 last:border-b-0 last:pb-0"
                               >
-                                <span className="text-[11px] font-mono text-zinc-500">{frontmatterLabel(key)}</span>
-                                <span className="text-[11px] font-mono text-zinc-300">{frontmatterValue(value)}</span>
+                                <span className="text-[11px] font-mono text-zinc-500 shrink-0">
+                                  {frontmatterLabel(key)}
+                                </span>
+                                <span className="text-[11px] font-mono text-zinc-300 text-right break-words min-w-0">
+                                  {frontmatterValue(value)}
+                                </span>
                               </div>
                             ))}
                         </div>

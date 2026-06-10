@@ -69,8 +69,8 @@ export function ChatOverlay() {
     <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-2.5">
       {open && (
         <div
-          className="w-[340px] flex flex-col rounded-2xl overflow-hidden shadow-2xl border border-white/[0.09]"
-          style={{ height: "460px", background: "var(--base-dark-gray)" }}
+          className="w-[340px] flex flex-col rounded-2xl overflow-hidden shadow-2xl border border-white/[0.09] backdrop-blur-xl"
+          style={{ height: "460px", background: "rgba(20, 20, 20, 0.95)" }}
         >
           {/* Header */}
           <div
@@ -88,7 +88,7 @@ export function ChatOverlay() {
             </div>
             <button
               onClick={() => setOpen(false)}
-              className="p-1 rounded-lg hover:bg-white/[0.07] text-zinc-600 hover:text-zinc-300 transition-colors"
+              className="p-1 rounded-lg hover:bg-white/[0.07] text-zinc-600 hover:text-zinc-300 transition-colors cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
             </button>
