@@ -530,20 +530,22 @@ export default function SkillsView() {
                   <>
                     <div className={`${GLASS_CARD} p-5`}>
                       <div className={SECTION_HEADER}>Front Matter</div>
-                      {Object.keys(selectedFrontmatter).length === 0 ? (
+                      {Object.keys(selectedFrontmatter).filter((k) => k !== "name" && k !== "description").length ===
+                      0 ? (
                         <div className="mt-4 text-[11px] font-mono text-zinc-700">No front matter metadata found.</div>
                       ) : (
-                        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                          {Object.entries(selectedFrontmatter).map(([key, value]) => (
-                            <div key={key} className="rounded-2xl border border-white/[0.05] bg-black/10 px-4 py-3">
-                              <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-zinc-700">
-                                {frontmatterLabel(key)}
+                        <div className="mt-4 space-y-0">
+                          {Object.entries(selectedFrontmatter)
+                            .filter(([key]) => key !== "name" && key !== "description")
+                            .map(([key, value]) => (
+                              <div
+                                key={key}
+                                className="flex items-center justify-between border-b border-white/[0.04] py-3 first:pt-0 last:border-b-0 last:pb-0"
+                              >
+                                <span className="text-[11px] font-mono text-zinc-500">{frontmatterLabel(key)}</span>
+                                <span className="text-[11px] font-mono text-zinc-300">{frontmatterValue(value)}</span>
                               </div>
-                              <div className="mt-2 break-words text-[11px] font-mono text-zinc-300">
-                                {frontmatterValue(value)}
-                              </div>
-                            </div>
-                          ))}
+                            ))}
                         </div>
                       )}
                     </div>

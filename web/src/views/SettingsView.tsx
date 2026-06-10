@@ -29,7 +29,8 @@ const tabs: SettingsTab[] = ["General", "Telegram", "Auth", "Advanced"];
 const MASK = "••••••••";
 const inputClass =
   "bg-[#181818] border border-white/[0.06] rounded-xl px-3 py-2 text-[11px] text-zinc-300 font-mono placeholder:text-zinc-700 focus:outline-none focus:border-[#66FCF1]/30";
-const tabClass = "px-4 py-2 text-[11px] font-mono capitalize border-b-2 -mb-px cursor-pointer";
+const tabClass =
+  "cursor-pointer px-2 pb-2 text-[11px] border-b font-mono uppercase tracking-[0.18em] transition-colors";
 
 const emptySettings: SettingsForm = {
   defaultModel: "",
@@ -282,28 +283,28 @@ export default function SettingsView() {
     <div className="mx-auto flex h-full w-full max-w-5xl flex-col gap-6 p-6 text-zinc-200">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="text-4xl leading-none text-white" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
+          <h1 className="text-3xl leading-none text-zinc-100" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
             Settings
           </h1>
-          <p className="mt-2 text-[11px] font-mono text-zinc-600">
+          <p className="mt-2 text-[11px] font-mono text-zinc-500">
             Control auth, notifications, models, and runtime behavior.
           </p>
         </div>
       </div>
 
       <div className="glass-card border border-white/[0.07] rounded-2xl overflow-hidden flex-1 min-h-0 flex flex-col w-full lg:w-1/2">
-        <div className="border-b border-white/[0.06] px-5 pt-4">
-          <div className="flex gap-1 overflow-x-auto overflow-y-hidden border-b border-white/[0.06]">
+        <div className="px-5 pt-4">
+          <div className="flex flex-wrap gap-4 border-b border-white/[0.06]">
             {tabs.map((tab) => (
               <button
                 key={tab}
                 type="button"
                 onClick={() => setActiveTab(tab)}
-                className={`${tabClass} ${
-                  activeTab === tab
-                    ? "text-[#66FCF1] border-[#66FCF1]"
-                    : "text-zinc-600 hover:text-zinc-300 border-transparent"
-                }`}
+                className={`${tabClass} ${activeTab !== tab ? "hover:text-zinc-300" : ""}`}
+                style={{
+                  borderColor: activeTab === tab ? "#66FCF1" : "transparent",
+                  color: activeTab === tab ? "#66FCF1" : undefined,
+                }}
               >
                 {tab}
               </button>

@@ -473,35 +473,35 @@ export default function SquadDetailView() {
               return (
                 <GlassCard key={agent.id} color={squad.color}>
                   <div className="flex">
-                    <div className="flex flex-col w-full gap-2 justify-between">
+                    <div className="flex flex-col w-full gap-1.5 justify-between">
                       <div className="flex justify-between items-start">
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-3">
                           <div
-                            className="h-11 w-11 rounded-2xl border flex items-center justify-center "
+                            className="h-8 w-8 rounded-xl border flex items-center justify-center"
                             style={{
                               borderColor: `${squad.color}40`,
                               background: `${squad.color}15`,
                               color: squad.color || "#66FCF1",
                             }}
                           >
-                            <Icon className="h-5 w-5" />
+                            <Icon className="h-4 w-4" />
                           </div>
                           <div className="flex flex-col">
                             <div className="flex items-center gap-1 flex-wrap">
-                              <h3 className="text-md truncate">{agent.character_name}</h3>
+                              <h3 className="text-sm truncate">{agent.character_name}</h3>
                             </div>
-                            <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-zinc-500 mt-1">
+                            <p className="text-[9px] font-mono uppercase tracking-[0.18em] text-zinc-500">
                               {agent.role_title?.trim() || "Agent"}
                             </p>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-1 text-[11px] font-mono text-zinc-500 flex-shrink-0">
+                        <div className="flex items-center gap-1 text-[10px] font-mono text-zinc-500 flex-shrink-0">
                           <Chip variant={statusToVariant(status)}>{agent.status || "idle"}</Chip>
                         </div>
                       </div>
                       <div className="min-w-0 flex">
-                        <p className="mt-3 text-xs text-zinc-300">
+                        <p className="mt-1 text-[11px] text-zinc-400">
                           {currentTask?.description ?? "No active task assigned."}
                         </p>
                       </div>
@@ -509,17 +509,17 @@ export default function SquadDetailView() {
                   </div>
 
                   {currentTask && (
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <SecondaryBtn onClick={() => void loadActivity(currentTask.id)} className="px-3 py-2">
-                        <Eye className="h-3.5 w-3.5" />
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <SecondaryBtn onClick={() => void loadActivity(currentTask.id)} className="px-2.5 py-1.5">
+                        <Eye className="h-3 w-3" />
                         View Activity
                       </SecondaryBtn>
                       {(status === "working" || status === "reviewing") && (
                         <DangerBtn
                           onClick={() => void stopTask(currentTask.id, agent.id)}
-                          className={`px-3 py-2 ${stoppingTaskId === currentTask.id ? "pointer-events-none opacity-50" : ""}`}
+                          className={`px-2.5 py-1.5 ${stoppingTaskId === currentTask.id ? "pointer-events-none opacity-50" : ""}`}
                         >
-                          <Square className="h-3.5 w-3.5" />
+                          <Square className="h-3 w-3" />
                           Stop
                         </DangerBtn>
                       )}

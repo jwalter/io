@@ -272,7 +272,11 @@ export default function UsageView() {
               <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis dataKey="date" stroke="#71717a" fontSize={10} tickLine={false} axisLine={false} />
               <YAxis stroke="#71717a" fontSize={10} tickLine={false} axisLine={false} tickFormatter={formatNumber} />
-              <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "#e4e4e7" }} />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                labelStyle={{ color: "#e4e4e7" }}
+                cursor={{ fill: "rgba(255,255,255,0.04)" }}
+              />
               <Bar dataKey="inputTokens" name="Input Tokens" fill="#66FCF1" radius={[6, 6, 0, 0]} />
               <Bar dataKey="outputTokens" name="Output Tokens" fill="#45A29E" radius={[6, 6, 0, 0]} />
             </BarChart>

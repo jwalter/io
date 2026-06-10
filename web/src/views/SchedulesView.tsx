@@ -405,7 +405,7 @@ export default function SchedulesView() {
         </PrimaryBtn>
       </div>
 
-      <div className="border-b border-white/[0.06] flex gap-1">
+      <div className="flex flex-wrap gap-4 border-b border-white/[0.06]">
         {(
           [
             ["squad", "Squad Schedules"],
@@ -417,9 +417,11 @@ export default function SchedulesView() {
             <button
               key={value}
               onClick={() => setTab(value)}
-              className={`px-4 py-2 text-[11px] font-mono capitalize border-b-2 -mb-px transition-colors cursor-pointer ${
-                active ? "text-[#66FCF1] border-b-[#66FCF1]" : "text-zinc-600 hover:text-zinc-300 border-transparent"
-              }`}
+              className={`cursor-pointer px-2 pb-2 text-[11px] border-b font-mono uppercase tracking-[0.18em] transition-colors ${!active ? "hover:text-zinc-300" : ""}`}
+              style={{
+                borderColor: active ? "#66FCF1" : "transparent",
+                color: active ? "#66FCF1" : undefined,
+              }}
             >
               {label}
             </button>

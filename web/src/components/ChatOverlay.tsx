@@ -164,7 +164,7 @@ export function ChatOverlay() {
       <button
         onClick={() => setOpen((o) => !o)}
         title={open ? "Close chat" : "Quick chat"}
-        className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-xl transition-all duration-150 hover:scale-105 active:scale-95"
+        className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-xl transition-all duration-150 hover:scale-105 active:scale-95 cursor-pointer"
         style={
           open ? { background: "#252525", border: "1px solid var(--base-black)" } : { background: "var(--base-teal)" }
         }
