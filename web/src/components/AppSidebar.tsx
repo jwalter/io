@@ -131,7 +131,7 @@ export function AppSidebar() {
           <button
             onClick={() => setCollapsed(!collapsed)}
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-xl text-[11px] font-mono text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.04] transition-colors ${collapsed ? "justify-center" : ""}`}
+            className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-xl text-[11px] font-mono text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.04] transition-colors cursor-pointer ${collapsed ? "justify-center" : ""}`}
           >
             {collapsed ? (
               <ChevronRight className="w-3.5 h-3.5 flex-shrink-0" />

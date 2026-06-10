@@ -291,7 +291,7 @@ export default function SettingsView() {
         </div>
       </div>
 
-      <div className="glass-card border border-white/[0.07] rounded-2xl overflow-hidden flex-1 min-h-0 flex flex-col">
+      <div className="glass-card border border-white/[0.07] rounded-2xl overflow-hidden flex-1 min-h-0 flex flex-col w-full lg:w-1/2">
         <div className="border-b border-white/[0.06] px-5 pt-4">
           <div className="flex gap-1 overflow-x-auto border-b border-white/[0.06]">
             {tabs.map((tab) => (

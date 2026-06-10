@@ -150,6 +150,8 @@ function TreeBranch({
   expanded,
   onToggle,
   onSelect,
+  onCreateInFolder,
+  onDeleteFolder,
   depth = 0,
 }: {
   nodes: TreeNode[];
@@ -157,6 +159,8 @@ function TreeBranch({
   expanded: Record<string, boolean>;
   onToggle: (path: string) => void;
   onSelect: (path: string) => void;
+  onCreateInFolder: (folderPath: string) => void;
+  onDeleteFolder: (folderPath: string) => void;
   depth?: number;
 }) {
   return (
@@ -168,31 +172,59 @@ function TreeBranch({
 
         return (
           <div key={node.path}>
-            <button
-              type="button"
-              onClick={() => (isFolder ? onToggle(node.path) : onSelect(node.path))}
-              className={`${treeItemClass} w-full flex items-center gap-2 text-left ${
-                isActive ? "text-[#66FCF1] bg-[#66FCF1]/5" : "text-zinc-400"
-              }`}
-              style={{ paddingLeft: `${12 + depth * 14}px` }}
-            >
-              {isFolder ? (
-                <>
-                  {isOpen ? (
-                    <ChevronDown className="h-3 w-3 text-zinc-600" />
-                  ) : (
-                    <ChevronRight className="h-3 w-3 text-zinc-600" />
-                  )}
-                  <Folder className={`h-3.5 w-3.5 ${isActive ? "text-[#66FCF1]" : "text-[#45A29E]"}`} />
-                </>
-              ) : (
-                <>
-                  <span className="h-3 w-3" />
-                  <FileText className={`h-3.5 w-3.5 ${isActive ? "text-[#66FCF1]" : "text-zinc-500"}`} />
-                </>
+            <div className="group relative">
+              <button
+                type="button"
+                onClick={() => (isFolder ? onToggle(node.path) : onSelect(node.path))}
+                className={`${treeItemClass} w-full flex items-center gap-2 text-left ${
+                  isActive ? "text-[#66FCF1] bg-[#66FCF1]/5" : "text-zinc-400"
+                }`}
+                style={{ paddingLeft: `${12 + depth * 14}px` }}
+              >
+                {isFolder ? (
+                  <>
+                    {isOpen ? (
+                      <ChevronDown className="h-3 w-3 text-zinc-600" />
+                    ) : (
+                      <ChevronRight className="h-3 w-3 text-zinc-600" />
+                    )}
+                    <Folder className={`h-3.5 w-3.5 ${isActive ? "text-[#66FCF1]" : "text-[#45A29E]"}`} />
+                  </>
+                ) : (
+                  <>
+                    <span className="h-3 w-3" />
+                    <FileText className={`h-3.5 w-3.5 ${isActive ? "text-[#66FCF1]" : "text-zinc-500"}`} />
+                  </>
+                )}
+                <span className="truncate">{node.name}</span>
+              </button>
+              {isFolder && (
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 hidden items-center gap-0.5 group-hover:flex">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCreateInFolder(node.path);
+                    }}
+                    className="rounded p-0.5 text-zinc-600 hover:text-[#66FCF1] cursor-pointer"
+                    title="New page in folder"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteFolder(node.path);
+                    }}
+                    className="rounded p-0.5 text-zinc-600 hover:text-red-400 cursor-pointer"
+                    title="Delete folder"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
               )}
-              <span className="truncate">{node.name}</span>
-            </button>
+            </div>
             {isFolder && isOpen && node.children?.length ? (
               <TreeBranch
                 nodes={node.children}
@@ -200,6 +232,8 @@ function TreeBranch({
                 expanded={expanded}
                 onToggle={onToggle}
                 onSelect={onSelect}
+                onCreateInFolder={onCreateInFolder}
+                onDeleteFolder={onDeleteFolder}
                 depth={depth + 1}
               />
             ) : null}
@@ -328,6 +362,37 @@ export default function WikiView() {
     }
   };
 
+  const deleteFolder = async (folderPath: string) => {
+    const folderPages = pages.filter((p) => p.startsWith(folderPath + "/"));
+    if (!folderPages.length) return;
+
+    setBusy(true);
+    try {
+      for (const pagePath of folderPages) {
+        await authJson([`/api/wiki/pages/${encodePath(pagePath)}`, `/api/wiki/page/${encodePath(pagePath)}`], {
+          method: "DELETE",
+        });
+      }
+      if (selectedPath?.startsWith(folderPath + "/")) {
+        setSelectedPath(null);
+        setContent("");
+        setDraft("");
+        setEditing(false);
+      }
+      await loadPages();
+      notifySuccess(`Deleted folder ${folderPath}`);
+    } catch (error) {
+      notifyError(error instanceof Error ? error.message : "Failed to delete folder");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const createInFolder = (folderPath: string) => {
+    setNewPagePath(folderPath + "/");
+    setNewPageOpen(true);
+  };
+
   const createPage = async () => {
     const trimmedPath = newPagePath.trim();
     if (!trimmedPath) return;
@@ -420,6 +485,8 @@ export default function WikiView() {
                 expanded={expanded}
                 onToggle={(path) => setExpanded((current) => ({ ...current, [path]: !(current[path] ?? true) }))}
                 onSelect={(path) => void loadPage(path)}
+                onCreateInFolder={createInFolder}
+                onDeleteFolder={(path) => void deleteFolder(path)}
               />
             ) : (
               <div className="px-3 py-6 text-center text-[11px] font-mono text-zinc-600">No pages found</div>
@@ -472,10 +539,6 @@ export default function WikiView() {
                     Edit
                   </SecondaryBtn>
                 )}
-                <SecondaryBtn onClick={() => setNewPageOpen(true)} className="px-3 py-2">
-                  <Plus className="h-3.5 w-3.5" />
-                  New Page
-                </SecondaryBtn>
                 <DangerBtn onClick={deletePage} className={`px-3 py-2 ${busy ? "pointer-events-none opacity-60" : ""}`}>
                   <Trash2 className="h-3.5 w-3.5" />
                   Delete
