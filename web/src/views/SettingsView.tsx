@@ -166,13 +166,32 @@ function SensitiveField({
   visible,
   onToggle,
   onChange,
+  onReveal,
+  revealField,
 }: {
   value: string;
   placeholder?: string;
   visible: boolean;
   onToggle: () => void;
   onChange: (value: string) => void;
+  onReveal?: (field: string, realValue: string) => void;
+  revealField?: string;
 }) {
+  const handleToggle = async () => {
+    if (!visible && revealField && value === MASK) {
+      try {
+        const data = await authJson<Record<string, string>>([`/api/settings/reveal?field=${revealField}`]);
+        if (data[revealField]) {
+          onChange(data[revealField]);
+          onReveal?.(revealField, data[revealField]);
+        }
+      } catch {
+        // If reveal fails, just toggle visibility of the masked value
+      }
+    }
+    onToggle();
+  };
+
   return (
     <div className="relative">
       <input
@@ -184,7 +203,7 @@ function SensitiveField({
       />
       <button
         type="button"
-        onClick={onToggle}
+        onClick={handleToggle}
         className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 transition-colors hover:text-zinc-300"
       >
         {visible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
@@ -228,6 +247,15 @@ export default function SettingsView() {
 
   const updateField = <K extends keyof SettingsForm>(key: K, value: SettingsForm[K]) => {
     setSettings((current) => ({ ...current, [key]: value }));
+  };
+
+  const handleReveal = (_field: string, realValue: string) => {
+    // Update initialSettings so revealing a secret doesn't mark the form dirty
+    setInitialSettings((current) => {
+      if (_field === "telegramBotToken") return { ...current, telegramToken: realValue };
+      if (_field === "supabaseAnonKey") return { ...current, supabaseAnonKey: realValue };
+      return current;
+    });
   };
 
   const save = async () => {
@@ -331,7 +359,9 @@ export default function SettingsView() {
                     visible={showTelegramToken}
                     onToggle={() => setShowTelegramToken((current) => !current)}
                     onChange={(value) => updateField("telegramToken", value)}
+                    onReveal={handleReveal}
                     placeholder="Telegram bot token"
+                    revealField="telegramBotToken"
                   />
                 </div>
               </FormRow>
@@ -363,7 +393,9 @@ export default function SettingsView() {
                     visible={showSupabaseKey}
                     onToggle={() => setShowSupabaseKey((current) => !current)}
                     onChange={(value) => updateField("supabaseAnonKey", value)}
+                    onReveal={handleReveal}
                     placeholder="Supabase anon key"
+                    revealField="supabaseAnonKey"
                   />
                 </div>
               </FormRow>

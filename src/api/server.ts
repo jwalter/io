@@ -605,6 +605,20 @@ export async function startApiServer(config: Config): Promise<void> {
     });
   });
 
+  app.get("/api/settings/reveal", (req, res) => {
+    const field = req.query.field as string | undefined;
+    const current = loadConfig();
+    const secrets: Record<string, string> = {
+      telegramBotToken: current.telegramBotToken ?? "",
+      supabaseAnonKey: current.supabaseAnonKey ?? "",
+    };
+    if (field && field in secrets) {
+      res.json({ [field]: secrets[field] });
+    } else {
+      res.json(secrets);
+    }
+  });
+
   app.put("/api/settings", (req, res) => {
     const updates: Partial<Config> = {};
     const body = req.body;
