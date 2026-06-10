@@ -26,10 +26,18 @@ interface Agent {
   is_test: number;
 }
 
+interface SquadTask {
+  id: string;
+  description: string;
+  status: string;
+  created_at: string;
+}
+
 interface SquadsResponse {
   squads: Squad[];
   agents: Agent[];
   instanceCounts: Record<string, number>;
+  recentTasks: Record<string, SquadTask[]>;
 }
 
 function isTokenExpired(token: string): boolean {
@@ -98,9 +106,24 @@ function ActivityIcon({ status }: { status: StatusKind }) {
   return <CheckCircle className="h-3.5 w-3.5 text-green-400" />;
 }
 
+function taskStatusKind(status: string): StatusKind {
+  const s = status.toLowerCase();
+  if (s === "failed" || s === "error") return "error";
+  if (s === "in_progress" || s === "running" || s === "working") return "working";
+  if (s === "completed" || s === "done") return "connected";
+  if (s === "pending" || s === "queued") return "idle";
+  return "idle";
+}
+
+function snippetDescription(description: string, maxLen = 60): string {
+  const trimmed = description.trim().replace(/\s+/g, " ");
+  if (trimmed.length <= maxLen) return trimmed;
+  return `${trimmed.slice(0, maxLen)}…`;
+}
+
 export default function SquadsView() {
   const navigate = useNavigate();
-  const [data, setData] = useState<SquadsResponse>({ squads: [], agents: [], instanceCounts: {} });
+  const [data, setData] = useState<SquadsResponse>({ squads: [], agents: [], instanceCounts: {}, recentTasks: {} });
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -161,7 +184,7 @@ export default function SquadsView() {
               const instanceCount = data.instanceCounts[squad.id] ?? 0;
               const status = overallStatus(squadAgents, instanceCount);
               const hovering = hoveredId === squad.id;
-              const recentActivity = squadAgents.slice(0, 3);
+              const recentActivity = data.recentTasks[squad.id] ?? [];
 
               return (
                 <div
@@ -228,25 +251,27 @@ export default function SquadsView() {
 
                   <div className="mt-4 pt-4 border-t border-white/[0.06]">
                     <p className="text-[11px] font-mono uppercase tracking-[0.18em] text-zinc-500 mb-3">
-                      Recent Activity
+                      Recent Objectives
                     </p>
                     <div className="space-y-2">
                       {recentActivity.length > 0 ? (
-                        recentActivity.map((agent) => {
-                          const agentStatus = normalizeStatus(agent.status);
+                        recentActivity.map((task) => {
+                          const taskStatus = taskStatusKind(task.status);
                           return (
-                            <div key={agent.id} className="flex items-center gap-2.5 text-sm text-zinc-200">
-                              <ActivityIcon status={agentStatus} />
-                              <span className="truncate flex-1">{agent.character_name}</span>
-                              <span className="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-500">
-                                <StatusDot status={agentStatus} />
-                                {agent.status || "idle"}
+                            <div key={task.id} className="flex items-center gap-2.5 text-sm text-zinc-200">
+                              <ActivityIcon status={taskStatus} />
+                              <span className="truncate flex-1 text-[11px] font-mono">
+                                {snippetDescription(task.description)}
+                              </span>
+                              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-zinc-500 shrink-0">
+                                <StatusDot status={taskStatus} />
+                                {task.status}
                               </span>
                             </div>
                           );
                         })
                       ) : (
-                        <p className="text-[11px] font-mono text-zinc-600">No agent activity has been reported yet.</p>
+                        <p className="text-[11px] font-mono text-zinc-600">No objectives yet.</p>
                       )}
                     </div>
                   </div>

@@ -417,7 +417,7 @@ export default function SchedulesView() {
             <button
               key={value}
               onClick={() => setTab(value)}
-              className={`px-4 py-2 text-[11px] font-mono capitalize border-b-2 -mb-px transition-colors ${
+              className={`px-4 py-2 text-[11px] font-mono capitalize border-b-2 -mb-px transition-colors cursor-pointer ${
                 active ? "text-[#66FCF1] border-b-[#66FCF1]" : "text-zinc-600 hover:text-zinc-300 border-transparent"
               }`}
             >

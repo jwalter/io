@@ -198,10 +198,14 @@ export async function startApiServer(config: Config): Promise<void> {
   app.get("/api/squads", (_req, res) => {
     const data = listSquads();
     const instanceCounts: Record<string, number> = {};
+    const recentTasks: Record<string, { id: string; description: string; status: string; created_at: string }[]> = {};
     for (const squad of data.squads) {
       instanceCounts[squad.id] = getInstancesForSquad(squad.id).length;
+      recentTasks[squad.id] = getTasksForSquad(squad.id)
+        .slice(0, 5)
+        .map((t) => ({ id: t.id, description: t.description, status: t.status, created_at: t.created_at }));
     }
-    res.json({ ...data, instanceCounts });
+    res.json({ ...data, instanceCounts, recentTasks });
   });
 
   // --- Squad Health Dashboard ---
